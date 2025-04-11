@@ -13,7 +13,6 @@ public class DiscoveryServerApplication {
     public static void main(String[] args) {
         SpringApplication.run(DiscoveryServerApplication.class, args);
         log.info("Application started");
-        log.info("Application started");
 
     }
 
