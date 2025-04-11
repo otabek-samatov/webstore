@@ -1,6 +1,6 @@
 # Webstore
 
-I am going to create  ecommerse application which sells goods.
+I am going to create  e-commerce application which sells goods.
 
 I named it as "Webstore".
 ---------------------------------------------------
