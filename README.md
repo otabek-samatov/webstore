@@ -1,4 +1,4 @@
-# webstore
+# Webstore
 
 I am going to create  ecommerse application which sells goods.
 
