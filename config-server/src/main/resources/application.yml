@@ -1,15 +1,15 @@
 spring:
   application:
     name: config-server
-  profiles:
-    active:
-    - native
   cloud:
     config:
       server:
         git:
           uri: https://github.com/otabek-samatov/webstore-config.git
           default-label: master
+          timeout: 5
+          clone-on-start: true
+          force-pull: true
 server:
   port: 8071
   
