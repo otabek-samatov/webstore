@@ -1,0 +1,40 @@
+buildscript {
+    ext {
+        springBootVersion = '3.4.4'
+    }
+    repositories {
+        mavenCentral()
+    }
+}
+
+plugins {
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+allprojects {
+    group = 'com.webstore'
+    version = '0.0.1-SNAPSHOT'
+
+    repositories {
+        mavenCentral()
+    }
+}
+
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'io.spring.dependency-management'
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+
+    dependencies {
+        testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    }
+
+    test {
+        useJUnitPlatform()
+    }
+}

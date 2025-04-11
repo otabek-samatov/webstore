@@ -1,0 +1,6 @@
+rootProject.name = 'webstore'
+
+include 'api-gateway'
+include 'config-server'
+include 'discovery-server'
+include 'inventory-service'
