@@ -3,4 +3,6 @@ rootProject.name = 'webstore'
 include 'config-server'
 include 'api-gateway'
 include 'discovery-server'
+include 'product-service'
 include 'inventory-service'
+
