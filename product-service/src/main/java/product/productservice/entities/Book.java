@@ -17,8 +17,7 @@ import java.util.Set;
 @Setter
 @Entity
 @Table(name = "book", indexes = {
-        @Index(name = "idx_book_title", columnList = "title"),
-        @Index(name = "idx_book_isbn", columnList = "isbn")
+        @Index(name = "idx_book_title", columnList = "title")
 })
 public class Book {
     @Id
