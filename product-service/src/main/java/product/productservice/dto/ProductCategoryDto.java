@@ -14,4 +14,5 @@ public class ProductCategoryDto implements Serializable {
     Long id;
     @NotBlank(message = "Category Name should be specified")
     String name;
+    Long parentCategoryId;
 }

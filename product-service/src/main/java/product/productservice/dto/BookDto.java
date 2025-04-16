@@ -1,6 +1,7 @@
 package product.productservice.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Value;
 import product.productservice.entities.Book;
@@ -19,7 +20,10 @@ public class BookDto implements Serializable {
     @NotBlank(message = "Title should be specified")
     String title;
     String subtitle;
+    Long publisherCompanyId;
+    @NotNull(message = "Publication date should be specified")
     LocalDate publicationDate;
+    Set<Long> categoryIds;
     @NotBlank(message = "ISBN should be specified")
     String isbn;
     String description;
@@ -28,4 +32,5 @@ public class BookDto implements Serializable {
     @NotBlank(message = "Language should be specified")
     String language;
     Set<String> bookImages;
+    Set<Long> authorIds;
 }
