@@ -1,0 +1,7 @@
+ALTER SEQUENCE book_author_seq INCREMENT BY 1;
+
+ALTER SEQUENCE book_seq INCREMENT BY 1;
+
+ALTER SEQUENCE product_category_seq INCREMENT BY 1;
+
+ALTER SEQUENCE publisher_company_seq INCREMENT BY 1;
