@@ -12,6 +12,7 @@ import java.io.Serializable;
 @Value
 public class PublisherCompanyDto implements Serializable {
     Long id;
+
     @NotBlank(message = "Publisher name should be specified")
     String name;
 }

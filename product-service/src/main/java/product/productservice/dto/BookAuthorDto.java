@@ -14,6 +14,7 @@ public class BookAuthorDto implements Serializable {
     Long id;
     String firstName;
     String middleName;
+
     @NotBlank(message = "Name should be specified")
     String lastName;
 }
