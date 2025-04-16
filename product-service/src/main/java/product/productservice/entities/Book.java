@@ -3,6 +3,7 @@ package product.productservice.entities;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Getter;
 import lombok.Setter;
@@ -34,10 +35,12 @@ public class Book {
     @Column(name = "subtitle")
     private String subtitle;
 
+    @NotNull(message = "Publisher should be specified")
     @ManyToOne(optional = false)
-    @JoinColumn(name = "publisher_company_id", nullable = false)
+    @JoinColumn(nullable = false)
     private PublisherCompany publisherCompany;
 
+    @NotNull(message = "Publication date should be specified")
     @Column(name = "publication_date", nullable = false)
     private LocalDate publicationDate;
 
