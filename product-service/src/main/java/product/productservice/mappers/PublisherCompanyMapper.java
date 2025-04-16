@@ -4,6 +4,8 @@ import org.mapstruct.*;
 import product.productservice.entities.PublisherCompany;
 import product.productservice.dto.PublisherCompanyDto;
 
+import java.util.List;
+
 @Mapper(unmappedTargetPolicy = ReportingPolicy.IGNORE, componentModel = MappingConstants.ComponentModel.SPRING)
 public interface PublisherCompanyMapper {
     PublisherCompany toEntity(PublisherCompanyDto publisherCompanyDto);
@@ -12,4 +14,8 @@ public interface PublisherCompanyMapper {
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     PublisherCompany partialUpdate(PublisherCompanyDto publisherCompanyDto, @MappingTarget PublisherCompany publisherCompany);
+
+    List<PublisherCompany> toEntity(List<PublisherCompanyDto> publisherCompanyDto);
+
+    List<PublisherCompanyDto> toDto(List<PublisherCompany> publisherCompany);
 }

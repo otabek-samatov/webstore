@@ -6,6 +6,7 @@ import product.productservice.entities.BookAuthor;
 import product.productservice.dto.BookDto;
 import product.productservice.entities.ProductCategory;
 
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -30,4 +31,8 @@ public interface BookMapper {
     default Set<Long> authorsToAuthorIds(Set<BookAuthor> authors) {
         return authors.stream().map(BookAuthor::getId).collect(Collectors.toSet());
     }
+
+    List<Book> toEntity(List<BookDto> bookDto);
+
+    List<BookDto> toDto(List<Book> book);
 }

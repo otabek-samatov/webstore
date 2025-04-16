@@ -4,6 +4,8 @@ import org.mapstruct.*;
 import product.productservice.entities.ProductCategory;
 import product.productservice.dto.ProductCategoryDto;
 
+import java.util.List;
+
 @Mapper(unmappedTargetPolicy = ReportingPolicy.IGNORE, componentModel = MappingConstants.ComponentModel.SPRING)
 public interface ProductCategoryMapper {
     @Mapping(source = "parentCategoryId", target = "parentCategory.id")
@@ -15,4 +17,8 @@ public interface ProductCategoryMapper {
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(source = "parentCategoryId", target = "parentCategory.id")
     ProductCategory partialUpdate(ProductCategoryDto productCategoryDto, @MappingTarget ProductCategory productCategory);
+
+    List<ProductCategory> toEntity(List<ProductCategoryDto> productCategoryDto);
+
+    List<ProductCategoryDto> toDto(List<ProductCategory> productCategory);
 }
