@@ -2,6 +2,7 @@ package product.productservice.entities;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Getter;
 import lombok.Setter;
@@ -41,6 +42,7 @@ public class Book {
     private LocalDate publicationDate;
 
     @ManyToMany
+    @NotEmpty(message = "Category should be specified")
     @JoinTable(name = "book_categories",
             joinColumns = @JoinColumn(name = "book_id"),
             inverseJoinColumns = @JoinColumn(name = "categories_id"))
@@ -67,10 +69,15 @@ public class Book {
     private Set<String> bookImages = new LinkedHashSet<>();
 
     @ManyToMany
+    @NotEmpty(message = "Authors should be specified")
     @JoinTable(name = "book_authors",
             joinColumns = @JoinColumn(name = "book_id"),
             inverseJoinColumns = @JoinColumn(name = "author_id"))
     private Set<BookAuthor> authors = new LinkedHashSet<>();
+
+    @Version
+    @Column(name = "version")
+    private Long version;
 
     @Override
     public final boolean equals(Object o) {

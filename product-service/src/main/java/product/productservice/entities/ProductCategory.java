@@ -26,6 +26,10 @@ public class ProductCategory {
     @JoinColumn(name = "parent_category_id")
     private ProductCategory parentCategory;
 
+    @Version
+    @Column(name = "version")
+    private Long version;
+
     @Override
     public final boolean equals(Object o) {
         if (this == o) return true;

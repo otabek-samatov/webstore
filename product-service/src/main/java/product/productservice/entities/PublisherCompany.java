@@ -23,6 +23,10 @@ public class PublisherCompany {
     @Column(name = "name", nullable = false)
     private String name;
 
+    @Version
+    @Column(name = "version")
+    private Long version;
+
     @Override
     public final boolean equals(Object o) {
         if (this == o) return true;

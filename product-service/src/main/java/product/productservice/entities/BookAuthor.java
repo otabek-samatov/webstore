@@ -31,6 +31,10 @@ public class BookAuthor {
     @Column(name = "last_name", nullable = false)
     private String lastName;
 
+    @Version
+    @Column(name = "version")
+    private Long version;
+
     @Override
     public final boolean equals(Object o) {
         if (this == o) return true;
