@@ -20,9 +20,8 @@ public interface BookMapper {
     @Mapping(source = "publisherCompany.id", target = "publisherCompanyId")
     BookDto toDto(Book book);
 
-    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(source = "publisherCompanyId", target = "publisherCompany.id")
-    Book partialUpdate(BookDto bookDto, @MappingTarget Book book);
+    Book update(BookDto bookDto, @MappingTarget Book book);
 
     default Set<Long> categoriesToCategoryIds(Set<ProductCategory> categories) {
         return categories.stream().map(ProductCategory::getId).collect(Collectors.toSet());

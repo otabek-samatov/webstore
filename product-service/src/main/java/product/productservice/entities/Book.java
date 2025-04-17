@@ -11,6 +11,7 @@ import org.hibernate.proxy.HibernateProxy;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
@@ -37,7 +38,7 @@ public class Book {
 
     @NotNull(message = "Publisher should be specified")
     @ManyToOne(optional = false)
-    @JoinColumn(nullable = false)
+    @JoinColumn(name = "publisher_company_id", nullable = false)
     private PublisherCompany publisherCompany;
 
     @NotNull(message = "Publication date should be specified")
@@ -49,7 +50,7 @@ public class Book {
     @JoinTable(name = "book_categories",
             joinColumns = @JoinColumn(name = "book_id"),
             inverseJoinColumns = @JoinColumn(name = "categories_id"))
-    private Set<ProductCategory> categories = new LinkedHashSet<>();
+    private Set<ProductCategory> categories = new HashSet<>();
 
     @NotBlank(message = "ISBN should be specified")
     @Column(name = "isbn", nullable = false, unique = true)
@@ -76,7 +77,7 @@ public class Book {
     @JoinTable(name = "book_authors",
             joinColumns = @JoinColumn(name = "book_id"),
             inverseJoinColumns = @JoinColumn(name = "author_id"))
-    private Set<BookAuthor> authors = new LinkedHashSet<>();
+    private Set<BookAuthor> authors = new HashSet<>();
 
     @Version
     @Column(name = "version")

@@ -12,8 +12,7 @@ public interface PublisherCompanyMapper {
 
     PublisherCompanyDto toDto(PublisherCompany publisherCompany);
 
-    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
-    PublisherCompany partialUpdate(PublisherCompanyDto publisherCompanyDto, @MappingTarget PublisherCompany publisherCompany);
+    void update(PublisherCompanyDto publisherCompanyDto, @MappingTarget PublisherCompany publisherCompany);
 
     List<PublisherCompany> toEntity(List<PublisherCompanyDto> publisherCompanyDto);
 

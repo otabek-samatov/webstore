@@ -17,4 +17,5 @@ public class PublisherCompanyDto implements Serializable {
 
     @NotBlank(message = "Publisher name should be specified")
     String name;
+
 }

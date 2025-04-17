@@ -18,3 +18,7 @@ spring:
     properties:
       hibernate:
         format_sql: true
+  jackson:
+      date-format: dd-MM-YYYY
+      serialization:
+        WRITE_DATES_AS_TIMESTAMPS: false

@@ -19,4 +19,12 @@ public class BookAuthorDto implements Serializable {
 
     @NotBlank(message = "Name should be specified")
     String lastName;
+
+    @Override
+    public String toString() {
+        return "BookAuthorDto{" +
+                "id=" + id +
+                ", lastName='" + lastName + '\'' +
+                '}';
+    }
 }

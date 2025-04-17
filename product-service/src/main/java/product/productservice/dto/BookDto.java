@@ -49,4 +49,12 @@ public class BookDto implements Serializable {
 
     @NotEmpty(message = "Authors should be specified")
     Set<Long> authorIds;
+
+    @Override
+    public String toString() {
+        String sb = "BookDto{" + "id=" + id +
+                ", isbn='" + isbn + '\'' +
+                '}';
+        return sb;
+    }
 }

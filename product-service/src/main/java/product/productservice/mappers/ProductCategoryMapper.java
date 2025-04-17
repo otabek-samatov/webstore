@@ -14,9 +14,8 @@ public interface ProductCategoryMapper {
     @Mapping(source = "parentCategory.id", target = "parentCategoryId")
     ProductCategoryDto toDto(ProductCategory productCategory);
 
-    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(source = "parentCategoryId", target = "parentCategory.id")
-    ProductCategory partialUpdate(ProductCategoryDto productCategoryDto, @MappingTarget ProductCategory productCategory);
+    ProductCategory update(ProductCategoryDto productCategoryDto, @MappingTarget ProductCategory productCategory);
 
     List<ProductCategory> toEntity(List<ProductCategoryDto> productCategoryDto);
 
