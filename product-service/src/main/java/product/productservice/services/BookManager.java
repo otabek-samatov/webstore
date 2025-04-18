@@ -1,10 +1,8 @@
 package product.productservice.services;
 
 import jakarta.persistence.EntityNotFoundException;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.validation.annotation.Validated;
 import product.productservice.dto.BookDto;
 import product.productservice.entities.Book;
 import product.productservice.entities.BookAuthor;
@@ -14,11 +12,11 @@ import product.productservice.repositories.BookAuthorRepository;
 import product.productservice.repositories.BookRepository;
 import product.productservice.repositories.ProductCategoryRepository;
 import product.productservice.repositories.PublisherCompanyRepository;
+import product.productservice.validators.CustomValidator;
 
 import java.util.Set;
 import java.util.stream.Collectors;
 
-@Validated
 @RequiredArgsConstructor
 @Service
 public class BookManager {
@@ -28,16 +26,20 @@ public class BookManager {
     private final BookAuthorRepository bookAuthorRepository;
     private final ProductCategoryRepository productCategoryRepository;
     private final PublisherCompanyRepository publisherCompanyRepository;
+    private final CustomValidator validator;
 
-    public Book create(@Valid BookDto dto) {
+    public Book create(BookDto dto) {
         return createOrUpdate(dto, true);
     }
 
-    public Book update(@Valid BookDto dto) {
+    public Book update(BookDto dto) {
         return createOrUpdate(dto, false);
     }
 
-    private Book createOrUpdate(@Valid BookDto dto, boolean createFlag) {
+    private Book createOrUpdate(BookDto dto, boolean createFlag) {
+
+        validator.validate(dto);
+
         Book entity;
 
         if (createFlag) {

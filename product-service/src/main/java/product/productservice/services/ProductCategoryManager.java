@@ -1,32 +1,33 @@
 package product.productservice.services;
 
 import jakarta.persistence.EntityNotFoundException;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.validation.annotation.Validated;
 import product.productservice.dto.ProductCategoryDto;
 import product.productservice.entities.ProductCategory;
 import product.productservice.mappers.ProductCategoryMapper;
 import product.productservice.repositories.ProductCategoryRepository;
+import product.productservice.validators.CustomValidator;
 
-@Validated
 @RequiredArgsConstructor
 @Service
 public class ProductCategoryManager {
 
     private final ProductCategoryRepository repository;
     private final ProductCategoryMapper mapper;
+    private final CustomValidator validator;
 
-    public ProductCategory create(@Valid ProductCategoryDto dto) {
+    public ProductCategory create(ProductCategoryDto dto) {
         return createOrUpdate(dto, true);
     }
 
-    public ProductCategory update(@Valid ProductCategoryDto dto) {
+    public ProductCategory update(ProductCategoryDto dto) {
         return createOrUpdate(dto, false);
     }
 
-    private ProductCategory createOrUpdate(@Valid ProductCategoryDto dto, boolean createFlag) {
+    private ProductCategory createOrUpdate(ProductCategoryDto dto, boolean createFlag) {
+        validator.validate(dto);
+
         ProductCategory entity;
         if (createFlag) {
             entity = new ProductCategory();
