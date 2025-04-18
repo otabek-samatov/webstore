@@ -25,7 +25,7 @@ import java.util.Set;
 public class Book {
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "book_seq")
-    @SequenceGenerator(name = "book_seq")
+    @SequenceGenerator(name = "book_seq", allocationSize = 1)
     @Column(name = "id", nullable = false)
     private Long id;
 

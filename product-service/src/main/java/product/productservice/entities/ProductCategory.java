@@ -14,7 +14,7 @@ import java.util.Objects;
 public class ProductCategory {
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "product_category_seq")
-    @SequenceGenerator(name = "product_category_seq")
+    @SequenceGenerator(name = "product_category_seq", allocationSize = 1)
     @Column(name = "id", nullable = false)
     private Long id;
 
