@@ -28,21 +28,13 @@ public class BookManager {
     private final PublisherCompanyRepository publisherCompanyRepository;
     private final CustomValidator validator;
 
-    public Book create(BookDto dto) {
-        return createOrUpdate(dto, true);
-    }
-
-    public Book update(BookDto dto) {
-        return createOrUpdate(dto, false);
-    }
-
-    private Book createOrUpdate(BookDto dto, boolean createFlag) {
+    public Book createOrUpdate(BookDto dto) {
 
         validator.validate(dto);
 
         Book entity;
 
-        if (createFlag) {
+        if (dto.getId() == null) {
             entity = new Book();
         } else {
             entity = repository.findById(dto.getId()).orElseThrow(() -> new EntityNotFoundException(dto + " not found"));
@@ -65,7 +57,15 @@ public class BookManager {
         entity.setPublisherCompany(publisherCompanyRepository.getReferenceById(dto.getPublisherCompanyId()));
 
         return repository.save(entity);
+    }
 
+    public Book findById(Long id) {
+       Book book = repository.findById(id).orElseThrow(() -> new EntityNotFoundException("Book with id " + id + " not found"));
+       return book;
+    }
+
+    public void deleteById(Long id) {
+        repository.deleteById(id);
     }
 
 
