@@ -3,6 +3,7 @@ package product.productservice.services;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import product.productservice.dto.BookDto;
 import product.productservice.entities.Book;
 import product.productservice.mappers.BookMapper;
@@ -20,6 +21,7 @@ public class BookManager {
     private final BookAuthorManager bookAuthorManager;
     private final CustomValidator validator;
 
+    @Transactional
     public Book createOrUpdate(BookDto dto) {
 
         validator.validate(dto);
@@ -44,9 +46,9 @@ public class BookManager {
     }
 
     public Book findById(Long id) {
-       Book book = repository.findById(id).orElseThrow(() -> new EntityNotFoundException("Book with id " + id + " not found"));
-       return book;
+        return repository.findById(id).orElseThrow(() -> new EntityNotFoundException("Book with id " + id + " not found"));
     }
+
 
     public void deleteById(Long id) {
         repository.deleteById(id);
