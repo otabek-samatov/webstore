@@ -1,8 +1,6 @@
 package product.productservice.controllers;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import product.productservice.dto.BookDto;
@@ -21,12 +19,10 @@ public class BookController {
 
     @GetMapping("/{bookId}")
     private ResponseEntity<BookDto> getBookById(@PathVariable Long bookId) {
-        try {
-            Book book = bookManager.findById(bookId);
-            return ResponseEntity.ok(bookMapper.toDto(book));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        }
+
+        Book book = bookManager.findById(bookId);
+        return ResponseEntity.ok(bookMapper.toDto(book));
+
     }
 
     @DeleteMapping("/{bookId}")
@@ -37,12 +33,9 @@ public class BookController {
 
     @PostMapping
     public ResponseEntity<BookDto> createOrUpdate(@RequestBody BookDto dto) {
-        try {
-            Book book = bookManager.createOrUpdate(dto);
-            return ResponseEntity.ok(bookMapper.toDto(book));
-        } catch (Exception e) {
-            return ResponseEntity.notFound().build();
-        }
+        Book book = bookManager.createOrUpdate(dto);
+        return ResponseEntity.ok(bookMapper.toDto(book));
+
     }
 
 }

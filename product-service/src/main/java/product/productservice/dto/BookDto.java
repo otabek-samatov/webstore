@@ -1,5 +1,6 @@
 package product.productservice.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -28,6 +29,7 @@ public class BookDto implements Serializable {
     @NotNull(message = "Publisher should be specified")
     Long publisherCompanyId;
 
+    @JsonFormat(pattern = "yyyy-MM-dd")
     @NotNull(message = "Publication date should be specified")
     LocalDate publicationDate;
 
@@ -52,9 +54,8 @@ public class BookDto implements Serializable {
 
     @Override
     public String toString() {
-        String sb = "BookDto{" + "id=" + id +
+        return "BookDto{" + "id=" + id +
                 ", isbn='" + isbn + '\'' +
                 '}';
-        return sb;
     }
 }
