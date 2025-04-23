@@ -37,7 +37,7 @@ public class Book {
     private String subtitle;
 
     @NotNull(message = "Publisher should be specified")
-    @ManyToOne(optional = false)
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
     @JoinColumn(name = "publisher_company_id", nullable = false)
     private PublisherCompany publisherCompany;
 

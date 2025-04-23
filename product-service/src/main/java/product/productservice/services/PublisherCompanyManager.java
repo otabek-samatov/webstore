@@ -37,4 +37,16 @@ public class PublisherCompanyManager {
         mapper.update(dto, entity);
         return repository.save(entity);
     }
+
+    public PublisherCompany getReferenceByID(Long id){
+        if (id == null) {
+            throw new IllegalArgumentException("id cannot be null ");
+        }
+
+        if (!repository.existsById(id)){
+            throw new EntityNotFoundException("Publisher Company with id " + id + " not found");
+        }
+
+        return repository.getReferenceById(id);
+    }
 }

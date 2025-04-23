@@ -9,6 +9,10 @@ import product.productservice.mappers.ProductCategoryMapper;
 import product.productservice.repositories.ProductCategoryRepository;
 import product.productservice.validators.CustomValidator;
 
+import java.util.Collection;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 @RequiredArgsConstructor
 @Service
 public class ProductCategoryManager {
@@ -39,5 +43,20 @@ public class ProductCategoryManager {
         entity.setParentCategory(repository.getReferenceById(dto.getParentCategoryId()));
 
         return repository.save(entity);
+    }
+
+
+    public Set<ProductCategory> getReferenceByIDs(Collection<Long> ids){
+        if (ids == null || ids.isEmpty()) {
+            throw new IllegalArgumentException("ids collection cannot be null or empty");
+        }
+
+        if (ids.size() != repository.countByIds(ids)){
+            throw new EntityNotFoundException("Some of the categories with ids " + ids + " not found");
+        }
+
+        return ids.stream()
+                .map(repository::getReferenceById)
+                .collect(Collectors.toSet());
     }
 }

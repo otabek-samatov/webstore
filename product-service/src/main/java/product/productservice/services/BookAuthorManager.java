@@ -9,6 +9,10 @@ import product.productservice.mappers.BookAuthorMapper;
 import product.productservice.repositories.BookAuthorRepository;
 import product.productservice.validators.CustomValidator;
 
+import java.util.Collection;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 @RequiredArgsConstructor
 @Service
 public class BookAuthorManager {
@@ -38,5 +42,19 @@ public class BookAuthorManager {
         mapper.update(dto, entity);
 
         return repository.save(entity);
+    }
+
+    public Set<BookAuthor> getReferenceByIDs(Collection<Long> ids){
+        if (ids == null || ids.isEmpty()) {
+            throw new IllegalArgumentException("ids collection cannot be null or empty");
+        }
+
+        if (ids.size() != repository.countByIds(ids)){
+            throw new EntityNotFoundException("Some of the authors with ids " + ids + " not found");
+        }
+
+        return ids.stream()
+                .map(repository::getReferenceById)
+                .collect(Collectors.toSet());
     }
 }
