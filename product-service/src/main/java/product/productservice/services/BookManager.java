@@ -22,13 +22,22 @@ public class BookManager {
     private final CustomValidator validator;
 
     @Transactional
-    public Book createOrUpdate(BookDto dto) {
+    public Book create(BookDto dto) {
+        return createOrUpdate(dto, true);
+    }
+
+    @Transactional
+    public Book update(BookDto dto) {
+        return createOrUpdate(dto, false);
+    }
+
+    private Book createOrUpdate(BookDto dto, boolean createFlag) {
 
         validator.validate(dto);
 
         Book entity;
 
-        if (dto.getId() == null) {
+        if (createFlag) {
             entity = new Book();
         } else {
             entity = repository.findById(dto.getId()).orElseThrow(() -> new EntityNotFoundException(dto + " not found"));
@@ -49,10 +58,8 @@ public class BookManager {
         return repository.findById(id).orElseThrow(() -> new EntityNotFoundException("Book with id " + id + " not found"));
     }
 
-
     public void deleteById(Long id) {
         repository.deleteById(id);
     }
-
 
 }

@@ -3,13 +3,17 @@ package product.productservice.services;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import product.productservice.dto.BookAuthorDto;
+import product.productservice.entities.Book;
 import product.productservice.entities.BookAuthor;
 import product.productservice.mappers.BookAuthorMapper;
 import product.productservice.repositories.BookAuthorRepository;
+import product.productservice.repositories.BookRepository;
 import product.productservice.validators.CustomValidator;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -18,13 +22,16 @@ import java.util.stream.Collectors;
 public class BookAuthorManager {
 
     private final BookAuthorRepository repository;
+    private final BookRepository bookRepository;
     private final BookAuthorMapper mapper;
     private final CustomValidator validator;
 
+    @Transactional
     public BookAuthor create(BookAuthorDto dto) {
         return createOrUpdate(dto, true);
     }
 
+    @Transactional
     public BookAuthor update(BookAuthorDto dto) {
         return createOrUpdate(dto, false);
     }
@@ -56,5 +63,22 @@ public class BookAuthorManager {
         return ids.stream()
                 .map(repository::getReferenceById)
                 .collect(Collectors.toSet());
+    }
+
+    public BookAuthor findById(Long id) {
+        return repository.findById(id).orElseThrow(() -> new EntityNotFoundException("BookAuthor with id " + id + " not found"));
+    }
+
+    public void deleteById(Long id) {
+        long bookCount = bookRepository.countOfBooksByAuthorID(id);
+        if (bookCount > 0) {
+            throw new RuntimeException(bookCount +  " books use this author. Cannot delete book Author.");
+        }
+
+        repository.deleteById(id);
+    }
+
+    public List<Book> findBooksByAuthorId(Long id) {
+        return bookRepository.findBooksByAuthorId(id);
     }
 }

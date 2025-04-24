@@ -14,28 +14,31 @@ import product.productservice.services.BookManager;
 @RequestMapping(value = "v1/books/book")
 public class BookController {
 
-    private final BookManager bookManager;
-    private final BookMapper bookMapper;
+    private final BookManager manager;
+    private final BookMapper mapper;
 
     @GetMapping("/{bookId}")
     private ResponseEntity<BookDto> getBookById(@PathVariable Long bookId) {
-
-        Book book = bookManager.findById(bookId);
-        return ResponseEntity.ok(bookMapper.toDto(book));
-
+        Book book = manager.findById(bookId);
+        return ResponseEntity.ok(mapper.toDto(book));
     }
 
     @DeleteMapping("/{bookId}")
     private ResponseEntity<Void> deleteBookById(@PathVariable Long bookId) {
-        bookManager.deleteById(bookId);
+        manager.deleteById(bookId);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping
-    public ResponseEntity<BookDto> createOrUpdate(@RequestBody BookDto dto) {
-        Book book = bookManager.createOrUpdate(dto);
-        return ResponseEntity.ok(bookMapper.toDto(book));
+    public ResponseEntity<BookDto> create(@RequestBody BookDto dto) {
+        Book book = manager.create(dto);
+        return ResponseEntity.ok(mapper.toDto(book));
+    }
 
+    @PutMapping
+    public ResponseEntity<BookDto> update(@RequestBody BookDto dto) {
+        Book book = manager.update(dto);
+        return ResponseEntity.ok(mapper.toDto(book));
     }
 
 }
