@@ -24,9 +24,9 @@ public class BookAuthorController {
     private final BookMapper bookMapper;
 
     @GetMapping("/{authorId}")
-    private ResponseEntity<BookAuthorDto> getBookById(@PathVariable Long authorId) {
-        BookAuthor book = manager.findById(authorId);
-        return ResponseEntity.ok(mapper.toDto(book));
+    private ResponseEntity<BookAuthorDto> getById(@PathVariable Long authorId) {
+        BookAuthor author = manager.findById(authorId);
+        return ResponseEntity.ok(mapper.toDto(author));
     }
 
     @GetMapping("/allbooks/{authorId}")
@@ -36,20 +36,20 @@ public class BookAuthorController {
     }
 
     @DeleteMapping("/{authorId}")
-    private ResponseEntity<Void> deleteBookById(@PathVariable Long authorId) {
+    private ResponseEntity<Void> deleteById(@PathVariable Long authorId) {
         manager.deleteById(authorId);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping
     public ResponseEntity<BookAuthorDto> create(@RequestBody BookAuthorDto dto) {
-        BookAuthor book = manager.create(dto);
-        return ResponseEntity.ok(mapper.toDto(book));
+        BookAuthor author = manager.create(dto);
+        return ResponseEntity.ok(mapper.toDto(author));
     }
 
     @PutMapping
     public ResponseEntity<BookAuthorDto> update(@RequestBody BookAuthorDto dto) {
-        BookAuthor book = manager.update(dto);
-        return ResponseEntity.ok(mapper.toDto(book));
+        BookAuthor author = manager.update(dto);
+        return ResponseEntity.ok(mapper.toDto(author));
     }
 }

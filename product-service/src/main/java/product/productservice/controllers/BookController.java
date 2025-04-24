@@ -18,13 +18,13 @@ public class BookController {
     private final BookMapper mapper;
 
     @GetMapping("/{bookId}")
-    private ResponseEntity<BookDto> getBookById(@PathVariable Long bookId) {
+    private ResponseEntity<BookDto> getById(@PathVariable Long bookId) {
         Book book = manager.findById(bookId);
         return ResponseEntity.ok(mapper.toDto(book));
     }
 
     @DeleteMapping("/{bookId}")
-    private ResponseEntity<Void> deleteBookById(@PathVariable Long bookId) {
+    private ResponseEntity<Void> deleteById(@PathVariable Long bookId) {
         manager.deleteById(bookId);
         return ResponseEntity.noContent().build();
     }
