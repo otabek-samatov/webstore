@@ -45,11 +45,8 @@ public class Book {
     @Column(name = "publication_date", nullable = false)
     private LocalDate publicationDate;
 
-    @ManyToMany
+    @ManyToMany(mappedBy = "books" )
     @NotEmpty(message = "Category should be specified")
-    @JoinTable(name = "book_categories",
-            joinColumns = @JoinColumn(name = "book_id"),
-            inverseJoinColumns = @JoinColumn(name = "categories_id"))
     private Set<ProductCategory> categories = new HashSet<>();
 
     @NotBlank(message = "ISBN should be specified")
@@ -72,11 +69,8 @@ public class Book {
     @CollectionTable(name = "book_Images", joinColumns = @JoinColumn(name = "book_id"))
     private Set<String> bookImages = new LinkedHashSet<>();
 
-    @ManyToMany
     @NotEmpty(message = "Authors should be specified")
-    @JoinTable(name = "book_authors",
-            joinColumns = @JoinColumn(name = "book_id"),
-            inverseJoinColumns = @JoinColumn(name = "author_id"))
+    @ManyToMany(mappedBy = "books" )
     private Set<BookAuthor> authors = new HashSet<>();
 
     @Version

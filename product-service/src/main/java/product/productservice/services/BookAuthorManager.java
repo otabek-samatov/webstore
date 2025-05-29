@@ -56,7 +56,7 @@ public class BookAuthorManager {
             throw new IllegalArgumentException("ids collection cannot be null or empty");
         }
 
-        if (ids.size() != repository.countByIds(ids)){
+        if (ids.size() != repository.countByIdIn(ids)){
             throw new EntityNotFoundException("Some of the authors with ids " + ids + " not found");
         }
 
@@ -70,7 +70,7 @@ public class BookAuthorManager {
     }
 
     public void deleteById(Long id) {
-        long bookCount = bookRepository.countOfBooksByAuthorID(id);
+        long bookCount = bookRepository.countBooksByAuthorsId(id);
         if (bookCount > 0) {
             throw new RuntimeException(bookCount +  " books use this author. Cannot delete book Author.");
         }
@@ -79,6 +79,6 @@ public class BookAuthorManager {
     }
 
     public List<Book> findBooksByAuthorId(Long id) {
-        return bookRepository.findBooksByAuthorId(id);
+        return bookRepository.findBooksByAuthorsId(id);
     }
 }

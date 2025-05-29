@@ -55,7 +55,8 @@ public class ProductCategoryManager {
             throw new IllegalArgumentException("ids collection cannot be null or empty");
         }
 
-        if (ids.size() != repository.countByIds(ids)) {
+        if (ids.size() != repository.countByIdIn(ids)){
+
             throw new EntityNotFoundException("Some of the categories with ids " + ids + " not found");
         }
 

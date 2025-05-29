@@ -1,7 +1,6 @@
 package product.productservice.repositories;
 
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import product.productservice.entities.Book;
@@ -11,23 +10,11 @@ import java.util.List;
 @Repository
 public interface BookRepository extends JpaRepository<Book, Long> {
 
-    @Query("SELECT COUNT(b.id) FROM Book b JOIN b.authors a WHERE a.id = :authorId ")
-    long countOfBooksByAuthorID(@Param("authorId") Long authorId);
+    long countBooksByAuthorsId(Long authorsId);
 
-    @Query("SELECT b FROM Book b JOIN b.authors a WHERE a.id = :authorId")
-    List<Book> findBooksByAuthorId(@Param("authorId") Long authorId);
+    List<Book>  findBooksByAuthorsId(@Param("authorId") Long authorId);
 
-    @Query("SELECT COUNT(b.id) FROM Book b where b.publisherCompany.id = :publisherId ")
-    long countOfBooksByPublisherId(@Param("publisherId") Long publisherId);
-
-    @Query("SELECT b FROM Book b WHERE b.publisherCompany.id = :publisherId")
-    List<Book> findBooksByPublisherId(@Param("publisherId") Long publisherId);
-
-    @Query("SELECT b FROM Book b JOIN b.categories c WHERE c.id = :categoryId")
-    List<Book> findBooksByCategoryId(@Param("categoryId") Long categoryId);
-
-    @Query("SELECT count(b.id) FROM Book b JOIN b.categories c WHERE c.id = :categoryId")
-    long countOfBooksByCategoryId(@Param("categoryId") Long categoryId);
+    long countBooksByPublisherCompanyId(Long publisherCompanyId);
 
 
 }

@@ -60,7 +60,7 @@ public class PublisherCompanyManager {
     }
 
     public void deleteById(Long id) {
-        long bookCount = bookRepository.countOfBooksByPublisherId(id);
+        long bookCount = bookRepository.countBooksByPublisherCompanyId(id);
         if (bookCount > 0) {
             throw new RuntimeException(bookCount +  " books use this publisher company. Cannot delete Publisher Company.");
         }
@@ -69,6 +69,6 @@ public class PublisherCompanyManager {
     }
 
     public List<Book> findBooksByPublisherId(Long id) {
-        return bookRepository.findBooksByPublisherId(id);
+        return bookRepository.findBooksByPublisherCompanyId(id);
     }
 }
