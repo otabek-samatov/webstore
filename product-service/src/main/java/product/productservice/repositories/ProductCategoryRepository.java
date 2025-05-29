@@ -7,9 +7,9 @@ import java.util.Collection;
 
 public interface ProductCategoryRepository extends JpaRepository<ProductCategory, Long> {
 
+  long countByParentCategoryId(Long parentCategoryId);
+
+  long countByIdIn(Collection<Long> ids);
 
 
-  @Query("SELECT COUNT(pc.id) FROM ProductCategory pc WHERE pc.parentCategory.id = :parentId")
-  long countByParentIds(@Param("parentId") Long parentId);
-  }
 }

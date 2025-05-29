@@ -70,16 +70,16 @@ public class ProductCategoryManager {
     }
 
     public List<Book> findBooksByCategoryId(Long id) {
-        return bookRepository.findBooksByCategoryId(id);
+        return bookRepository.findBooksByCategoriesId(id);
     }
 
     public void deleteById(Long id) {
-        long count = bookRepository.countOfBooksByCategoryId(id);
+        long count = bookRepository.countOfBooksByCategoriesId(id);
         if (count > 0) {
             throw new RuntimeException(count + " books use this category. Cannot delete category.");
         }
 
-        count = repository.countByParentIds(id);
+        count = repository.countByParentCategoryId(id);
         if (count > 0) {
             throw new RuntimeException(count + " categories use this author. Cannot delete category.");
         }
