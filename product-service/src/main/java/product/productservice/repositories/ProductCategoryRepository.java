@@ -11,4 +11,7 @@ public interface ProductCategoryRepository extends JpaRepository<ProductCategory
 
   @Query("SELECT COUNT(pc.id) FROM ProductCategory pc WHERE pc.id IN :ids")
   long countByIds(@Param("ids") Collection<Long> ids);
+
+  @Query("SELECT COUNT(pc.id) FROM ProductCategory pc WHERE pc.parentCategory.id = :parentId")
+  long countByParentIds(@Param("parentId") Long parentId);
   }
