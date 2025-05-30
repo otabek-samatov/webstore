@@ -6,9 +6,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.proxy.HibernateProxy;
 
-import java.util.LinkedHashSet;
 import java.util.Objects;
-import java.util.Set;
 
 @Getter
 @Setter
@@ -28,9 +26,6 @@ public class PublisherCompany {
     @Version
     @Column(name = "version")
     private Long version;
-
-    @OneToMany(mappedBy = "publisherCompany")
-    private Set<Book> books = new LinkedHashSet<>();
 
     @Override
     public final boolean equals(Object o) {

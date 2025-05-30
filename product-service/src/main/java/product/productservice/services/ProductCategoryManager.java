@@ -3,6 +3,7 @@ package product.productservice.services;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import product.productservice.dto.ProductCategoryDto;
 import product.productservice.entities.Book;
 import product.productservice.entities.ProductCategory;
@@ -44,7 +45,12 @@ public class ProductCategoryManager {
         }
 
         mapper.update(dto, entity);
-        entity.setParentCategory(repository.getReferenceById(dto.getParentCategoryId()));
+
+        if (dto.getParentCategoryId() != null) {
+            entity.setParentCategory(repository.getReferenceById(dto.getParentCategoryId()));
+        } else {
+            entity.setParentCategory(null);
+        }
 
         return repository.save(entity);
     }
@@ -55,7 +61,7 @@ public class ProductCategoryManager {
             throw new IllegalArgumentException("ids collection cannot be null or empty");
         }
 
-        if (ids.size() != repository.countByIdIn(ids)){
+        if (ids.size() != repository.countByIdIn(ids)) {
 
             throw new EntityNotFoundException("Some of the categories with ids " + ids + " not found");
         }
@@ -85,6 +91,28 @@ public class ProductCategoryManager {
         }
 
         repository.deleteById(id);
+    }
+
+    public boolean createByFields(String categoryName, String parentCategoryName) {
+
+        Long id = repository.getIdByName(categoryName);
+        if (id != null) {
+            return false;
+        }
+
+        Long parentId = null;
+        if (StringUtils.hasText(parentCategoryName)){
+            parentId = repository.getIdByName(parentCategoryName);
+        }
+
+        ProductCategoryDto dto = ProductCategoryDto.builder()
+                .name(categoryName)
+                .parentCategoryId(parentId)
+                .build();
+
+        create(dto);
+
+        return true;
     }
 
 }
