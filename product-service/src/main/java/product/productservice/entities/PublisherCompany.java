@@ -22,7 +22,7 @@ public class PublisherCompany {
     private Long id;
 
     @NotBlank(message = "Publisher name should be specified")
-    @Column(name = "name", nullable = false)
+    @Column(name = "name", nullable = false, unique = true)
     private String name;
 
     @Version

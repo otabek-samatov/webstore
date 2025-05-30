@@ -45,8 +45,11 @@ public class Book {
     @Column(name = "publication_date", nullable = false)
     private LocalDate publicationDate;
 
-    @ManyToMany(mappedBy = "books" )
+    @ManyToMany
     @NotEmpty(message = "Category should be specified")
+    @JoinTable(name = "book_categories",
+            joinColumns = @JoinColumn(name = "book_id"),
+            inverseJoinColumns = @JoinColumn(name = "categories_id"))
     private Set<ProductCategory> categories = new HashSet<>();
 
     @NotBlank(message = "ISBN should be specified")

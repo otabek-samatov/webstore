@@ -5,9 +5,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.proxy.HibernateProxy;
 
-import java.util.LinkedHashSet;
 import java.util.Objects;
-import java.util.Set;
 
 @Getter
 @Setter
@@ -21,7 +19,7 @@ public class ProductCategory {
     private Long id;
 
     @jakarta.validation.constraints.NotBlank(message = "Category Name should be specified")
-    @Column(name = "name", nullable = false)
+    @Column(name = "name", nullable = false, unique = true)
     private String name;
 
     @ManyToOne
@@ -32,11 +30,6 @@ public class ProductCategory {
     @Column(name = "version")
     private Long version;
 
-    @ManyToMany
-    @JoinTable(name = "book_categories",
-            joinColumns = @JoinColumn(name = "categories_id"),
-            inverseJoinColumns = @JoinColumn(name = "book_id"))
-    private Set<Book> books = new LinkedHashSet<>();
 
     @Override
     public final boolean equals(Object o) {
