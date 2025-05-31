@@ -7,13 +7,13 @@ import lombok.Setter;
 @Getter
 @Setter
 @Entity
-@Table(name = "BookAuthor", uniqueConstraints = {
-        @UniqueConstraint(name = "uc_bookauthor_bookid_authorid", columnNames = {"bookId", "authorId"})
+@Table(name = "BookCategory", uniqueConstraints = {
+        @UniqueConstraint(name = "uc_bookcategory_bookid", columnNames = {"bookId", "categoryId"})
 })
-public class BookAuthor {
+public class BookCategory {
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "book_author_seq")
-    @SequenceGenerator(name = "book_author_seq")
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "book_category_seq")
+    @SequenceGenerator(name = "book_category_seq")
     @Column(name = "id", nullable = false)
     private Long id;
 
@@ -22,7 +22,7 @@ public class BookAuthor {
     private Book book;
 
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
-    @JoinColumn(name = "authorId", nullable = false)
-    private Author author;
+    @JoinColumn(name = "categoryId", nullable = false)
+    private Category category;
 
 }

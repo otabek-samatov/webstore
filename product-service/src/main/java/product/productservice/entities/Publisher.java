@@ -6,31 +6,28 @@ import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.proxy.HibernateProxy;
 
-import java.util.LinkedHashSet;
 import java.util.Objects;
-import java.util.Set;
 
 @Getter
 @Setter
 @Entity
-@Table(name = "publisher_company")
-public class PublisherCompany {
+@Table(name = "Publisher", indexes = {
+        @Index(name = "idx_publisher_name", columnList = "name")
+})
+public class Publisher {
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "publisher_company_seq")
-    @SequenceGenerator(name = "publisher_company_seq", allocationSize = 1)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "publisher_seq")
+    @SequenceGenerator(name = "publisher_seq", allocationSize = 1)
     @Column(name = "id", nullable = false)
     private Long id;
+
+    @Version
+    @Column(name = "version")
+    private Integer version;
 
     @NotBlank(message = "Publisher name should be specified")
     @Column(name = "name", nullable = false, unique = true)
     private String name;
-
-    @Version
-    @Column(name = "version")
-    private Long version;
-
-    @OneToMany(mappedBy = "publisherCompany")
-    private Set<Book> books = new LinkedHashSet<>();
 
     @Override
     public final boolean equals(Object o) {
@@ -39,7 +36,7 @@ public class PublisherCompany {
         Class<?> oEffectiveClass = o instanceof HibernateProxy ? ((HibernateProxy) o).getHibernateLazyInitializer().getPersistentClass() : o.getClass();
         Class<?> thisEffectiveClass = this instanceof HibernateProxy ? ((HibernateProxy) this).getHibernateLazyInitializer().getPersistentClass() : this.getClass();
         if (thisEffectiveClass != oEffectiveClass) return false;
-        PublisherCompany that = (PublisherCompany) o;
+        Publisher that = (Publisher) o;
         return getId() != null && Objects.equals(getId(), that.getId());
     }
 

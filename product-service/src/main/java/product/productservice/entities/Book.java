@@ -2,7 +2,6 @@ package product.productservice.entities;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Getter;
@@ -12,14 +11,13 @@ import org.hibernate.proxy.HibernateProxy;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
 
 @Getter
 @Setter
 @Entity
-@Table(name = "book", indexes = {
+@Table(name = "Book", indexes = {
         @Index(name = "idx_book_title", columnList = "title")
 })
 public class Book {
@@ -28,6 +26,10 @@ public class Book {
     @SequenceGenerator(name = "book_seq", allocationSize = 1)
     @Column(name = "id", nullable = false)
     private Long id;
+
+    @Version
+    @Column(name = "version")
+    private Long version;
 
     @NotBlank(message = "Title should be specified")
     @Column(name = "title", nullable = false)
@@ -38,19 +40,12 @@ public class Book {
 
     @NotNull(message = "Publisher should be specified")
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
-    @JoinColumn(name = "publisher_company_id", nullable = false)
-    private PublisherCompany publisherCompany;
+    @JoinColumn(name = "publisherId", nullable = false)
+    private Publisher publisher;
 
     @NotNull(message = "Publication date should be specified")
-    @Column(name = "publication_date", nullable = false)
+    @Column(name = "publicationDate", nullable = false)
     private LocalDate publicationDate;
-
-    @ManyToMany
-    @NotEmpty(message = "Category should be specified")
-    @JoinTable(name = "book_categories",
-            joinColumns = @JoinColumn(name = "book_id"),
-            inverseJoinColumns = @JoinColumn(name = "categories_id"))
-    private Set<ProductCategory> categories = new HashSet<>();
 
     @NotBlank(message = "ISBN should be specified")
     @Column(name = "isbn", nullable = false, unique = true)
@@ -60,7 +55,7 @@ public class Book {
     private String description;
 
     @PositiveOrZero(message = "Price should be non negative")
-    @Column(name = "price", nullable = false, precision = 19, scale = 2)
+    @Column(name = "price", nullable = false, precision = 6, scale = 2)
     private BigDecimal price;
 
     @NotBlank(message = "Language should be specified")
@@ -68,17 +63,9 @@ public class Book {
     private String language;
 
     @ElementCollection
-    @Column(name = "book_image_url")
-    @CollectionTable(name = "book_Images", joinColumns = @JoinColumn(name = "book_id"))
-    private Set<String> bookImages = new LinkedHashSet<>();
-
-    @NotEmpty(message = "Authors should be specified")
-    @ManyToMany(mappedBy = "books" )
-    private Set<BookAuthor> authors = new HashSet<>();
-
-    @Version
-    @Column(name = "version")
-    private Long version;
+    @Column(name = "imageUrl")
+    @CollectionTable(name = "BookImages", joinColumns = @JoinColumn(name = "bookid"))
+    private Set<String> bookImages = new HashSet<>();
 
     @Override
     public final boolean equals(Object o) {

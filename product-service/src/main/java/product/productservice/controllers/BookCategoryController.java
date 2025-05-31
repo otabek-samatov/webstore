@@ -5,12 +5,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import product.productservice.dto.BookDto;
-import product.productservice.dto.ProductCategoryDto;
+import product.productservice.dto.CategoryDto;
 import product.productservice.entities.Book;
-import product.productservice.entities.ProductCategory;
+import product.productservice.entities.Category;
 import product.productservice.mappers.BookMapper;
-import product.productservice.mappers.ProductCategoryMapper;
-import product.productservice.services.ProductCategoryManager;
+import product.productservice.mappers.CategoryMapper;
+import product.productservice.services.CategoryManager;
 
 import java.util.List;
 
@@ -20,13 +20,13 @@ import java.util.List;
 public class BookCategoryController {
 
 
-    private final ProductCategoryManager manager;
-    private final ProductCategoryMapper mapper;
+    private final CategoryManager manager;
+    private final CategoryMapper mapper;
     private final BookMapper bookMapper;
 
     @GetMapping("/{categoryId}")
-    private ResponseEntity<ProductCategoryDto> getById(@PathVariable Long categoryId) {
-        ProductCategory category = manager.findById(categoryId);
+    private ResponseEntity<CategoryDto> getById(@PathVariable Long categoryId) {
+        Category category = manager.findById(categoryId);
         return ResponseEntity.ok(mapper.toDto(category));
     }
 
@@ -43,14 +43,14 @@ public class BookCategoryController {
     }
 
     @PostMapping
-    public ResponseEntity<ProductCategoryDto> create(@RequestBody ProductCategoryDto dto) {
-        ProductCategory c = manager.create(dto);
+    public ResponseEntity<CategoryDto> create(@RequestBody CategoryDto dto) {
+        Category c = manager.create(dto);
         return ResponseEntity.ok(mapper.toDto(c));
     }
 
     @PutMapping
-    public ResponseEntity<ProductCategoryDto> update(@RequestBody ProductCategoryDto dto) {
-        ProductCategory c = manager.update(dto);
+    public ResponseEntity<CategoryDto> update(@RequestBody CategoryDto dto) {
+        Category c = manager.update(dto);
         return ResponseEntity.ok(mapper.toDto(c));
     }
 }

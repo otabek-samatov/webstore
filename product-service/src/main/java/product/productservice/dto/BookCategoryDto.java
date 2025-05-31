@@ -6,17 +6,15 @@ import lombok.Value;
 import java.io.Serializable;
 
 /**
- * DTO for {@link product.productservice.entities.BookAuthorRelation}
+ * DTO for {@link product.productservice.entities.BookCategoryRelation}
  */
-
 @Builder
 @Value
-public class BookAuthorDto implements Serializable {
+public class BookCategoryDto implements Serializable {
 
     Long id;
 
     Long bookId;
 
-    Long authorId;
-
+    Long categoryId;
 }

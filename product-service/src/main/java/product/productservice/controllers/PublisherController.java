@@ -4,13 +4,13 @@ package product.productservice.controllers;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import product.productservice.dto.PublisherCompanyDto;
 import product.productservice.dto.BookDto;
+import product.productservice.dto.PublisherDto;
 import product.productservice.entities.Book;
-import product.productservice.entities.PublisherCompany;
+import product.productservice.entities.Publisher;
 import product.productservice.mappers.BookMapper;
-import product.productservice.mappers.PublisherCompanyMapper;
-import product.productservice.services.PublisherCompanyManager;
+import product.productservice.mappers.PublisherMapper;
+import product.productservice.services.PublisherManager;
 
 import java.util.List;
 
@@ -19,13 +19,13 @@ import java.util.List;
 @RequestMapping(value = "v1/books/publisher")
 public class PublisherController {
 
-    private final PublisherCompanyManager manager;
-    private final PublisherCompanyMapper mapper;
+    private final PublisherManager manager;
+    private final PublisherMapper mapper;
     private final BookMapper bookMapper;
 
     @GetMapping("/{publisherId}")
-    private ResponseEntity<PublisherCompanyDto> getById(@PathVariable Long publisherId) {
-        PublisherCompany book = manager.findById(publisherId);
+    private ResponseEntity<PublisherDto> getById(@PathVariable Long publisherId) {
+        Publisher book = manager.findById(publisherId);
         return ResponseEntity.ok(mapper.toDto(book));
     }
 
@@ -42,14 +42,14 @@ public class PublisherController {
     }
 
     @PostMapping
-    public ResponseEntity<PublisherCompanyDto> create(@RequestBody PublisherCompanyDto dto) {
-        PublisherCompany book = manager.create(dto);
+    public ResponseEntity<PublisherDto> create(@RequestBody PublisherDto dto) {
+        Publisher book = manager.create(dto);
         return ResponseEntity.ok(mapper.toDto(book));
     }
 
     @PutMapping
-    public ResponseEntity<PublisherCompanyDto> update(@RequestBody PublisherCompanyDto dto) {
-        PublisherCompany book = manager.update(dto);
+    public ResponseEntity<PublisherDto> update(@RequestBody PublisherDto dto) {
+        Publisher book = manager.update(dto);
         return ResponseEntity.ok(mapper.toDto(book));
     }
 }

@@ -4,11 +4,11 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import product.productservice.dto.BookAuthorDto;
+import product.productservice.dto.AuthorDto;
+import product.productservice.entities.Author;
 import product.productservice.entities.Book;
-import product.productservice.entities.BookAuthor;
-import product.productservice.mappers.BookAuthorMapper;
-import product.productservice.repositories.BookAuthorRepository;
+import product.productservice.mappers.AuthorMapper;
+import product.productservice.repositories.AuthorRepository;
 import product.productservice.repositories.BookRepository;
 import product.productservice.validators.CustomValidator;
 
@@ -21,37 +21,37 @@ import java.util.stream.Collectors;
 @Service
 public class BookAuthorManager {
 
-    private final BookAuthorRepository repository;
+    private final AuthorRepository repository;
     private final BookRepository bookRepository;
-    private final BookAuthorMapper mapper;
+    private final AuthorMapper mapper;
     private final CustomValidator validator;
 
     @Transactional
-    public BookAuthor create(BookAuthorDto dto) {
+    public Author create(AuthorDto dto) {
         return createOrUpdate(dto, true);
     }
 
     @Transactional
-    public BookAuthor update(BookAuthorDto dto) {
+    public Author update(AuthorDto dto) {
         return createOrUpdate(dto, false);
     }
 
-    private BookAuthor createOrUpdate(BookAuthorDto dto, boolean createFlag) {
+    private Author createOrUpdate(AuthorDto dto, boolean createFlag) {
         validator.validate(dto);
 
-        BookAuthor entity;
+        Author entity;
         if (createFlag) {
-            entity = new BookAuthor();
+            entity = new Author();
         } else {
             entity = repository.findById(dto.getId()).orElseThrow(() -> new EntityNotFoundException(dto + " not found"));
         }
 
-        mapper.update(dto, entity);
+        mapper.partialUpdate(dto, entity);
 
         return repository.save(entity);
     }
 
-    public Set<BookAuthor> getReferenceByIDs(Collection<Long> ids){
+    public Set<Author> getReferenceByIDs(Collection<Long> ids){
         if (ids == null || ids.isEmpty()) {
             throw new IllegalArgumentException("ids collection cannot be null or empty");
         }
@@ -65,7 +65,7 @@ public class BookAuthorManager {
                 .collect(Collectors.toSet());
     }
 
-    public BookAuthor findById(Long id) {
+    public Author findById(Long id) {
         return repository.findById(id).orElseThrow(() -> new EntityNotFoundException("BookAuthor with id " + id + " not found"));
     }
 

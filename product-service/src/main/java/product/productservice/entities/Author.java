@@ -1,6 +1,7 @@
 package product.productservice.entities;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.proxy.HibernateProxy;
@@ -10,26 +11,29 @@ import java.util.Objects;
 @Getter
 @Setter
 @Entity
-@Table(name = "product_category")
-public class ProductCategory {
+@Table(name = "Author", indexes = {
+        @Index(name = "idx_lastName", columnList = "lastName")
+})
+public class Author {
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "product_category_seq")
-    @SequenceGenerator(name = "product_category_seq", allocationSize = 1)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "author_seq")
+    @SequenceGenerator(name = "author_seq", allocationSize = 1)
     @Column(name = "id", nullable = false)
     private Long id;
 
-    @jakarta.validation.constraints.NotBlank(message = "Category Name should be specified")
-    @Column(name = "name", nullable = false, unique = true)
-    private String name;
-
-    @ManyToOne
-    @JoinColumn(name = "parent_category_id")
-    private ProductCategory parentCategory;
-
     @Version
     @Column(name = "version")
-    private Long version;
+    private Integer version;
 
+    @Column(name = "firstName")
+    private String firstName;
+
+    @Column(name = "middleName")
+    private String middleName;
+
+    @NotBlank(message = "Last Name should be specified")
+    @Column(name = "lastName", nullable = false)
+    private String lastName;
 
     @Override
     public final boolean equals(Object o) {
@@ -38,7 +42,7 @@ public class ProductCategory {
         Class<?> oEffectiveClass = o instanceof HibernateProxy ? ((HibernateProxy) o).getHibernateLazyInitializer().getPersistentClass() : o.getClass();
         Class<?> thisEffectiveClass = this instanceof HibernateProxy ? ((HibernateProxy) this).getHibernateLazyInitializer().getPersistentClass() : this.getClass();
         if (thisEffectiveClass != oEffectiveClass) return false;
-        ProductCategory that = (ProductCategory) o;
+        Author that = (Author) o;
         return getId() != null && Objects.equals(getId(), that.getId());
     }
 
