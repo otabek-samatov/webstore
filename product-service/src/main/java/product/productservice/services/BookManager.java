@@ -4,6 +4,8 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import product.productservice.dto.BookAuthorRelationDto;
+import product.productservice.dto.BookCategoryRelationDto;
 import product.productservice.dto.BookDto;
 import product.productservice.entities.Book;
 import product.productservice.mappers.BookMapper;
@@ -21,15 +23,15 @@ public class BookManager {
 
     @Transactional
     public Book create(BookDto dto) {
-        return createOrUpdate(dto, true);
+        return createOrUpdate(dto, null, null, true);
     }
 
     @Transactional
     public Book update(BookDto dto) {
-        return createOrUpdate(dto, false);
+        return createOrUpdate(dto, null, null,false);
     }
 
-    private Book createOrUpdate(BookDto dto, boolean createFlag) {
+    private Book createOrUpdate(BookDto dto, BookAuthorRelationDto authorRelationDto, BookCategoryRelationDto categoryRelationDto, boolean createFlag) {
 
         validator.validate(dto);
 

@@ -12,6 +12,8 @@ import java.util.Objects;
 @Entity
 @Table(name = "BookCategoryRelation", indexes = {
         @Index(name = "idx_bookcategoryrelation", columnList = "bookId, productCategoryId")
+}, uniqueConstraints = {
+        @UniqueConstraint(name = "uc_bookcategoryrelation", columnNames = {"bookId", "productCategoryId"})
 })
 public class BookCategoryRelation {
     @Id
