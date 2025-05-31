@@ -11,19 +11,19 @@ import java.util.Objects;
 @Getter
 @Setter
 @Entity
-@Table(name = "ProductCategory", indexes = {
-        @Index(name = "idx_productcategory_name", columnList = "name")
+@Table(name = "Category", indexes = {
+        @Index(name = "idx_category_name", columnList = "name")
 })
-public class ProductCategory {
+public class Category {
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "product_category_seq")
-    @SequenceGenerator(name = "product_category_seq", allocationSize = 1)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "category_seq")
+    @SequenceGenerator(name = "category_seq", allocationSize = 1)
     @Column(name = "id", nullable = false)
     private Long id;
 
     @Version
     @Column(name = "version")
-    private Long version;
+    private Integer version;
 
     @NotBlank(message = "Category Name should be specified")
     @Column(name = "name", nullable = false, unique = true)
@@ -31,7 +31,7 @@ public class ProductCategory {
 
     @ManyToOne
     @JoinColumn(name = "parentId")
-    private ProductCategory parent;
+    private Category parent;
 
     @Override
     public final boolean equals(Object o) {
@@ -40,7 +40,7 @@ public class ProductCategory {
         Class<?> oEffectiveClass = o instanceof HibernateProxy ? ((HibernateProxy) o).getHibernateLazyInitializer().getPersistentClass() : o.getClass();
         Class<?> thisEffectiveClass = this instanceof HibernateProxy ? ((HibernateProxy) this).getHibernateLazyInitializer().getPersistentClass() : this.getClass();
         if (thisEffectiveClass != oEffectiveClass) return false;
-        ProductCategory that = (ProductCategory) o;
+        Category that = (Category) o;
         return getId() != null && Objects.equals(getId(), that.getId());
     }
 

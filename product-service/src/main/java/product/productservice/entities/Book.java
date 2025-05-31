@@ -25,7 +25,7 @@ public class Book {
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "book_seq")
     @SequenceGenerator(name = "book_seq", allocationSize = 1)
     @Column(name = "id", nullable = false)
-    private Long id;
+    private Integer id;
 
     @Version
     @Column(name = "version")
@@ -41,7 +41,7 @@ public class Book {
     @NotNull(message = "Publisher should be specified")
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
     @JoinColumn(name = "publisherId", nullable = false)
-    private PublisherCompany publisher;
+    private Publisher publisher;
 
     @NotNull(message = "Publication date should be specified")
     @Column(name = "publicationDate", nullable = false)

@@ -3,39 +3,39 @@ package product.productservice.services;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import product.productservice.dto.PublisherCompanyDto;
+import product.productservice.dto.PublisherDto;
 import product.productservice.entities.Book;
-import product.productservice.entities.PublisherCompany;
-import product.productservice.mappers.PublisherCompanyMapper;
+import product.productservice.entities.Publisher;
+import product.productservice.mappers.PublisherMapper;
 import product.productservice.repositories.BookRepository;
-import product.productservice.repositories.PublisherCompanyRepository;
+import product.productservice.repositories.PublisherRepository;
 import product.productservice.validators.CustomValidator;
 
 import java.util.List;
 
 @RequiredArgsConstructor
 @Service
-public class PublisherCompanyManager {
+public class PublisherManager {
 
-    private final PublisherCompanyRepository repository;
+    private final PublisherRepository repository;
     private final BookRepository bookRepository;
-    private final PublisherCompanyMapper mapper;
+    private final PublisherMapper mapper;
     private final CustomValidator validator;
 
-    public PublisherCompany create(PublisherCompanyDto dto) {
+    public Publisher create(PublisherDto dto) {
         return createOrUpdate(dto, true);
     }
 
-    public PublisherCompany update(PublisherCompanyDto dto) {
+    public Publisher update(PublisherDto dto) {
         return createOrUpdate(dto, false);
     }
 
-    private PublisherCompany createOrUpdate(PublisherCompanyDto dto, boolean createFlag) {
+    private Publisher createOrUpdate(PublisherDto dto, boolean createFlag) {
         validator.validate(dto);
 
-        PublisherCompany entity;
+        Publisher entity;
         if (createFlag) {
-            entity = new PublisherCompany();
+            entity = new Publisher();
         } else {
             entity = repository.findById(dto.getId()).orElseThrow(() -> new EntityNotFoundException(dto + " not found"));
         }
@@ -43,7 +43,7 @@ public class PublisherCompanyManager {
         return repository.save(entity);
     }
 
-    public PublisherCompany getReferenceByID(Long id){
+    public Publisher getReferenceByID(Long id){
         if (id == null) {
             throw new IllegalArgumentException("id cannot be null ");
         }
@@ -55,7 +55,7 @@ public class PublisherCompanyManager {
         return repository.getReferenceById(id);
     }
 
-    public PublisherCompany findById(Long id) {
+    public Publisher findById(Long id) {
         return repository.findById(id).orElseThrow(() -> new EntityNotFoundException("Publisher with id " + id + " not found"));
     }
 

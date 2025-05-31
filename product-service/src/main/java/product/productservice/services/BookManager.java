@@ -4,8 +4,6 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import product.productservice.dto.BookAuthorRelationDto;
-import product.productservice.dto.BookCategoryRelationDto;
 import product.productservice.dto.BookDto;
 import product.productservice.entities.Book;
 import product.productservice.mappers.BookMapper;
@@ -18,20 +16,20 @@ public class BookManager {
 
     private final BookRepository repository;
     private final BookMapper mapper;
-    private final PublisherCompanyManager publisherCompanyManager;
+    private final PublisherManager publisherManager;
     private final CustomValidator validator;
 
     @Transactional
     public Book create(BookDto dto) {
-        return createOrUpdate(dto, null, null, true);
+        return createOrUpdate(dto, true);
     }
 
     @Transactional
     public Book update(BookDto dto) {
-        return createOrUpdate(dto, null, null,false);
+        return createOrUpdate(dto, false);
     }
 
-    private Book createOrUpdate(BookDto dto, BookAuthorRelationDto authorRelationDto, BookCategoryRelationDto categoryRelationDto, boolean createFlag) {
+    private Book createOrUpdate(BookDto dto, boolean createFlag) {
 
         validator.validate(dto);
 
@@ -45,7 +43,7 @@ public class BookManager {
 
         mapper.partialUpdate(dto, entity);
 
-        entity.setPublisher(publisherCompanyManager.getReferenceByID(dto.getPublisherId()));
+        entity.setPublisher(publisherManager.getReferenceByID(dto.getPublisherId()));
 
         return repository.save(entity);
     }

@@ -1,53 +1,28 @@
 package product.productservice.entities;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.proxy.HibernateProxy;
-
-import java.util.Objects;
 
 @Getter
 @Setter
 @Entity
-@Table(name = "BookAuthor", indexes = {
-        @Index(name = "idx_lastName", columnList = "lastName")
+@Table(name = "BookAuthor", uniqueConstraints = {
+        @UniqueConstraint(name = "uc_bookauthor_bookid_authorid", columnNames = {"bookId", "authorId"})
 })
 public class BookAuthor {
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "book_author_seq")
-    @SequenceGenerator(name = "book_author_seq", allocationSize = 1)
+    @SequenceGenerator(name = "book_author_seq")
     @Column(name = "id", nullable = false)
     private Long id;
 
-    @Version
-    @Column(name = "version")
-    private Long version;
+    @ManyToOne
+    @JoinColumn(name = "bookId")
+    private Book book;
 
-    @Column(name = "firstName")
-    private String firstName;
+    @ManyToOne
+    @JoinColumn(name = "authorId")
+    private Author author;
 
-    @Column(name = "middleName")
-    private String middleName;
-
-    @NotBlank(message = "Last Name should be specified")
-    @Column(name = "lastName", nullable = false)
-    private String lastName;
-
-    @Override
-    public final boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null) return false;
-        Class<?> oEffectiveClass = o instanceof HibernateProxy ? ((HibernateProxy) o).getHibernateLazyInitializer().getPersistentClass() : o.getClass();
-        Class<?> thisEffectiveClass = this instanceof HibernateProxy ? ((HibernateProxy) this).getHibernateLazyInitializer().getPersistentClass() : this.getClass();
-        if (thisEffectiveClass != oEffectiveClass) return false;
-        BookAuthor that = (BookAuthor) o;
-        return getId() != null && Objects.equals(getId(), that.getId());
-    }
-
-    @Override
-    public final int hashCode() {
-        return this instanceof HibernateProxy ? ((HibernateProxy) this).getHibernateLazyInitializer().getPersistentClass().hashCode() : getClass().hashCode();
-    }
 }

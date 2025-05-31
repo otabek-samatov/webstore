@@ -3,17 +3,21 @@ package product.productservice.dto;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Builder;
 import lombok.Value;
+import product.productservice.entities.Category;
 
 import java.io.Serializable;
 
 /**
- * DTO for {@link product.productservice.entities.PublisherCompany}
+ * DTO for {@link Category}
  */
 
 @Builder
 @Value
-public class PublisherCompanyDto implements Serializable {
+public class CategoryDto implements Serializable {
     Long id;
-    @NotBlank(message = "Publisher name should be specified")
+
+    @NotBlank(message = "Category Name should be specified")
     String name;
+
+    Long parentId;
 }
