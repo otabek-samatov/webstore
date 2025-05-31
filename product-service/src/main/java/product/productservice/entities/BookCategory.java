@@ -17,12 +17,12 @@ public class BookCategory {
     @Column(name = "id", nullable = false)
     private Long id;
 
-    @ManyToOne
-    @JoinColumn(name = "bookId")
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    @JoinColumn(name = "bookId", nullable = false)
     private Book book;
 
-    @ManyToOne
-    @JoinColumn(name = "categoryId")
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    @JoinColumn(name = "categoryId", nullable = false)
     private Category category;
 
 }
