@@ -85,7 +85,7 @@ public class ProductCategoryManager {
             throw new RuntimeException(count + " books use this category. Cannot delete category.");
         }
 
-        count = repository.countByParentCategoryId(id);
+        count = repository.countByParentId(id);
         if (count > 0) {
             throw new RuntimeException(count + " categories use this author. Cannot delete category.");
         }
