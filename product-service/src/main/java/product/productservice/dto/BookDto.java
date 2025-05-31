@@ -1,13 +1,10 @@
 package product.productservice.dto;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Builder;
 import lombok.Value;
-import product.productservice.entities.Book;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
@@ -15,7 +12,7 @@ import java.time.LocalDate;
 import java.util.Set;
 
 /**
- * DTO for {@link Book}
+ * DTO for {@link product.productservice.entities.Book}
  */
 @Builder
 @Value
@@ -24,17 +21,12 @@ public class BookDto implements Serializable {
 
     @NotBlank(message = "Title should be specified")
     String title;
+
     String subtitle;
+    Long publisherId;
 
-    @NotNull(message = "Publisher should be specified")
-    Long publisherCompanyId;
-
-    @JsonFormat(pattern = "yyyy-MM-dd")
     @NotNull(message = "Publication date should be specified")
     LocalDate publicationDate;
-
-    @NotEmpty(message = "Category should be specified")
-    Set<Long> categoryIds;
 
     @NotBlank(message = "ISBN should be specified")
     String isbn;
@@ -48,14 +40,4 @@ public class BookDto implements Serializable {
     String language;
 
     Set<String> bookImages;
-
-    @NotEmpty(message = "Authors should be specified")
-    Set<Long> authorIds;
-
-    @Override
-    public String toString() {
-        return "BookDto{" + "id=" + id +
-                ", isbn='" + isbn + '\'' +
-                '}';
-    }
 }

@@ -1,8 +1,8 @@
 package product.productservice.mappers;
 
 import org.mapstruct.*;
-import product.productservice.entities.PublisherCompany;
 import product.productservice.dto.PublisherCompanyDto;
+import product.productservice.entities.PublisherCompany;
 
 import java.util.List;
 

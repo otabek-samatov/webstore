@@ -1,7 +1,6 @@
 package product.productservice.entities;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.proxy.HibernateProxy;
@@ -11,13 +10,13 @@ import java.util.Objects;
 @Getter
 @Setter
 @Entity
-@Table(name = "BookAuthor", indexes = {
-        @Index(name = "idx_lastName", columnList = "lastName")
+@Table(name = "BookCategoryRelation", indexes = {
+        @Index(name = "idx_bookcategoryrelation", columnList = "bookId, productCategoryId")
 })
-public class BookAuthor {
+public class BookCategoryRelation {
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "book_author_seq")
-    @SequenceGenerator(name = "book_author_seq", allocationSize = 1)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "book_category_relation_seq")
+    @SequenceGenerator(name = "book_category_relation_seq", allocationSize = 1)
     @Column(name = "id", nullable = false)
     private Long id;
 
@@ -25,15 +24,13 @@ public class BookAuthor {
     @Column(name = "version")
     private Long version;
 
-    @Column(name = "firstName")
-    private String firstName;
+    @ManyToOne
+    @JoinColumn(name = "bookId")
+    private Book book;
 
-    @Column(name = "middleName")
-    private String middleName;
-
-    @NotBlank(message = "Last Name should be specified")
-    @Column(name = "lastName", nullable = false)
-    private String lastName;
+    @ManyToOne
+    @JoinColumn(name = "productCategoryId")
+    private ProductCategory productCategory;
 
     @Override
     public final boolean equals(Object o) {
@@ -42,7 +39,7 @@ public class BookAuthor {
         Class<?> oEffectiveClass = o instanceof HibernateProxy ? ((HibernateProxy) o).getHibernateLazyInitializer().getPersistentClass() : o.getClass();
         Class<?> thisEffectiveClass = this instanceof HibernateProxy ? ((HibernateProxy) this).getHibernateLazyInitializer().getPersistentClass() : this.getClass();
         if (thisEffectiveClass != oEffectiveClass) return false;
-        BookAuthor that = (BookAuthor) o;
+        BookCategoryRelation that = (BookCategoryRelation) o;
         return getId() != null && Objects.equals(getId(), that.getId());
     }
 

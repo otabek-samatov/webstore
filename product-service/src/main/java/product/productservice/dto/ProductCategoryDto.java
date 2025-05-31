@@ -3,13 +3,13 @@ package product.productservice.dto;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Builder;
 import lombok.Value;
-import product.productservice.entities.ProductCategory;
 
 import java.io.Serializable;
 
 /**
- * DTO for {@link ProductCategory}
+ * DTO for {@link product.productservice.entities.ProductCategory}
  */
+
 @Builder
 @Value
 public class ProductCategoryDto implements Serializable {
@@ -18,5 +18,5 @@ public class ProductCategoryDto implements Serializable {
     @NotBlank(message = "Category Name should be specified")
     String name;
 
-    Long parentCategoryId;
+    Long parentId;
 }

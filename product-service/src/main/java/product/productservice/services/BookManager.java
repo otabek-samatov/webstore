@@ -45,11 +45,7 @@ public class BookManager {
 
         mapper.update(dto, entity);
 
-        entity.setPublisherCompany(publisherCompanyManager.getReferenceByID(dto.getPublisherCompanyId()));
-
-        entity.setAuthors(bookAuthorManager.getReferenceByIDs(dto.getAuthorIds()));
-
-        entity.setCategories(productCategoryManager.getReferenceByIDs(dto.getCategoryIds()));
+        entity.setPublisher(publisherCompanyManager.getReferenceByID(dto.getPublisherId()));
 
         return repository.save(entity);
     }

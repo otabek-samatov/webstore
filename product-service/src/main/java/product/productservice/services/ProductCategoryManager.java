@@ -46,10 +46,10 @@ public class ProductCategoryManager {
 
         mapper.update(dto, entity);
 
-        if (dto.getParentCategoryId() != null) {
-            entity.setParentCategory(repository.getReferenceById(dto.getParentCategoryId()));
+        if (dto.getParentId() != null) {
+            entity.setParent(repository.getReferenceById(dto.getParentId()));
         } else {
-            entity.setParentCategory(null);
+            entity.setParent(null);
         }
 
         return repository.save(entity);
@@ -107,7 +107,7 @@ public class ProductCategoryManager {
 
         ProductCategoryDto dto = ProductCategoryDto.builder()
                 .name(categoryName)
-                .parentCategoryId(parentId)
+                .parentId(parentId)
                 .build();
 
         create(dto);

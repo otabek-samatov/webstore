@@ -1,8 +1,8 @@
 package product.productservice.mappers;
 
 import org.mapstruct.*;
-import product.productservice.entities.BookAuthor;
 import product.productservice.dto.BookAuthorDto;
+import product.productservice.entities.BookAuthor;
 
 import java.util.List;
 
@@ -12,6 +12,7 @@ public interface BookAuthorMapper {
 
     BookAuthorDto toDto(BookAuthor bookAuthor);
 
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     BookAuthor update(BookAuthorDto bookAuthorDto, @MappingTarget BookAuthor bookAuthor);
 
     List<BookAuthor> toEntity(List<BookAuthorDto> bookAuthorDto);

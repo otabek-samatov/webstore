@@ -11,7 +11,9 @@ import java.util.Objects;
 @Getter
 @Setter
 @Entity
-@Table(name = "publisher_company")
+@Table(name = "PublisherCompany", indexes = {
+        @Index(name = "idx_publishercompany_name", columnList = "name")
+})
 public class PublisherCompany {
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "publisher_company_seq")
@@ -19,13 +21,13 @@ public class PublisherCompany {
     @Column(name = "id", nullable = false)
     private Long id;
 
-    @NotBlank(message = "Publisher name should be specified")
-    @Column(name = "name", nullable = false, unique = true)
-    private String name;
-
     @Version
     @Column(name = "version")
     private Long version;
+
+    @NotBlank(message = "Publisher name should be specified")
+    @Column(name = "name", nullable = false, unique = true)
+    private String name;
 
     @Override
     public final boolean equals(Object o) {

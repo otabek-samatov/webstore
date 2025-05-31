@@ -31,11 +31,11 @@ public class MainGenerator implements CommandLineRunner {
     @Override
     public void run(String... args) throws Exception {
 
-        generatePublisherCompanyObjects();
+      //  generatePublisherCompanyObjects();
 
-        generateAuthorObjects();
+    //    generateAuthorObjects();
 
-        generateProductCategoryObjects();
+      //  generateProductCategoryObjects();
 
     }
 

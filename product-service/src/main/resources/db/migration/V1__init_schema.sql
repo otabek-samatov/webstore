@@ -1,95 +1,119 @@
-CREATE SEQUENCE IF NOT EXISTS book_author_seq START WITH 1 INCREMENT BY 50;
+CREATE SEQUENCE IF NOT EXISTS book_author_relation_seq START WITH 1 INCREMENT BY 1;
 
-CREATE SEQUENCE IF NOT EXISTS book_seq START WITH 1 INCREMENT BY 50;
+CREATE SEQUENCE IF NOT EXISTS book_author_seq START WITH 1 INCREMENT BY 1;
 
-CREATE SEQUENCE IF NOT EXISTS product_category_seq START WITH 1 INCREMENT BY 50;
+CREATE SEQUENCE IF NOT EXISTS book_category_relation_seq START WITH 1 INCREMENT BY 1;
 
-CREATE SEQUENCE IF NOT EXISTS publisher_company_seq START WITH 1 INCREMENT BY 50;
+CREATE SEQUENCE IF NOT EXISTS book_seq START WITH 1 INCREMENT BY 1;
 
-CREATE TABLE book
+CREATE SEQUENCE IF NOT EXISTS product_category_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE IF NOT EXISTS publisher_company_seq START WITH 1 INCREMENT BY 1;
+
+CREATE TABLE Book
 (
-    id                   BIGINT         NOT NULL,
-    title                VARCHAR(255)   NOT NULL,
-    subtitle             VARCHAR(255),
-    publisher_company_id BIGINT         NOT NULL,
-    publication_date     date           NOT NULL,
-    isbn                 VARCHAR(255)   NOT NULL,
-    description          VARCHAR(2000),
-    price                DECIMAL(19, 2) NOT NULL,
-    language             VARCHAR(255)   NOT NULL,
+    id              BIGINT        NOT NULL,
+    version         BIGINT,
+    title           VARCHAR(255)  NOT NULL,
+    subtitle        VARCHAR(255),
+    publisherId     BIGINT        NOT NULL,
+    publicationDate date          NOT NULL,
+    isbn            VARCHAR(255)  NOT NULL,
+    description     VARCHAR(2000),
+    price           DECIMAL(6, 2) NOT NULL,
+    language        VARCHAR(255)  NOT NULL,
     CONSTRAINT pk_book PRIMARY KEY (id)
 );
 
-CREATE TABLE book_author
+CREATE TABLE BookAuthor
 (
-    id          BIGINT       NOT NULL,
-    first_name  VARCHAR(255),
-    middle_name VARCHAR(255),
-    last_name   VARCHAR(255) NOT NULL,
-    CONSTRAINT pk_book_author PRIMARY KEY (id)
+    id         BIGINT       NOT NULL,
+    version    BIGINT,
+    firstName  VARCHAR(255),
+    middleName VARCHAR(255),
+    lastName   VARCHAR(255) NOT NULL,
+    CONSTRAINT pk_bookauthor PRIMARY KEY (id)
 );
 
-CREATE TABLE book_authors
+CREATE TABLE BookAuthorRelation
 (
-    author_id BIGINT NOT NULL,
-    book_id   BIGINT NOT NULL,
-    CONSTRAINT pk_book_authors PRIMARY KEY (author_id, book_id)
+    id           BIGINT NOT NULL,
+    version      BIGINT,
+    bookId       BIGINT,
+    bookAuthorId BIGINT,
+    CONSTRAINT pk_bookauthorrelation PRIMARY KEY (id)
 );
 
-CREATE TABLE book_categories
+CREATE TABLE BookCategoryRelation
 (
-    book_id       BIGINT NOT NULL,
-    categories_id BIGINT NOT NULL,
-    CONSTRAINT pk_book_categories PRIMARY KEY (book_id, categories_id)
+    id                  BIGINT NOT NULL,
+    version             BIGINT,
+    bookId             BIGINT,
+    productCategoryId BIGINT,
+    CONSTRAINT pk_book_category_relation PRIMARY KEY (id)
 );
 
-CREATE TABLE book_images
+CREATE TABLE BookImages
 (
-    book_id        BIGINT NOT NULL,
-    book_image_url VARCHAR(255)
+    bookId   BIGINT NOT NULL,
+    imageUrl VARCHAR(255)
 );
 
-CREATE TABLE product_category
+CREATE TABLE ProductCategory
 (
-    id                 BIGINT       NOT NULL,
-    name               VARCHAR(255) NOT NULL,
-    parent_category_id BIGINT,
-    CONSTRAINT pk_product_category PRIMARY KEY (id)
+    id        BIGINT       NOT NULL,
+    version   BIGINT,
+    name      VARCHAR(255) NOT NULL,
+    parentId BIGINT,
+    CONSTRAINT pk_productcategory PRIMARY KEY (id)
 );
 
-CREATE TABLE publisher_company
+CREATE TABLE PublisherCompany
 (
-    id   BIGINT       NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    CONSTRAINT pk_publisher_company PRIMARY KEY (id)
+    id      BIGINT       NOT NULL,
+    version BIGINT,
+    name    VARCHAR(255) NOT NULL,
+    CONSTRAINT pk_publishercompany PRIMARY KEY (id)
 );
 
-ALTER TABLE book
+ALTER TABLE Book
     ADD CONSTRAINT uc_book_isbn UNIQUE (isbn);
 
-CREATE INDEX idx_book_isbn ON book (isbn);
+ALTER TABLE ProductCategory
+    ADD CONSTRAINT uc_productcategory_name UNIQUE (name);
 
-CREATE INDEX idx_book_title ON book (title);
+ALTER TABLE PublisherCompany
+    ADD CONSTRAINT uc_publishercompany_name UNIQUE (name);
 
-CREATE INDEX idx_bookauthor_last_name ON book_author (last_name);
+CREATE INDEX idx_book_title ON Book (title);
 
-ALTER TABLE book
-    ADD CONSTRAINT FK_BOOK_ON_PUBLISHER_COMPANY FOREIGN KEY (publisher_company_id) REFERENCES publisher_company (id);
+CREATE INDEX idx_bookauthorrelation_bookid ON BookAuthorRelation (bookId, bookAuthorId);
 
-ALTER TABLE product_category
-    ADD CONSTRAINT FK_PRODUCT_CATEGORY_ON_PARENT_CATEGORY FOREIGN KEY (parent_category_id) REFERENCES product_category (id);
+CREATE INDEX idx_bookcategoryrelation ON BookCategoryRelation (bookId, productCategoryId);
 
-ALTER TABLE book_authors
-    ADD CONSTRAINT fk_booaut_on_book FOREIGN KEY (book_id) REFERENCES book (id);
+CREATE INDEX idx_lastName ON BookAuthor (lastName);
 
-ALTER TABLE book_authors
-    ADD CONSTRAINT fk_booaut_on_book_author FOREIGN KEY (author_id) REFERENCES book_author (id);
+CREATE INDEX idx_productcategory_name ON ProductCategory (name);
 
-ALTER TABLE book_categories
-    ADD CONSTRAINT fk_boocat_on_book FOREIGN KEY (book_id) REFERENCES book (id);
+CREATE INDEX idx_publishercompany_name ON PublisherCompany (name);
 
-ALTER TABLE book_categories
-    ADD CONSTRAINT fk_boocat_on_product_category FOREIGN KEY (categories_id) REFERENCES product_category (id);
+ALTER TABLE BookAuthorRelation
+    ADD CONSTRAINT FK_BOOKAUTHORRELATION_ON_BOOKAUTHORID FOREIGN KEY (bookAuthorId) REFERENCES BookAuthor (id);
 
-ALTER TABLE book_images
-    ADD CONSTRAINT fk_book_images_on_book FOREIGN KEY (book_id) REFERENCES book (id);
+ALTER TABLE BookAuthorRelation
+    ADD CONSTRAINT FK_BOOKAUTHORRELATION_ON_BOOKID FOREIGN KEY (bookId) REFERENCES book (id);
+
+ALTER TABLE BookCategoryRelation
+    ADD CONSTRAINT FK_BOOK_CATEGORY_RELATION_ON_BOOKID FOREIGN KEY (bookId) REFERENCES book (id);
+
+ALTER TABLE BookCategoryRelation
+    ADD CONSTRAINT FK_BOOK_CATEGORY_RELATION_ON_PRODUCTCATEGORYID FOREIGN KEY (productCategoryId) REFERENCES ProductCategory (id);
+
+ALTER TABLE Book
+    ADD CONSTRAINT FK_BOOK_ON_PUBLISHERID FOREIGN KEY (publisherId) REFERENCES PublisherCompany (id);
+
+ALTER TABLE ProductCategory
+    ADD CONSTRAINT FK_PRODUCTCATEGORY_ON_PARENTID FOREIGN KEY (parentId) REFERENCES ProductCategory (id);
+
+ALTER TABLE BookImages
+    ADD CONSTRAINT fk_bookimages_on_book FOREIGN KEY (bookId) REFERENCES book (id);

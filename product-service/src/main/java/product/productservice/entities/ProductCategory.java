@@ -1,6 +1,7 @@
 package product.productservice.entities;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.proxy.HibernateProxy;
@@ -10,7 +11,9 @@ import java.util.Objects;
 @Getter
 @Setter
 @Entity
-@Table(name = "product_category")
+@Table(name = "ProductCategory", indexes = {
+        @Index(name = "idx_productcategory_name", columnList = "name")
+})
 public class ProductCategory {
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "product_category_seq")
@@ -18,18 +21,17 @@ public class ProductCategory {
     @Column(name = "id", nullable = false)
     private Long id;
 
-    @jakarta.validation.constraints.NotBlank(message = "Category Name should be specified")
-    @Column(name = "name", nullable = false, unique = true)
-    private String name;
-
-    @ManyToOne
-    @JoinColumn(name = "parent_category_id")
-    private ProductCategory parentCategory;
-
     @Version
     @Column(name = "version")
     private Long version;
 
+    @NotBlank(message = "Category Name should be specified")
+    @Column(name = "name", nullable = false, unique = true)
+    private String name;
+
+    @ManyToOne
+    @JoinColumn(name = "parentId")
+    private ProductCategory parent;
 
     @Override
     public final boolean equals(Object o) {
