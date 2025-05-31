@@ -13,7 +13,7 @@ public interface BookAuthorMapper {
     BookAuthorDto toDto(BookAuthor bookAuthor);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
-    BookAuthor update(BookAuthorDto bookAuthorDto, @MappingTarget BookAuthor bookAuthor);
+    BookAuthor partialUpdate(BookAuthorDto bookAuthorDto, @MappingTarget BookAuthor bookAuthor);
 
     List<BookAuthor> toEntity(List<BookAuthorDto> bookAuthorDto);
 

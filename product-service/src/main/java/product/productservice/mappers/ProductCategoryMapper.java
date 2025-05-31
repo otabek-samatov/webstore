@@ -8,13 +8,13 @@ import java.util.List;
 
 @Mapper(unmappedTargetPolicy = ReportingPolicy.IGNORE, componentModel = MappingConstants.ComponentModel.SPRING)
 public interface ProductCategoryMapper {
-    @Mapping(source = "parentId", target = "parent.id")
+    @Mapping(target = "parent", ignore = true)
     ProductCategory toEntity(ProductCategoryDto productCategoryDto);
 
     @Mapping(source = "parent.id", target = "parentId")
     ProductCategoryDto toDto(ProductCategory productCategory);
 
-    @Mapping(source = "parentId", target = "parent.id")
+    @Mapping(target = "parent", ignore = true)
     ProductCategory update(ProductCategoryDto productCategoryDto, @MappingTarget ProductCategory productCategory);
 
     List<ProductCategory> toEntity(List<ProductCategoryDto> productCategoryDto);

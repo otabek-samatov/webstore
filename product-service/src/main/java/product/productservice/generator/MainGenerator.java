@@ -31,11 +31,11 @@ public class MainGenerator implements CommandLineRunner {
     @Override
     public void run(String... args) throws Exception {
 
-      //  generatePublisherCompanyObjects();
+        generatePublisherCompanyObjects();
 
-    //    generateAuthorObjects();
+        generateAuthorObjects();
 
-      //  generateProductCategoryObjects();
+        generateProductCategoryObjects();
 
     }
 
@@ -66,9 +66,7 @@ public class MainGenerator implements CommandLineRunner {
         }
 
         System.out.println("Created PublisherCompany count = " + x);
-
     }
-
 
     private void generateAuthorObjects() {
         final int LIMIT = 1000;

@@ -16,9 +16,7 @@ public class BookManager {
 
     private final BookRepository repository;
     private final BookMapper mapper;
-    private final ProductCategoryManager productCategoryManager;
     private final PublisherCompanyManager publisherCompanyManager;
-    private final BookAuthorManager bookAuthorManager;
     private final CustomValidator validator;
 
     @Transactional
@@ -43,7 +41,7 @@ public class BookManager {
             entity = repository.findById(dto.getId()).orElseThrow(() -> new EntityNotFoundException(dto + " not found"));
         }
 
-        mapper.update(dto, entity);
+        mapper.partialUpdate(dto, entity);
 
         entity.setPublisher(publisherCompanyManager.getReferenceByID(dto.getPublisherId()));
 
