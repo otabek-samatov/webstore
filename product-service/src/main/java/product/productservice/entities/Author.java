@@ -1,6 +1,7 @@
 package product.productservice.entities;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.proxy.HibernateProxy;
@@ -10,29 +11,29 @@ import java.util.Objects;
 @Getter
 @Setter
 @Entity
-@Table(name = "BookAuthorRelation", indexes = {
-        @Index(name = "idx_bookauthorrelation_bookid", columnList = "bookId, bookAuthorId")
-}, uniqueConstraints = {
-        @UniqueConstraint(name = "uc_bookauthorrelation_bookid", columnNames = {"bookId", "bookAuthorId"})
+@Table(name = "Author", indexes = {
+        @Index(name = "idx_lastName", columnList = "lastName")
 })
-public class BookAuthorRelation {
+public class Author {
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "book_author_relation_seq")
-    @SequenceGenerator(name = "book_author_relation_seq", allocationSize = 1)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "author_seq")
+    @SequenceGenerator(name = "author_seq", allocationSize = 1)
     @Column(name = "id", nullable = false)
     private Long id;
 
     @Version
     @Column(name = "version")
-    private Long version;
+    private Integer version;
 
-    @ManyToOne
-    @JoinColumn(name = "bookId")
-    private Book book;
+    @Column(name = "firstName")
+    private String firstName;
 
-    @ManyToOne
-    @JoinColumn(name = "bookAuthorId")
-    private BookAuthor bookAuthor;
+    @Column(name = "middleName")
+    private String middleName;
+
+    @NotBlank(message = "Last Name should be specified")
+    @Column(name = "lastName", nullable = false)
+    private String lastName;
 
     @Override
     public final boolean equals(Object o) {
@@ -41,7 +42,7 @@ public class BookAuthorRelation {
         Class<?> oEffectiveClass = o instanceof HibernateProxy ? ((HibernateProxy) o).getHibernateLazyInitializer().getPersistentClass() : o.getClass();
         Class<?> thisEffectiveClass = this instanceof HibernateProxy ? ((HibernateProxy) this).getHibernateLazyInitializer().getPersistentClass() : this.getClass();
         if (thisEffectiveClass != oEffectiveClass) return false;
-        BookAuthorRelation that = (BookAuthorRelation) o;
+        Author that = (Author) o;
         return getId() != null && Objects.equals(getId(), that.getId());
     }
 
