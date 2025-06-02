@@ -11,7 +11,7 @@ import product.productservice.dto.PublisherDto;
 import product.productservice.repositories.AuthorRepository;
 import product.productservice.repositories.CategoryRepository;
 import product.productservice.repositories.PublisherRepository;
-import product.productservice.services.BookAuthorManager;
+import product.productservice.services.AuthorManager;
 import product.productservice.services.CategoryManager;
 import product.productservice.services.PublisherManager;
 
@@ -22,7 +22,7 @@ public class MainGenerator implements CommandLineRunner {
     private final PublisherManager publisherManager;
     private final PublisherRepository publisherRepository;
 
-    private final BookAuthorManager bookAuthorManager;
+    private final AuthorManager authorManager;
     private final AuthorRepository authorRepository;
 
     private final CategoryManager categoryManager;
@@ -92,7 +92,7 @@ public class MainGenerator implements CommandLineRunner {
                         .middleName(middleName)
                         .build();
 
-                bookAuthorManager.create(dto);
+                authorManager.create(dto);
                 i++;
                 x++;
 

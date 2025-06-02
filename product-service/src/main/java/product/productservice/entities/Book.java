@@ -64,8 +64,20 @@ public class Book {
 
     @ElementCollection
     @Column(name = "imageUrl")
-    @CollectionTable(name = "BookImages", joinColumns = @JoinColumn(name = "bookid"))
+    @CollectionTable(name = "Book_Images", joinColumns = @JoinColumn(name = "bookid"))
     private Set<String> bookImages = new HashSet<>();
+
+    @ManyToMany(cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REFRESH, CascadeType.DETACH})
+    @JoinTable(name = "Book_Author",
+            joinColumns = @JoinColumn(name = "bookId"),
+            inverseJoinColumns = @JoinColumn(name = "authorId"))
+    private Set<Author> authors = new HashSet<>();
+
+    @ManyToMany(cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REFRESH, CascadeType.DETACH})
+    @JoinTable(name = "Book_Category",
+            joinColumns = @JoinColumn(name = "bookId"),
+            inverseJoinColumns = @JoinColumn(name = "categoryId"))
+    private Set<Category> categories = new HashSet<>();
 
     @Override
     public final boolean equals(Object o) {

@@ -19,7 +19,7 @@ import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 @Service
-public class BookAuthorManager {
+public class AuthorManager {
 
     private final AuthorRepository repository;
     private final BookRepository bookRepository;

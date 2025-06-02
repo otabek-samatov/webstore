@@ -10,7 +10,7 @@ import product.productservice.entities.Author;
 import product.productservice.entities.Book;
 import product.productservice.mappers.AuthorMapper;
 import product.productservice.mappers.BookMapper;
-import product.productservice.services.BookAuthorManager;
+import product.productservice.services.AuthorManager;
 
 import java.util.List;
 
@@ -19,7 +19,7 @@ import java.util.List;
 @RequestMapping(value = "v1/books/author")
 public class BookAuthorController {
 
-    private final BookAuthorManager manager;
+    private final AuthorManager manager;
     private final AuthorMapper mapper;
     private final BookMapper bookMapper;
 
