@@ -23,6 +23,7 @@ public class BookDto implements Serializable {
     String title;
 
     String subtitle;
+
     Long publisherId;
 
     @NotNull(message = "Publication date should be specified")
@@ -39,5 +40,7 @@ public class BookDto implements Serializable {
     @NotBlank(message = "Language should be specified")
     String language;
 
+    Set<Long> authorIds;
+    Set<Long> categoryIds;
     Set<String> bookImages;
 }
