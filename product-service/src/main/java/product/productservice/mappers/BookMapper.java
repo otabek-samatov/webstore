@@ -15,6 +15,7 @@ public interface BookMapper {
     @Mapping(target = "authors", ignore = true)
     @Mapping(target = "categories", ignore = true)
     @Mapping(target = "publisher", ignore = true)
+    @Mapping(target = "bookImages", ignore = true)
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     Book toEntity(BookDto bookDto);
 
@@ -26,6 +27,7 @@ public interface BookMapper {
     @Mapping(target = "authors", ignore = true)
     @Mapping(target = "categories", ignore = true)
     @Mapping(target = "publisher", ignore = true)
+    @Mapping(target = "bookImages", ignore = true)
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     Book partialUpdate(BookDto bookDto, @MappingTarget Book book);
 

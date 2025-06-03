@@ -18,6 +18,8 @@ public class BookManager {
     private final BookMapper mapper;
     private final PublisherManager publisherManager;
     private final CustomValidator validator;
+    private final AuthorManager authorManager;
+    private final CategoryManager categoryManager;
 
     @Transactional
     public Book create(BookDto dto) {
@@ -33,19 +35,22 @@ public class BookManager {
 
         validator.validate(dto);
 
-        Book entity;
+        Book book;
 
         if (createFlag) {
-            entity = new Book();
+            book = new Book();
         } else {
-            entity = repository.findById(dto.getId()).orElseThrow(() -> new EntityNotFoundException(dto + " not found"));
+            book = repository.findById(dto.getId()).orElseThrow(() -> new EntityNotFoundException(dto + " not found"));
         }
 
-        mapper.partialUpdate(dto, entity);
+        mapper.partialUpdate(dto, book);
 
-        entity.setPublisher(publisherManager.getReferenceByID(dto.getPublisherId()));
+        book.setPublisher(publisherManager.getReferenceByID(dto.getPublisherId()));
+        book.addAuthors(authorManager.getReferenceByIDs(dto.getAuthorIds()));
+        book.addCategories(categoryManager.getReferenceByIDs(dto.getCategoryIds()));
+        book.addBookImages(dto.getBookImages());
 
-        return repository.save(entity);
+        return repository.save(book);
     }
 
     public Book findById(Long id) {

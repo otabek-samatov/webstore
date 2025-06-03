@@ -3,17 +3,28 @@ package product.productservice.generator;
 
 import lombok.RequiredArgsConstructor;
 import net.datafaker.Faker;
+import net.datafaker.providers.base.Book;
 import net.datafaker.providers.base.Name;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import product.productservice.dto.AuthorDto;
+import product.productservice.dto.BookDto;
 import product.productservice.dto.PublisherDto;
 import product.productservice.repositories.AuthorRepository;
+import product.productservice.repositories.BookRepository;
 import product.productservice.repositories.CategoryRepository;
 import product.productservice.repositories.PublisherRepository;
 import product.productservice.services.AuthorManager;
+import product.productservice.services.BookManager;
 import product.productservice.services.CategoryManager;
 import product.productservice.services.PublisherManager;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.util.HashSet;
+import java.util.Set;
 
 @RequiredArgsConstructor
 @Component
@@ -28,6 +39,11 @@ public class MainGenerator implements CommandLineRunner {
     private final CategoryManager categoryManager;
     private final CategoryRepository productCategoryRepository;
 
+    private final BookManager bookManager;
+    private final BookRepository bookRepository;
+
+    private final JdbcClient jdbcClient;
+
     @Override
     public void run(String... args) throws Exception {
 
@@ -36,6 +52,8 @@ public class MainGenerator implements CommandLineRunner {
         generateAuthorObjects();
 
         generateProductCategoryObjects();
+
+        generateBookObjects();
 
     }
 
@@ -168,5 +186,77 @@ public class MainGenerator implements CommandLineRunner {
 
         System.out.println(" Categories have been created ");
 
+    }
+
+
+    private void generateBookObjects() {
+        final int LIMIT = 10000;
+
+        int x = 0;
+
+        Faker faker = new Faker();
+
+        long i = bookRepository.count();
+
+        LocalDate from = LocalDate.of(2000, 1, 1);
+        LocalDate to = LocalDate.of(2024, 12, 31);
+
+        while (i < LIMIT) {
+            Book b = faker.book();
+            double price = 10.0 + (1000.0 - 10.0) * faker.random().nextDouble();
+
+            // Optional: round to 2 decimal places
+            BigDecimal roundedPrice = BigDecimal.valueOf(price).setScale(2, RoundingMode.HALF_UP);
+
+            BookDto dto = BookDto.builder()
+                    .title(b.title())
+                    .publicationDate(faker.date().birthdayLocalDate(1, 30))
+                    .isbn(faker.code().isbn13())
+                    .price(roundedPrice)
+                    .language("English")
+                    .publisherId(getRandomPublisherId())
+                    .categoryIds(getRandomCategories(faker.random().nextInt(1, 3)))
+                    .authorIds(getRandomAuthors(faker.random().nextInt(1, 3)))
+                    .bookImages(getRandomImageUrls(faker, faker.random().nextInt(1, 3)))
+                    .build();
+
+            Long id = bookRepository.getIdByISBN(dto.getIsbn());
+            if (id == null) {
+                bookManager.create(dto);
+                i++;
+                x++;
+            }
+        }
+
+        System.out.println("Created Book count = " + x);
+
+    }
+
+    private Long getRandomPublisherId() {
+        return jdbcClient.sql("select p.id from publisher p order by RANDOM() limit 1").query(Long.class).single();
+    }
+
+    private Set<Long> getRandomCategories(int count) {
+        return jdbcClient.sql("select p.id from Category p order by RANDOM() limit :c")
+                .param("c", count)
+                .query(Long.class)
+                .set();
+    }
+
+    private Set<Long> getRandomAuthors(int count) {
+        return jdbcClient.sql("select a.id from author a order by RANDOM() limit :c")
+                .param("c", count)
+                .query(Long.class)
+                .set();
+    }
+
+    private Set<String> getRandomImageUrls(Faker f, int count) {
+        Set<String> imgs = new HashSet<>();
+
+        for (int i = 0; i < count; i++) {
+            imgs.add(f.internet().image());
+        }
+
+        return imgs;
     }
 }
