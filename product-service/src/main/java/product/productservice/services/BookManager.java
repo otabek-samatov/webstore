@@ -5,10 +5,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import product.productservice.dto.BookDto;
+import product.productservice.entities.Author;
 import product.productservice.entities.Book;
+import product.productservice.entities.Category;
+import product.productservice.entities.Publisher;
 import product.productservice.mappers.BookMapper;
 import product.productservice.repositories.BookRepository;
 import product.productservice.validators.CustomValidator;
+
+import java.util.Set;
 
 @RequiredArgsConstructor
 @Service
@@ -45,10 +50,25 @@ public class BookManager {
 
         mapper.partialUpdate(dto, book);
 
-        book.setPublisher(publisherManager.getReferenceByID(dto.getPublisherId()));
-        book.addAuthors(authorManager.getReferenceByIDs(dto.getAuthorIds()));
-        book.addCategories(categoryManager.getReferenceByIDs(dto.getCategoryIds()));
-        book.addBookImages(dto.getBookImages());
+        Publisher p = publisherManager.getReferenceByID(dto.getPublisherId());
+        if (p != null) {
+            book.setPublisher(p);
+        }
+
+        Set<Author> authors = authorManager.getReferenceByIDs(dto.getAuthorIds());
+        if (authors != null) {
+            book.setAuthors(authors);
+        }
+
+        Set<Category> categories = categoryManager.getReferenceByIDs(dto.getCategoryIds());
+        if (categories != null) {
+            book.setCategories(categories);
+        }
+
+        Set<String> images = dto.getBookImages();
+        if (images != null) {
+            book.setBookImages(images);
+        }
 
         return repository.save(book);
     }

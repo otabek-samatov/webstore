@@ -8,6 +8,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.proxy.HibernateProxy;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -88,39 +89,72 @@ public class Book {
     private Set<Category> categories = new HashSet<>();
 
     public void addBookImage(String imageUrl) {
-        bookImages.add(imageUrl);
+        if (StringUtils.hasText(imageUrl)) {
+            bookImages.add(imageUrl);
+        }
     }
 
     public void addBookImages(Collection<String> bookImages) {
-        this.bookImages.addAll(bookImages);
+        if (bookImages != null) {
+            this.bookImages.addAll(bookImages);
+        }
+    }
+
+    public void setBookImages(Collection<String> bookImages) {
+        this.bookImages.clear();
+        addBookImages(bookImages);
     }
 
     public void addAuthor(Author author) {
-        authors.add(author);
+        if (author != null) {
+            authors.add(author);
+        }
     }
 
     public void addAuthors(Collection<Author> authors) {
-        this.authors.addAll(authors);
+        if (authors != null) {
+            this.authors.addAll(authors);
+        }
+    }
+
+    public void setAuthors(Collection<Author> authors) {
+        this.authors.clear();
+        addAuthors(authors);
     }
 
     public void addCategory(Category category) {
-        categories.add(category);
+        if (category != null) {
+            categories.add(category);
+        }
     }
 
     public void addCategories(Collection<Category> categories) {
-        this.categories.addAll(categories);
+        if (categories != null) {
+            this.categories.addAll(categories);
+        }
+    }
+
+    public void setCategories(Collection<Category> categories) {
+        this.categories.clear();
+        addCategories(categories);
     }
 
     public void removeAuthor(Author author) {
-        authors.remove(author);
+        if (author != null) {
+            authors.remove(author);
+        }
     }
 
     public void removeCategory(Category category) {
-        categories.remove(category);
+        if  (category != null) {
+            categories.remove(category);
+        }
     }
 
     public void removeBookImage(String imageUrl) {
-        bookImages.remove(imageUrl);
+        if (imageUrl != null) {
+            bookImages.remove(imageUrl);
+        }
     }
 
     public Set<Author> getAuthors() {
