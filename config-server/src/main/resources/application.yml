@@ -10,6 +10,14 @@ spring:
           timeout: 5
           clone-on-start: true
           force-pull: true
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/webstore
+    username: user
+    password: password
+    driverClassName: org.postgresql.Driver
+
+
 server:
   port: 8071
   
