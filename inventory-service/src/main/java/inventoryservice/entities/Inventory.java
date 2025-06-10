@@ -1,4 +1,4 @@
-package entities;
+package inventoryservice.entities;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
