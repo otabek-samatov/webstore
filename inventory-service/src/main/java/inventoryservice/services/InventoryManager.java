@@ -16,7 +16,7 @@ public class InventoryManager {
     private EntityManager entityManager;
 
     public long getAvailableProductCount(String productSKU) {
-        return entityManager.createQuery("select p.stockLevel - p.reservedStock from Inventory p where p.product_sku = :productSKU", Long.class)
+        return entityManager.createQuery("select p.stockLevel - p.reservedStock from Inventory p where p.productSKU = :productSKU", Long.class)
                 .setParameter("productSKU", productSKU)
                 .setLockMode(LockModeType.PESSIMISTIC_READ)
                 .getSingleResult();
@@ -83,7 +83,7 @@ public class InventoryManager {
         }
 
         try {
-            return entityManager.createQuery("select p from Inventory p where p.product_sku = :productSKU", Inventory.class)
+            return entityManager.createQuery("select p from Inventory p where p.productSKU = :productSKU", Inventory.class)
                     .setParameter("productSKU", productSKU)
                     .setLockMode(LockModeType.PESSIMISTIC_WRITE)
                     .getSingleResult();

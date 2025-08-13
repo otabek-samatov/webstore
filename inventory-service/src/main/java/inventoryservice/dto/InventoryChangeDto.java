@@ -24,7 +24,7 @@ public class InventoryChangeDto implements Serializable {
     LocalDateTime eventTime;
 
     @NotNull
-    BigDecimal changeAmount;
+    Long changeAmount;
 
     @NotNull
     ReasonType eventType;

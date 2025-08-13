@@ -42,9 +42,9 @@ public class InventoryChange {
     @Column(name = "event_id", nullable = false)
     private Long eventID;
 
-    @ManyToOne(cascade = CascadeType.ALL)
-    @JoinColumn(name = "product_sku")
-    private Inventory inventorySKU;
+    @ManyToOne(cascade = CascadeType.ALL, optional = false)
+    @JoinColumn(name = "inventory_id", nullable = false)
+    private Inventory inventory;
 
     @Override
     public final boolean equals(Object o) {

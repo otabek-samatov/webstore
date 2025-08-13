@@ -44,7 +44,7 @@ public class Inventory {
 
     @NotBlank(message = "Produc SKU should be specified")
     @Column(name = "product_sku", nullable = false, unique = true)
-    private String product_sku;
+    private String productSKU;
 
     @Override
     public final boolean equals(Object o) {

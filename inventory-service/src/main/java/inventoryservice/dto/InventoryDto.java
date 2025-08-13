@@ -18,11 +18,11 @@ public class InventoryDto implements Serializable {
 
     @NotNull(message = "Stock Level should be specified")
     @PositiveOrZero(message = "Stock level cannot be negative")
-    BigDecimal stockLevel;
+    Long stockLevel;
 
     @NotNull(message = "Reserved Stock should be specified")
     @PositiveOrZero(message = "Reserved Stock cannot be negative")
-    BigDecimal reservedStock;
+    Long reservedStock;
 
     @NotBlank(message = "Produc SKU should be specified")
     String productSKU;
