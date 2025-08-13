@@ -6,16 +6,16 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.proxy.HibernateProxy;
 
 import java.math.BigDecimal;
+import java.util.Objects;
 
 @Getter
 @Setter
 @Entity
 @Table(name = "inventory", indexes = {
-        @Index(name = "idx_inventory_product_id", columnList = "product_id, product_class")
-}, uniqueConstraints = {
-        @UniqueConstraint(name = "uc_inventory_product_id", columnNames = {"product_id", "product_class"})
+        @Index(name = "idx_inventory_product_sku_unq", columnList = "product_sku", unique = true)
 })
 public class Inventory {
     @Id
@@ -28,15 +28,6 @@ public class Inventory {
     @Column(name = "version")
     private Integer version;
 
-    @NotNull(message = "Product Id should be specified")
-    @Column(name = "product_id")
-    private Long productID;
-
-    @NotBlank(message = "Product class should be specified")
-    @NotNull
-    @Column(name = "product_class")
-    private String productClass;
-
     @NotNull(message = "Stock Level should be specified")
     @PositiveOrZero(message = "Stock level cannot be negative")
     @Column(name = "stock_level", nullable = false)
@@ -47,8 +38,28 @@ public class Inventory {
     @Column(name = "reserved_stock", nullable = false)
     private BigDecimal reservedStock = BigDecimal.ZERO;
 
+    @NotNull
     @Enumerated(EnumType.STRING)
     @Column(name = "measurement_unit", nullable = false)
     private MeasurementUnit measurementUnit;
 
+    @NotBlank(message = "Produc SKU should be specified")
+    @Column(name = "product_sku", nullable = false, unique = true)
+    private String product_sku;
+
+    @Override
+    public final boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null) return false;
+        Class<?> oEffectiveClass = o instanceof HibernateProxy ? ((HibernateProxy) o).getHibernateLazyInitializer().getPersistentClass() : o.getClass();
+        Class<?> thisEffectiveClass = this instanceof HibernateProxy ? ((HibernateProxy) this).getHibernateLazyInitializer().getPersistentClass() : this.getClass();
+        if (thisEffectiveClass != oEffectiveClass) return false;
+        Inventory inventory = (Inventory) o;
+        return getId() != null && Objects.equals(getId(), inventory.getId());
+    }
+
+    @Override
+    public final int hashCode() {
+        return this instanceof HibernateProxy ? ((HibernateProxy) this).getHibernateLazyInitializer().getPersistentClass().hashCode() : getClass().hashCode();
+    }
 }
