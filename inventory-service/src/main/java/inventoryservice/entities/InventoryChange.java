@@ -6,7 +6,6 @@ import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.proxy.HibernateProxy;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
@@ -32,7 +31,7 @@ public class InventoryChange {
 
     @NotNull
     @Column(name = "change_amount", nullable = false)
-    private BigDecimal changeAmount;
+    private Long changeAmount;
 
     @NotNull
     @Enumerated(EnumType.STRING)

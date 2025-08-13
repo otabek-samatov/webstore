@@ -8,7 +8,6 @@ import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.proxy.HibernateProxy;
 
-import java.math.BigDecimal;
 import java.util.Objects;
 
 @Getter
@@ -31,12 +30,12 @@ public class Inventory {
     @NotNull(message = "Stock Level should be specified")
     @PositiveOrZero(message = "Stock level cannot be negative")
     @Column(name = "stock_level", nullable = false)
-    private BigDecimal stockLevel = BigDecimal.ZERO;
+    private Long stockLevel = 0L;
 
     @NotNull(message = "Reserved Stock should be specified")
     @PositiveOrZero(message = "Reserved Stock cannot be negative")
     @Column(name = "reserved_stock", nullable = false)
-    private BigDecimal reservedStock = BigDecimal.ZERO;
+    private Long reservedStock = 0L;
 
     @NotNull
     @Enumerated(EnumType.STRING)
