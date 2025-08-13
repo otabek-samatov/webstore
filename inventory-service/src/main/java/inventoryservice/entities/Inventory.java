@@ -30,7 +30,7 @@ public class Inventory {
 
     @NotNull(message = "Product Id should be specified")
     @Column(name = "product_id")
-    private Long productId;
+    private Long productID;
 
     @NotBlank(message = "Product class should be specified")
     @NotNull
