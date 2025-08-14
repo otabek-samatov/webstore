@@ -23,9 +23,9 @@ public class InventoryDto implements Serializable {
     @PositiveOrZero(message = "Reserved Stock cannot be negative")
     Long reservedStock;
 
-    @NotBlank(message = "Produc SKU should be specified")
+    @NotBlank(message = "Product SKU should be specified")
     String productSKU;
 
-    @NotNull
+    @NotNull(message = "Measurement Unit should be specified")
     MeasurementUnit measurementUnit;
 }

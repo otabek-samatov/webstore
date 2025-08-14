@@ -42,7 +42,7 @@ public class Inventory {
     @Column(name = "measurement_unit", nullable = false)
     private MeasurementUnit measurementUnit = MeasurementUnit.PIECE;
 
-    @NotBlank(message = "Produc SKU should be specified")
+    @NotBlank(message = "Product SKU should be specified")
     @Column(name = "product_sku", nullable = false, unique = true)
     private String productSKU;
 

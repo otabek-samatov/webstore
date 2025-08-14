@@ -31,7 +31,7 @@ public class InventoryChangeDto implements Serializable {
 
     @NotNull
     @PositiveOrZero
-    Long eventID;
+    Long eventID = 0L;
 
     @NotNull
     Long inventoryId;
