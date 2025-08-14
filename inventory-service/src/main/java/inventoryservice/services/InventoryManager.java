@@ -1,5 +1,6 @@
 package inventoryservice.services;
 
+import inventoryservice.dto.InventoryDto;
 import inventoryservice.entities.Inventory;
 import inventoryservice.entities.ReasonType;
 import inventoryservice.exceptions.IncorrectParameterException;
@@ -90,6 +91,22 @@ public class InventoryManager {
         } catch (NoResultException e) {
             throw new EntityNotFoundException("Product not found: " + productSKU);
         }
+    }
+
+    @Transactional
+    public Inventory createNewInventory(String productSKU, long stockLevel) {
+
+        if (!StringUtils.hasText(productSKU)) {
+            throw new IncorrectParameterException("productSKU is empty");
+        }
+
+        Inventory newInventory = new Inventory();
+        newInventory.setProductSKU(productSKU);
+        newInventory.setStockLevel(stockLevel);
+
+        entityManager.persist(newInventory);
+
+        return newInventory;
     }
 
 }

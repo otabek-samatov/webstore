@@ -42,8 +42,8 @@ public class InventoryChange {
     @Column(name = "event_id", nullable = false)
     private Long eventID;
 
-    @ManyToOne(cascade = CascadeType.ALL, optional = false)
-    @JoinColumn(name = "inventory_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(nullable = false)
     private Inventory inventory;
 
     @Override

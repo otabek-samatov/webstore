@@ -40,7 +40,7 @@ public class Inventory {
     @NotNull
     @Enumerated(EnumType.STRING)
     @Column(name = "measurement_unit", nullable = false)
-    private MeasurementUnit measurementUnit;
+    private MeasurementUnit measurementUnit = MeasurementUnit.PIECE;
 
     @NotBlank(message = "Produc SKU should be specified")
     @Column(name = "product_sku", nullable = false, unique = true)
