@@ -24,19 +24,19 @@ public class BookAuthorController {
     private final BookMapper bookMapper;
 
     @GetMapping("/{authorId}")
-    private ResponseEntity<AuthorDto> getById(@PathVariable Long authorId) {
+    public ResponseEntity<AuthorDto> getById(@PathVariable Long authorId) {
         Author author = manager.findById(authorId);
         return ResponseEntity.ok(mapper.toDto(author));
     }
 
     @GetMapping("/allbooks/{authorId}")
-    private ResponseEntity<List<BookDto>> getBooksByAuthorId(@PathVariable Long authorId) {
+    public ResponseEntity<List<BookDto>> getBooksByAuthorId(@PathVariable Long authorId) {
         List<Book> books = manager.findBooksByAuthorId(authorId);
         return ResponseEntity.ok(bookMapper.toDto(books));
     }
 
     @DeleteMapping("/{authorId}")
-    private ResponseEntity<Void> deleteById(@PathVariable Long authorId) {
+    public ResponseEntity<Void> deleteById(@PathVariable Long authorId) {
         manager.deleteById(authorId);
         return ResponseEntity.noContent().build();
     }

@@ -87,7 +87,7 @@ public class CategoryManager {
 
         count = repository.countByParentId(id);
         if (count > 0) {
-            throw new RuntimeException(count + " categories use this author. Cannot delete category.");
+            throw new RuntimeException(count + " categories use this category. Cannot delete category.");
         }
 
         repository.deleteById(id);
