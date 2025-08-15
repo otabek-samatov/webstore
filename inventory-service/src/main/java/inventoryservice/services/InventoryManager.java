@@ -1,19 +1,19 @@
 package inventoryservice.services;
 
 import inventoryservice.entities.Inventory;
+import inventoryservice.entities.InventoryChange;
 import inventoryservice.entities.ReasonType;
 import inventoryservice.exceptions.NotEnoughStockException;
 import inventoryservice.repositories.InventoryChangeRepository;
 import inventoryservice.repositories.InventoryRepository;
 import jakarta.persistence.EntityNotFoundException;
-import jakarta.persistence.LockModeType;
-import jakarta.persistence.NoResultException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.Optional;
 
 @RequiredArgsConstructor
 @Service
@@ -23,55 +23,103 @@ public class InventoryManager {
     private final InventoryChangeRepository inventoryChangeRepository;
 
     public long getAvailableProductCount(String productSKU) {
-        return entityManager.createQuery("select p.stockLevel - p.reservedStock from Inventory p where p.productSKU = :productSKU", Long.class)
-                .setParameter("productSKU", productSKU)
-                .setLockMode(LockModeType.PESSIMISTIC_READ)
-                .getSingleResult();
+        return inventoryRepository.countInventoryByProductSKU(productSKU);
     }
 
     @Transactional
-    public void processStockAdjustment(String productSKU, long quantity, ReasonType reason) {
+    public void reserveStock(String productSKU, long quantity) {
 
-        if (quantity <= 0) {
-            throw new IllegalArgumentException("Stock level must be greater than 0");
-        }
-
-        if (reason == null) {
-            throw new IllegalArgumentException("Reason is empty");
+        if (quantity < 0) {
+            throw new IllegalArgumentException("Stock level must not be negative");
         }
 
         Inventory inv = findInventoryForUpdate(productSKU);
 
-        if (ReasonType.ORDER_CREATED.equals(reason)) {
-            if (inv.getStockLevel() - inv.getReservedStock() < quantity) {
-                throw new NotEnoughStockException(productSKU);
-            }
-
-            inv.setReservedStock(inv.getReservedStock() + quantity);
-
-        } else if (ReasonType.ORDER_CONFIRMED.equals(reason)) {
-            if (inv.getReservedStock() < quantity) {
-                throw new NotEnoughStockException(productSKU);
-            }
-
-            inv.setReservedStock(inv.getReservedStock() - quantity);
-            inv.setStockLevel(inv.getStockLevel() - quantity);
-
-        } else if (ReasonType.ORDER_CANCELLED.equals(reason)) {
-            if (inv.getReservedStock() < quantity) {
-                throw new NotEnoughStockException(productSKU);
-            }
-            inv.setReservedStock(inv.getReservedStock() - quantity);
-        } else if (ReasonType.FILLED_BY_WAREHOUSE.equals(reason)) {
-            inv.setStockLevel(inv.getStockLevel() + quantity);
-        } else if (ReasonType.CANCELLED_BY_WAREHOUSE.equals(reason)) {
-            if (inv.getStockLevel() < quantity) {
-                throw new NotEnoughStockException(productSKU);
-            }
-
-            inv.setStockLevel(inv.getStockLevel() - quantity);
+        if (inv.getStockLevel() - inv.getReservedStock() < quantity) {
+            throw new NotEnoughStockException(productSKU);
         }
 
+        inv.setReservedStock(inv.getReservedStock() + quantity);
+
+        saveChanges(inv, quantity, ReasonType.RESERVE_STOCK);
+    }
+
+    @Transactional
+    public void commitStock(String productSKU, long quantity) {
+
+        if (quantity < 0) {
+            throw new IllegalArgumentException("Stock level must not be negative");
+        }
+
+        Inventory inv = findInventoryForUpdate(productSKU);
+        if (inv.getReservedStock() < quantity) {
+            throw new NotEnoughStockException(productSKU);
+        }
+
+        inv.setReservedStock(inv.getReservedStock() - quantity);
+        inv.setStockLevel(inv.getStockLevel() - quantity);
+
+        saveChanges(inv, quantity, ReasonType.COMMIT_STOCK);
+    }
+
+    @Transactional
+    public void revertStock(String productSKU, long quantity) {
+
+        if (quantity < 0) {
+            throw new IllegalArgumentException("Stock level must not be negative");
+        }
+
+        Inventory inv = findInventoryForUpdate(productSKU);
+        if (inv.getReservedStock() < quantity) {
+            throw new NotEnoughStockException(productSKU);
+        }
+
+        inv.setReservedStock(inv.getReservedStock() - quantity);
+
+        saveChanges(inv, quantity, ReasonType.REVERT_STOCK);
+    }
+
+    @Transactional
+    public void increaseStockLevel(String productSKU, long quantity) {
+
+        if (quantity < 0) {
+            throw new IllegalArgumentException("Stock level must not be negative");
+        }
+
+        if (!StringUtils.hasText(productSKU)) {
+            throw new IllegalArgumentException("productSKU is empty");
+        }
+
+        Optional<Inventory> inventoryOptional = inventoryRepository.findInventoryByProductSKU(productSKU);
+
+        Inventory inv = inventoryOptional.orElse(new Inventory());
+        inv.setProductSKU(productSKU);
+        inv.setStockLevel(inv.getStockLevel() + quantity);
+
+        saveChanges(inv, quantity, ReasonType.INCREASED_BY_WAREHOUSE);
+    }
+
+    @Transactional
+    public void decreaseStockLevel(String productSKU, long quantity) {
+
+        if (quantity < 0) {
+            throw new IllegalArgumentException("Stock level must not be negative");
+        }
+
+        Inventory inv = findInventoryForUpdate(productSKU);
+        if (inv.getStockLevel() < quantity) {
+            throw new NotEnoughStockException(productSKU);
+        }
+
+        inv.setStockLevel(inv.getStockLevel() - quantity);
+
+        InventoryChange invChange = new InventoryChange();
+        invChange.setInventory(inv);
+        invChange.setChangeAmount(quantity);
+        invChange.setEventType(ReasonType.CANCELLED_BY_WAREHOUSE);
+
+        inventoryRepository.save(inv);
+        inventoryChangeRepository.save(invChange);
     }
 
     private Inventory findInventoryForUpdate(String productSKU) {
@@ -80,30 +128,9 @@ public class InventoryManager {
             throw new IllegalArgumentException("productSKU is empty");
         }
 
-        try {
-            return entityManager.createQuery("select p from Inventory p where p.productSKU = :productSKU", Inventory.class)
-                    .setParameter("productSKU", productSKU)
-                    .setLockMode(LockModeType.PESSIMISTIC_WRITE)
-                    .getSingleResult();
-        } catch (NoResultException e) {
-            throw new EntityNotFoundException("Product not found: " + productSKU);
-        }
-    }
+        Optional<Inventory> inv = inventoryRepository.findInventoryByProductSKU(productSKU);
 
-    @Transactional
-    public Inventory createNewInventory(String productSKU, long stockLevel) {
-
-        if (!StringUtils.hasText(productSKU)) {
-            throw new IllegalArgumentException("productSKU is empty");
-        }
-
-        Inventory newInventory = new Inventory();
-        newInventory.setProductSKU(productSKU);
-        newInventory.setStockLevel(stockLevel);
-
-        entityManager.persist(newInventory);
-
-        return newInventory;
+        return inv.orElseThrow(() -> new EntityNotFoundException("Product not found: " + productSKU));
     }
 
     public Inventory findInventoryByProductSKU(String productSKU) {
@@ -126,5 +153,14 @@ public class InventoryManager {
         inventoryRepository.delete(inventory);
     }
 
+    private void saveChanges(Inventory inventory, long changeQuantity, ReasonType reasonType) {
 
+        InventoryChange invChange = new InventoryChange();
+        invChange.setInventory(inventory);
+        invChange.setChangeAmount(changeQuantity);
+        invChange.setEventType(reasonType);
+
+        inventoryRepository.save(inventory);
+        inventoryChangeRepository.save(invChange);
+    }
 }

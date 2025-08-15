@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.proxy.HibernateProxy;
 
 import java.time.LocalDateTime;
@@ -26,6 +27,7 @@ public class InventoryChange {
     private Integer version;
 
     @NotNull
+    @CreationTimestamp
     @Column(name = "event_time", nullable = false)
     private LocalDateTime eventTime;
 
@@ -40,7 +42,7 @@ public class InventoryChange {
 
     @NotNull
     @Column(name = "event_id", nullable = false)
-    private Long eventID;
+    private Long eventID = 0L;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(nullable = false)

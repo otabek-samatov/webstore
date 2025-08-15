@@ -17,27 +17,52 @@ public class InventoryController {
     private final InventoryMapper inventoryMapper;
 
     @GetMapping("/{sku}")
-    private ResponseEntity<InventoryDto> getBySKU(@PathVariable String sku) {
+    public ResponseEntity<InventoryDto> getBySKU(@PathVariable String sku) {
         Inventory inv = manager.findInventoryByProductSKU(sku);
         return ResponseEntity.ok(inventoryMapper.toDto(inv));
     }
 
+    @GetMapping("/available-count/{sku}")
+    public ResponseEntity<Long> getAvailableCount(@PathVariable String sku) {
+        long c = manager.getAvailableProductCount(sku);
+        return ResponseEntity.ok(c);
+    }
+
     @DeleteMapping("/{sku}")
-    private ResponseEntity<InventoryDto> deleteBySKU(@PathVariable String sku) {
+    public ResponseEntity<Void> deleteBySKU(@PathVariable String sku) {
         manager.deleteBySKU(sku);
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping
-    public ResponseEntity<BookDto> create(@RequestBody BookDto dto) {
-        Book book = manager.create(dto);
-        return ResponseEntity.ok(mapper.toDto(book));
+    @PostMapping("/reserve-stock")
+    public ResponseEntity<Void> reserveStock(@RequestBody InventoryDto dto) {
+        manager.reserveStock(dto.getProductSKU(), dto.getReservedStock());
+        return ResponseEntity.noContent().build();
     }
 
-    @PutMapping
-    public ResponseEntity<BookDto> update(@RequestBody BookDto dto) {
-        Book book = manager.update(dto);
-        return ResponseEntity.ok(mapper.toDto(book));
+    @PostMapping("/revert-stock")
+    public ResponseEntity<Void> releaseStock(@RequestBody InventoryDto dto) {
+        manager.revertStock(dto.getProductSKU(), dto.getReservedStock());
+        return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/commit-stock")
+    public ResponseEntity<Void> commitStock(@RequestBody InventoryDto dto) {
+        manager.commitStock(dto.getProductSKU(), dto.getReservedStock());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/increase-stock")
+    public ResponseEntity<Void> fillStockByWarehouse(@RequestBody InventoryDto dto) {
+        manager.increaseStockLevel(dto.getProductSKU(), dto.getReservedStock());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/decrease-stock")
+    public ResponseEntity<Void> cancelStockByWarehouse(@RequestBody InventoryDto dto) {
+        manager.decreaseStockLevel(dto.getProductSKU(), dto.getReservedStock());
+        return ResponseEntity.noContent().build();
+    }
+
 
 }
