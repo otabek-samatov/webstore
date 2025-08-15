@@ -23,7 +23,7 @@ public class InventoryManager {
     private final InventoryChangeRepository inventoryChangeRepository;
 
     public long getAvailableProductCount(String productSKU) {
-        return inventoryRepository.countInventoryByProductSKU(productSKU);
+        return inventoryRepository.getAvailableStockLevel(productSKU);
     }
 
     @Transactional
@@ -113,13 +113,7 @@ public class InventoryManager {
 
         inv.setStockLevel(inv.getStockLevel() - quantity);
 
-        InventoryChange invChange = new InventoryChange();
-        invChange.setInventory(inv);
-        invChange.setChangeAmount(quantity);
-        invChange.setEventType(ReasonType.CANCELLED_BY_WAREHOUSE);
-
-        inventoryRepository.save(inv);
-        inventoryChangeRepository.save(invChange);
+        saveChanges(inv, quantity, ReasonType.CANCELLED_BY_WAREHOUSE);
     }
 
     private Inventory findInventoryForUpdate(String productSKU) {

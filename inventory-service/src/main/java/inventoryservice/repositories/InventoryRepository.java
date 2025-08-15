@@ -16,10 +16,7 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
     Optional<Inventory> findInventoryByProductSKU(String productSKU);
 
     @Lock(LockModeType.PESSIMISTIC_READ)
-    long countInventoryByProductSKU(String productSKU);
-
-    @Lock(LockModeType.PESSIMISTIC_READ)
     @Query("select p.stockLevel - p.reservedStock from Inventory p where p.productSKU = :productSKU")
-    long getAvailableStockLevel(Long categoryId);
+    long getAvailableStockLevel(String productSKU);
 
 }
