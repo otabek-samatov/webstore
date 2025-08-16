@@ -143,14 +143,10 @@ public class InventoryManager {
             throw new IllegalArgumentException("productSKU is empty");
         }
 
-        List<InventoryChange> historyList = inventoryChangeRepository.getHistoryBySKU(sku);
-        if (historyList != null) {
-            inventoryChangeRepository.deleteAll(historyList);
-        }
 
         Inventory inventory = findInventoryByProductSKU(sku);
-        inventoryRepository.delete(inventory);
-    }
+        inventoryChangeRepository.deleteByInventoryProductSKU(sku);
+        inventoryRepository.delete(inventory);    }
 
     private void saveChanges(Inventory inventory, long changeQuantity, ReasonType reasonType) {
 
