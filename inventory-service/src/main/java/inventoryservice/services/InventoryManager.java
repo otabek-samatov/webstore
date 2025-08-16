@@ -1,10 +1,11 @@
 package inventoryservice.services;
 
-import inventoryservice.dto.request.RequestInventoryDto;
+import inventoryservice.dto.InventoryDto;
 import inventoryservice.entities.Inventory;
 import inventoryservice.entities.InventoryChange;
 import inventoryservice.entities.ReasonType;
 import inventoryservice.exceptions.NotEnoughStockException;
+import inventoryservice.mappers.InventoryMapper;
 import inventoryservice.repositories.InventoryChangeRepository;
 import inventoryservice.repositories.InventoryRepository;
 import inventoryservice.validators.CustomValidator;
@@ -14,7 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.util.List;
+import java.math.BigDecimal;
 import java.util.Optional;
 
 @RequiredArgsConstructor
@@ -24,6 +25,7 @@ public class InventoryManager {
     private final InventoryRepository inventoryRepository;
     private final InventoryChangeRepository inventoryChangeRepository;
     private final CustomValidator validator;
+    private final InventoryMapper inventoryMapper;
 
     @Transactional
     public long getAvailableProductCount(String productSKU) {
@@ -31,12 +33,12 @@ public class InventoryManager {
     }
 
     @Transactional
-    public void reserveStock(RequestInventoryDto dto) {
+    public void reserveStock(InventoryDto dto) {
 
         validator.validate(dto);
 
         String productSKU = dto.getProductSKU();
-        long quantity = dto.getQuantity();
+        long quantity = dto.getReservedStock();
 
         Inventory inv = findInventoryByProductSKU(productSKU);
 
@@ -50,12 +52,12 @@ public class InventoryManager {
     }
 
     @Transactional
-    public void commitStock(RequestInventoryDto dto) {
+    public void commitStock(InventoryDto dto) {
 
         validator.validate(dto);
 
         String productSKU = dto.getProductSKU();
-        long quantity = dto.getQuantity();
+        long quantity = dto.getReservedStock();
 
         Inventory inv = findInventoryByProductSKU(productSKU);
         if (inv.getReservedStock() < quantity) {
@@ -69,12 +71,12 @@ public class InventoryManager {
     }
 
     @Transactional
-    public void revertStock(RequestInventoryDto dto) {
+    public void revertStock(InventoryDto dto) {
 
         validator.validate(dto);
 
         String productSKU = dto.getProductSKU();
-        long quantity = dto.getQuantity();
+        long quantity = dto.getReservedStock();
 
         Inventory inv = findInventoryByProductSKU(productSKU);
         if (inv.getReservedStock() < quantity) {
@@ -87,12 +89,12 @@ public class InventoryManager {
     }
 
     @Transactional
-    public void increaseStockLevel(RequestInventoryDto dto) {
+    public void increaseStockLevel(InventoryDto dto) {
 
         validator.validate(dto);
 
         String productSKU = dto.getProductSKU();
-        long quantity = dto.getQuantity();
+        long quantity = dto.getStockLevel();
 
         if (!StringUtils.hasText(productSKU)) {
             throw new IllegalArgumentException("productSKU is empty");
@@ -100,20 +102,34 @@ public class InventoryManager {
 
         Optional<Inventory> inventoryOptional = inventoryRepository.findInventoryByProductSKU(productSKU);
 
-        Inventory inv = inventoryOptional.orElse(new Inventory());
-        inv.setProductSKU(productSKU);
+        Inventory inv = inventoryOptional.orElse(null);
+        if (inv == null) {
+            if (dto.getStockPrice() == null || dto.getStockPrice().compareTo(BigDecimal.ZERO) < 0) {
+                throw new IllegalArgumentException("Stock Price cannot be negative");
+            }
+
+            if (dto.getSellPrice() == null || dto.getSellPrice().compareTo(BigDecimal.ZERO) < 0) {
+                throw new IllegalArgumentException("Sell Price cannot be negative");
+            }
+
+            inv = new Inventory();
+            inv.setProductSKU(productSKU);
+            inv.setSellPrice(dto.getSellPrice());
+            inv.setStockPrice(dto.getStockPrice());
+        }
+
         inv.setStockLevel(inv.getStockLevel() + quantity);
 
         saveChanges(inv, quantity, ReasonType.INCREASED_BY_WAREHOUSE);
     }
 
     @Transactional
-    public void decreaseStockLevel(RequestInventoryDto dto) {
+    public void decreaseStockLevel(InventoryDto dto) {
 
         validator.validate(dto);
 
         String productSKU = dto.getProductSKU();
-        long quantity = dto.getQuantity();
+        long quantity = dto.getStockLevel();
 
         Inventory inv = findInventoryByProductSKU(productSKU);
         if (inv.getStockLevel() - inv.getReservedStock() < quantity) {
@@ -146,7 +162,8 @@ public class InventoryManager {
 
         Inventory inventory = findInventoryByProductSKU(sku);
         inventoryChangeRepository.deleteByInventoryProductSKU(sku);
-        inventoryRepository.delete(inventory);    }
+        inventoryRepository.delete(inventory);
+    }
 
     private void saveChanges(Inventory inventory, long changeQuantity, ReasonType reasonType) {
 

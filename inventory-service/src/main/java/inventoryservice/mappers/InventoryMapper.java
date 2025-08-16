@@ -2,9 +2,7 @@ package inventoryservice.mappers;
 
 import inventoryservice.dto.InventoryDto;
 import inventoryservice.entities.Inventory;
-import org.mapstruct.Mapper;
-import org.mapstruct.MappingConstants;
-import org.mapstruct.ReportingPolicy;
+import org.mapstruct.*;
 
 import java.util.Collection;
 
@@ -15,4 +13,9 @@ public interface InventoryMapper {
 
     Collection<InventoryDto> toDto(Collection<Inventory> inventory);
 
+    Inventory toEntity(InventoryDto inventoryDto);
+
+    Collection<Inventory> toEntity(Collection<InventoryDto> inventoryDto);
+
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)Inventory partialUpdate(InventoryDto inventoryDto, @MappingTarget Inventory inventory);
 }

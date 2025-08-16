@@ -1,7 +1,6 @@
 package inventoryservice.controllers;
 
 import inventoryservice.dto.InventoryDto;
-import inventoryservice.dto.request.RequestInventoryDto;
 import inventoryservice.entities.Inventory;
 import inventoryservice.mappers.InventoryMapper;
 import inventoryservice.services.InventoryManager;
@@ -36,31 +35,31 @@ public class InventoryController {
     }
 
     @PostMapping("/reserve-stock")
-    public ResponseEntity<Void> reserveStock(@RequestBody RequestInventoryDto dto) {
+    public ResponseEntity<Void> reserveStock(@RequestBody InventoryDto dto) {
         manager.reserveStock(dto);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/revert-stock")
-    public ResponseEntity<Void> releaseStock(@RequestBody RequestInventoryDto dto) {
+    public ResponseEntity<Void> releaseStock(@RequestBody InventoryDto dto) {
         manager.revertStock(dto);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/commit-stock")
-    public ResponseEntity<Void> commitStock(@RequestBody RequestInventoryDto dto) {
+    public ResponseEntity<Void> commitStock(@RequestBody InventoryDto dto) {
         manager.commitStock(dto);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/increase-stock")
-    public ResponseEntity<Void> fillStockByWarehouse(@RequestBody RequestInventoryDto dto) {
+    public ResponseEntity<Void> fillStockByWarehouse(@RequestBody InventoryDto dto) {
         manager.increaseStockLevel(dto);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/decrease-stock")
-    public ResponseEntity<Void> cancelStockByWarehouse(@RequestBody RequestInventoryDto dto) {
+    public ResponseEntity<Void> cancelStockByWarehouse(@RequestBody InventoryDto dto) {
         manager.decreaseStockLevel(dto);
         return ResponseEntity.noContent().build();
     }

@@ -15,7 +15,6 @@ import java.util.Objects;
 @Entity
 @Table(name = "inventory_change")
 public class InventoryChange {
-    @NotNull
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "inventory_change_seq")
     @SequenceGenerator(name = "inventory_change_seq", allocationSize = 1)

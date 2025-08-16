@@ -8,6 +8,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.proxy.HibernateProxy;
 
+import java.math.BigDecimal;
 import java.util.Objects;
 
 @Getter
@@ -17,6 +18,7 @@ import java.util.Objects;
         @Index(name = "idx_inventory_product_sku_unq", columnList = "product_sku", unique = true)
 })
 public class Inventory {
+
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "inventory_seq")
     @SequenceGenerator(name = "inventory_seq", allocationSize = 1)
@@ -45,6 +47,14 @@ public class Inventory {
     @NotBlank(message = "Product SKU should be specified")
     @Column(name = "product_sku", nullable = false, unique = true)
     private String productSKU;
+
+    @PositiveOrZero(message = "Stock Price cannot be negative")
+    @Column(name = "stock_price", nullable = false, precision = 9, scale = 2)
+    private BigDecimal stockPrice;
+
+    @PositiveOrZero(message = "Sell Price cannot be negative")
+    @Column(name = "sell_price", nullable = false, precision = 9, scale = 2)
+    private BigDecimal sellPrice;
 
     @Override
     public final boolean equals(Object o) {
