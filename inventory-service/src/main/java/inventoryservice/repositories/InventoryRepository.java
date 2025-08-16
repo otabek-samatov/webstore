@@ -17,6 +17,6 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
 
     @Lock(LockModeType.PESSIMISTIC_READ)
     @Query("select p.stockLevel - p.reservedStock from Inventory p where p.productSKU = :productSKU")
-    long getAvailableStockLevel(String productSKU);
+    Optional<Long> getAvailableStockLevel(String productSKU);
 
 }

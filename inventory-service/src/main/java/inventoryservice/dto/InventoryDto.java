@@ -4,14 +4,14 @@ import inventoryservice.entities.MeasurementUnit;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
-import lombok.Value;
+import lombok.Data;
 
 import java.io.Serializable;
 
 /**
  * DTO for {@link inventoryservice.entities.Inventory}
  */
-@Value
+@Data
 public class InventoryDto implements Serializable {
     Long id;
 

@@ -26,7 +26,6 @@ public class InventoryChange {
     @Column(name = "version")
     private Integer version;
 
-    @NotNull
     @CreationTimestamp
     @Column(name = "event_time", nullable = false)
     private LocalDateTime eventTime;

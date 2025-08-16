@@ -5,16 +5,15 @@ import inventoryservice.entities.ReasonType;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.PositiveOrZero;
-import lombok.Value;
+import lombok.Data;
 
 import java.io.Serializable;
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
  * DTO for {@link InventoryChange}
  */
-@Value
+@Data
 public class InventoryChangeDto implements Serializable {
     @NotNull
     Long id;

@@ -1,11 +1,13 @@
 package inventoryservice.services;
 
+import inventoryservice.dto.request.RequestInventoryDto;
 import inventoryservice.entities.Inventory;
 import inventoryservice.entities.InventoryChange;
 import inventoryservice.entities.ReasonType;
 import inventoryservice.exceptions.NotEnoughStockException;
 import inventoryservice.repositories.InventoryChangeRepository;
 import inventoryservice.repositories.InventoryRepository;
+import inventoryservice.validators.CustomValidator;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -21,19 +23,22 @@ public class InventoryManager {
 
     private final InventoryRepository inventoryRepository;
     private final InventoryChangeRepository inventoryChangeRepository;
+    private final CustomValidator validator;
 
+    @Transactional
     public long getAvailableProductCount(String productSKU) {
-        return inventoryRepository.getAvailableStockLevel(productSKU);
+        return inventoryRepository.getAvailableStockLevel(productSKU).orElse(0L);
     }
 
     @Transactional
-    public void reserveStock(String productSKU, long quantity) {
+    public void reserveStock(RequestInventoryDto dto) {
 
-        if (quantity < 0) {
-            throw new IllegalArgumentException("Stock level must not be negative");
-        }
+        validator.validate(dto);
 
-        Inventory inv = findInventoryForUpdate(productSKU);
+        String productSKU = dto.getProductSKU();
+        long quantity = dto.getQuantity();
+
+        Inventory inv = findInventoryByProductSKU(productSKU);
 
         if (inv.getStockLevel() - inv.getReservedStock() < quantity) {
             throw new NotEnoughStockException(productSKU);
@@ -45,13 +50,14 @@ public class InventoryManager {
     }
 
     @Transactional
-    public void commitStock(String productSKU, long quantity) {
+    public void commitStock(RequestInventoryDto dto) {
 
-        if (quantity < 0) {
-            throw new IllegalArgumentException("Stock level must not be negative");
-        }
+        validator.validate(dto);
 
-        Inventory inv = findInventoryForUpdate(productSKU);
+        String productSKU = dto.getProductSKU();
+        long quantity = dto.getQuantity();
+
+        Inventory inv = findInventoryByProductSKU(productSKU);
         if (inv.getReservedStock() < quantity) {
             throw new NotEnoughStockException(productSKU);
         }
@@ -63,13 +69,14 @@ public class InventoryManager {
     }
 
     @Transactional
-    public void revertStock(String productSKU, long quantity) {
+    public void revertStock(RequestInventoryDto dto) {
 
-        if (quantity < 0) {
-            throw new IllegalArgumentException("Stock level must not be negative");
-        }
+        validator.validate(dto);
 
-        Inventory inv = findInventoryForUpdate(productSKU);
+        String productSKU = dto.getProductSKU();
+        long quantity = dto.getQuantity();
+
+        Inventory inv = findInventoryByProductSKU(productSKU);
         if (inv.getReservedStock() < quantity) {
             throw new NotEnoughStockException(productSKU);
         }
@@ -80,11 +87,12 @@ public class InventoryManager {
     }
 
     @Transactional
-    public void increaseStockLevel(String productSKU, long quantity) {
+    public void increaseStockLevel(RequestInventoryDto dto) {
 
-        if (quantity < 0) {
-            throw new IllegalArgumentException("Stock level must not be negative");
-        }
+        validator.validate(dto);
+
+        String productSKU = dto.getProductSKU();
+        long quantity = dto.getQuantity();
 
         if (!StringUtils.hasText(productSKU)) {
             throw new IllegalArgumentException("productSKU is empty");
@@ -100,14 +108,15 @@ public class InventoryManager {
     }
 
     @Transactional
-    public void decreaseStockLevel(String productSKU, long quantity) {
+    public void decreaseStockLevel(RequestInventoryDto dto) {
 
-        if (quantity < 0) {
-            throw new IllegalArgumentException("Stock level must not be negative");
-        }
+        validator.validate(dto);
 
-        Inventory inv = findInventoryForUpdate(productSKU);
-        if (inv.getStockLevel() < quantity) {
+        String productSKU = dto.getProductSKU();
+        long quantity = dto.getQuantity();
+
+        Inventory inv = findInventoryByProductSKU(productSKU);
+        if (inv.getStockLevel() - inv.getReservedStock() < quantity) {
             throw new NotEnoughStockException(productSKU);
         }
 
@@ -116,7 +125,8 @@ public class InventoryManager {
         saveChanges(inv, quantity, ReasonType.CANCELLED_BY_WAREHOUSE);
     }
 
-    private Inventory findInventoryForUpdate(String productSKU) {
+    @Transactional
+    public Inventory findInventoryByProductSKU(String productSKU) {
 
         if (!StringUtils.hasText(productSKU)) {
             throw new IllegalArgumentException("productSKU is empty");
@@ -124,12 +134,7 @@ public class InventoryManager {
 
         Optional<Inventory> inv = inventoryRepository.findInventoryByProductSKU(productSKU);
 
-        return inv.orElseThrow(() -> new EntityNotFoundException("Product not found: " + productSKU));
-    }
-
-    public Inventory findInventoryByProductSKU(String productSKU) {
-        return inventoryRepository.findInventoryByProductSKU(productSKU)
-                .orElseThrow(() -> new EntityNotFoundException("Inventory with productSKU " + productSKU + " not found"));
+        return inv.orElseThrow(() -> new EntityNotFoundException("Product with ID = " + productSKU + " not found"));
     }
 
     @Transactional
@@ -138,9 +143,9 @@ public class InventoryManager {
             throw new IllegalArgumentException("productSKU is empty");
         }
 
-        List<Long> historyList = inventoryChangeRepository.getHistoryBySKU(sku);
-        if (!historyList.isEmpty()) {
-            inventoryChangeRepository.deleteAllById(historyList);
+        List<InventoryChange> historyList = inventoryChangeRepository.getHistoryBySKU(sku);
+        if (historyList != null) {
+            inventoryChangeRepository.deleteAll(historyList);
         }
 
         Inventory inventory = findInventoryByProductSKU(sku);
