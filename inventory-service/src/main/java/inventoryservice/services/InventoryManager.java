@@ -105,20 +105,17 @@ public class InventoryManager {
         Inventory inv = inventoryOptional.orElse(null);
         if (inv == null) {
             if (dto.getStockPrice() == null || dto.getStockPrice().compareTo(BigDecimal.ZERO) < 0) {
-                throw new IllegalArgumentException("Stock Price cannot be negative");
+                throw new IllegalArgumentException("For new Inventory, input non negative Stock Price");
             }
 
             if (dto.getSellPrice() == null || dto.getSellPrice().compareTo(BigDecimal.ZERO) < 0) {
-                throw new IllegalArgumentException("Sell Price cannot be negative");
+                throw new IllegalArgumentException("For new Inventory, input non negative Sell Price ");
             }
 
-            inv = new Inventory();
-            inv.setProductSKU(productSKU);
-            inv.setSellPrice(dto.getSellPrice());
-            inv.setStockPrice(dto.getStockPrice());
+            inv = inventoryMapper.toEntity(dto);
+        } else {
+            inv.setStockLevel(inv.getStockLevel() + quantity);
         }
-
-        inv.setStockLevel(inv.getStockLevel() + quantity);
 
         saveChanges(inv, quantity, ReasonType.INCREASED_BY_WAREHOUSE);
     }
