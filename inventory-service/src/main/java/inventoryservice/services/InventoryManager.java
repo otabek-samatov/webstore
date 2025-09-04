@@ -104,14 +104,6 @@ public class InventoryManager {
 
         Inventory inv = inventoryOptional.orElse(null);
         if (inv == null) {
-            if (dto.getStockPrice() == null || dto.getStockPrice().compareTo(BigDecimal.ZERO) < 0) {
-                throw new IllegalArgumentException("For new Inventory, input non negative Stock Price");
-            }
-
-            if (dto.getSellPrice() == null || dto.getSellPrice().compareTo(BigDecimal.ZERO) < 0) {
-                throw new IllegalArgumentException("For new Inventory, input non negative Sell Price ");
-            }
-
             inv = inventoryMapper.toEntity(dto);
         } else {
             inv.setStockLevel(inv.getStockLevel() + quantity);
