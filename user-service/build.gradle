@@ -8,9 +8,9 @@ ext {
     springCloudVersion = "2025.0.0"
 }
 
-group = 'users'
+group = 'user'
 version = '0.0.1-SNAPSHOT'
-description = 'users-service'
+description = 'user-service'
 
 java {
     toolchain {

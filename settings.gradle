@@ -5,5 +5,5 @@ include 'api-gateway'
 include 'discovery-server'
 include 'product-service'
 include 'inventory-service'
-include 'users-service'
+include 'user-service'
 
