@@ -2,8 +2,6 @@ package userservice.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
-import lombok.Value;
-import userservice.entities.RoleType;
 
 import java.io.Serializable;
 
@@ -15,6 +13,6 @@ public class UserDto implements Serializable {
     Long id;
     @NotBlank(message = "userName cannot be blank")
     String userName;
-    RoleType securityRoleRoleType;
     Boolean isActive;
+    private Long securityRoleId;
 }
