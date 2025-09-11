@@ -1,5 +1,6 @@
 package userservice.controllers;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,7 +18,7 @@ public class UserController {
     private final UserMapper userMapper;
 
     @PostMapping
-    public ResponseEntity<UserDto> create(@RequestBody UserDto userDto) {
+    public ResponseEntity<UserDto> create(@RequestBody @Valid UserDto userDto) {
         User user = userManager.createUser(userDto);
         return ResponseEntity.ok(userMapper.toDto(user));
     }
@@ -28,8 +29,8 @@ public class UserController {
         return ResponseEntity.ok(userMapper.toDto(user));
     }
 
-    @PostMapping
-    public ResponseEntity<UserDto> update(@RequestBody UserDto userDto) {
+    @PutMapping
+    public ResponseEntity<UserDto> update(@RequestBody @Valid UserDto userDto) {
         User user = userManager.update(userDto);
         return ResponseEntity.ok(userMapper.toDto(user));
     }

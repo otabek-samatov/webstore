@@ -10,7 +10,8 @@ import userservice.mappers.UserMapper;
 import userservice.repositories.SecurityRoleRepository;
 import userservice.repositories.UserProfileRepository;
 import userservice.repositories.UserRepository;
-import userservice.validators.CustomValidator;
+import userservice.validators.BaseValidator;
+import userservice.validators.UserValidator;
 
 @RequiredArgsConstructor
 @Service
@@ -18,7 +19,7 @@ public class UserManager {
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
     private final SecurityRoleRepository securityRoleRepository;
-    private final CustomValidator validator;
+    private final UserValidator validator;
     private final UserMapper mapper;
 
 
@@ -55,7 +56,6 @@ public class UserManager {
 
     @Transactional
     public void deleteById(Long id) {
-
         userProfileRepository.deleteByUserId(id);
         userRepository.deleteById(id);
 

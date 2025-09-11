@@ -6,4 +6,7 @@ import userservice.entities.User;
 
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
+    boolean existsUserByUserName(String userName);
+
+    User findByUserName(String userName);
 }

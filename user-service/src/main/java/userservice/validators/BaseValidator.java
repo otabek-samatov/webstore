@@ -7,11 +7,13 @@ import org.springframework.stereotype.Service;
 
 import java.util.Set;
 
-@RequiredArgsConstructor
 @Service
-public class CustomValidator {
+public class BaseValidator {
+    protected final Validator validator;
 
-    private final Validator validator;
+    public BaseValidator(Validator validator) {
+        this.validator = validator;
+    }
 
     public void validate(Object obj) {
         if (obj == null) {

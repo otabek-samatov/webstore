@@ -7,8 +7,6 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.proxy.HibernateProxy;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Objects;
 
 @Getter
@@ -28,7 +26,7 @@ public class User {
     @Column(name = "version")
     private Integer version;
 
-    @Column(name = "user_name", nullable = false, unique = true)
+    @Column(name = "user_name", nullable = false, unique = true, updatable = false)
     private String userName;
 
     @Column(name = "password", nullable = false)
@@ -44,6 +42,13 @@ public class User {
     @ManyToOne(optional = false)
     @JoinColumn(name = "security_role_id", nullable = false)
     private SecurityRole securityRole;
+
+    public void setUserName(String userName) {
+        if (this.userName != null) {
+            throw new IllegalStateException("Username cannot be changed once set");
+        }
+        this.userName = userName;
+    }
 
     @Override
     public final boolean equals(Object o) {
