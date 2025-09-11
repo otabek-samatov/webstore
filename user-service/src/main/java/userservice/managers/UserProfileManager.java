@@ -4,9 +4,7 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import userservice.dto.UserDto;
 import userservice.dto.UserProfileDto;
-import userservice.entities.User;
 import userservice.entities.UserProfile;
 import userservice.mappers.UserProfileMapper;
 import userservice.repositories.AddressRepository;
@@ -24,11 +22,12 @@ public class UserProfileManager {
     private final UserProfileMapper mapper;
 
 
-    public UserProfile getUserByID(Long id) {
+    public UserProfile getByID(Long id) {
         return profileRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("User Profile with id " + id + " not found"));
     }
 
-    public UserProfile createUser(UserProfileDto dto) {
+    @Transactional
+    public UserProfile create(UserProfileDto dto) {
         validator.validate(dto);
 
         UserProfile profile = new UserProfile();
@@ -45,10 +44,11 @@ public class UserProfileManager {
         return profileRepository.save(profile);
     }
 
+    @Transactional
     public UserProfile update(UserProfileDto dto) {
         validator.validate(dto);
 
-        UserProfile profile = profileRepository.findById(dto.getId()).orElseThrow(() -> new EntityNotFoundException(dto + " not found"));
+        UserProfile profile = profileRepository.findById(dto.getId()).orElseThrow(() -> new EntityNotFoundException(dto.getId() + " not found"));
 
         mapper.partialUpdate(dto, profile);
 
@@ -65,6 +65,7 @@ public class UserProfileManager {
 
     @Transactional
     public void deleteById(Long id) {
-        profileRepository.deleteByUserId(id);
+        profileRepository.findById(id)
+                .ifPresent(profileRepository::delete);
     }
 }

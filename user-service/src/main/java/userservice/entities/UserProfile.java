@@ -23,7 +23,7 @@ public class UserProfile {
     @Column(name = "version")
     private Integer version;
 
-    @OneToOne(cascade = CascadeType.ALL, optional = false, orphanRemoval = true)
+    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL, optional = false, orphanRemoval = true)
     @JoinColumn(name = "user_id", nullable = false, unique = true)
     private User user;
 
@@ -39,7 +39,7 @@ public class UserProfile {
     @Column(name = "date_of_birth")
     private LocalDate dateOfBirth;
 
-    @OneToOne(cascade = CascadeType.ALL, optional = false, orphanRemoval = true)
+    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL, optional = false, orphanRemoval = true)
     @JoinColumn(name = "address_id", nullable = false)
     private Address address;
 

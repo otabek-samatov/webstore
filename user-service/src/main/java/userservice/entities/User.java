@@ -39,7 +39,7 @@ public class User {
     @Column(name = "is_active")
     private Boolean isActive;
 
-    @ManyToOne(optional = false)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "security_role_id", nullable = false)
     private SecurityRole securityRole;
 

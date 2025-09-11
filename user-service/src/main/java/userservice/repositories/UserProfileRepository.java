@@ -1,29 +1,18 @@
 package userservice.repositories;
 
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import userservice.entities.UserProfile;
 
+import java.util.Optional;
+
 @Repository
 public interface UserProfileRepository extends JpaRepository<UserProfile, Long> {
 
-    @Modifying
-    @Query("DELETE FROM UserProfile up WHERE up.user.id = :userId")
-    void deleteByUserId(@Param("userId") Long userId);
-
     @Query("select up from UserProfile up where up.user.id = :userId")
-    UserProfile findUserProfileByUserId(@Param("userId") Long userId);
+    Optional<UserProfile> findUserProfileByUserId(@Param("userId") Long userId);
 
 
-    @Query("select up from UserProfile up where up.user.userName = :userName")
-    UserProfile findUserProfileByUserName(@Param("userName") String userName);
-
-    @Query("select up.id from UserProfile up where up.user.userName = :userName")
-    Long findIdByUserName(@Param("userName") String userName);
-
-    @Query("select up.id from UserProfile up where up.user.id = :userId")
-    Long findIdByUserId(@Param("userId") Long userId);
 }

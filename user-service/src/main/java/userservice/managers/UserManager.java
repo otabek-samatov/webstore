@@ -10,7 +10,6 @@ import userservice.mappers.UserMapper;
 import userservice.repositories.SecurityRoleRepository;
 import userservice.repositories.UserProfileRepository;
 import userservice.repositories.UserRepository;
-import userservice.validators.BaseValidator;
 import userservice.validators.UserValidator;
 
 @RequiredArgsConstructor
@@ -23,11 +22,12 @@ public class UserManager {
     private final UserMapper mapper;
 
 
-    public User getUserByID(Long id) {
+    public User getByID(Long id) {
         return userRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("User with id " + id + " not found"));
     }
 
-    public User createUser(UserDto dto) {
+    @Transactional
+    public User create(UserDto dto) {
         validator.validate(dto);
 
         User user = new User();
@@ -40,10 +40,11 @@ public class UserManager {
         return userRepository.save(user);
     }
 
+    @Transactional
     public User update(UserDto dto) {
         validator.validate(dto);
 
-        User user = userRepository.findById(dto.getId()).orElseThrow(() -> new EntityNotFoundException(dto + " not found"));
+        User user = userRepository.findById(dto.getId()).orElseThrow(() -> new EntityNotFoundException(dto.getId() + " not found"));
 
         mapper.partialUpdate(dto, user);
 
@@ -56,8 +57,7 @@ public class UserManager {
 
     @Transactional
     public void deleteById(Long id) {
-        userProfileRepository.deleteByUserId(id);
-        userRepository.deleteById(id);
-
+        userProfileRepository.findUserProfileByUserId(id)
+                .ifPresent(userProfileRepository::delete);
     }
 }

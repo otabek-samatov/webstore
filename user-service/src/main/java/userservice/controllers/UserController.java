@@ -19,13 +19,13 @@ public class UserController {
 
     @PostMapping
     public ResponseEntity<UserDto> create(@RequestBody @Valid UserDto userDto) {
-        User user = userManager.createUser(userDto);
+        User user = userManager.create(userDto);
         return ResponseEntity.ok(userMapper.toDto(user));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<UserDto> getById(@PathVariable Long id) {
-        User user = userManager.getUserByID(id);
+        User user = userManager.getByID(id);
         return ResponseEntity.ok(userMapper.toDto(user));
     }
 
