@@ -17,11 +17,7 @@ Cart Service – Each user’s shopping cart logic.
 
 Order Service – Order placement and tracking.
 
-Payment Service – Handles payment processing.
-
 User Service – Registration, login, profile.
-
-Notification Service – For email/SMS/Telegram alerts.
 
 Gateway Service – API gateway using Spring Cloud Gateway.
 
