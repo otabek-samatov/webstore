@@ -28,10 +28,10 @@ public class UserValidator extends BaseValidator {
             }
         }
 
-        if (dto.getSecurityRoleId() != null) {
-            boolean f = securityRoleRepository.existsById(dto.getSecurityRoleId());
-            if (!f) {
-                throw new IllegalArgumentException("Security role with id " + dto.getSecurityRoleId() + " not found");
+        if (dto.getSecurityRoleType() != null) {
+            Long id = securityRoleRepository.getIDByRoleType(dto.getSecurityRoleType());
+            if (id == null) {
+                throw new IllegalArgumentException("Security role with type " + dto.getSecurityRoleType() + " not found");
             }
         }
 

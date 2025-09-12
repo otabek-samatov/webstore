@@ -9,7 +9,7 @@ public interface UserMapper {
     @Mapping(target = "securityRole", ignore = true)
     User toEntity(UserDto userDto);
 
-    @Mapping(source = "securityRole.id", target = "securityRoleId")
+    @Mapping(source = "securityRole.roleType", target = "securityRoleType")
     UserDto toDto(User user);
 
     @Mapping(target = "securityRole", ignore = true)

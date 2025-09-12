@@ -33,8 +33,9 @@ public class UserManager {
         User user = new User();
         mapper.partialUpdate(dto, user);
 
-        if (dto.getSecurityRoleId() != null) {
-            user.setSecurityRole(securityRoleRepository.getReferenceById(dto.getSecurityRoleId()));
+        if (dto.getSecurityRoleType() != null) {
+            Long id = securityRoleRepository.getIDByRoleType(dto.getSecurityRoleType());
+            user.setSecurityRole(securityRoleRepository.getReferenceById(id));
         }
 
         return userRepository.save(user);
@@ -48,8 +49,9 @@ public class UserManager {
 
         mapper.partialUpdate(dto, user);
 
-        if (dto.getSecurityRoleId() != null) {
-            user.setSecurityRole(securityRoleRepository.getReferenceById(dto.getSecurityRoleId()));
+        if (dto.getSecurityRoleType() != null) {
+            Long id = securityRoleRepository.getIDByRoleType(dto.getSecurityRoleType());
+            user.setSecurityRole(securityRoleRepository.getReferenceById(id));
         }
 
         return userRepository.save(user);

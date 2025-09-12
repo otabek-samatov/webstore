@@ -3,7 +3,6 @@ package userservice.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
-import lombok.Value;
 
 import java.io.Serializable;
 import java.time.LocalDate;
@@ -15,10 +14,6 @@ import java.time.LocalDate;
 public class UserProfileDto implements Serializable {
     Long id;
 
-
-    @NotNull(message = "User ID should be specified")
-    Long userId;
-
     @NotBlank(message = "First Name should be specified")
     String firstName;
 
@@ -27,8 +22,11 @@ public class UserProfileDto implements Serializable {
 
     String middleName;
 
-    @NotNull(message = "Address ID should be specified")
-    Long addressId;
+    @NotBlank(message = "User Name Should be Specified")
+    private String userName;
+
+    @NotNull(message = "Address Should be Specified")
+    private AddressDto address;
 
     @NotNull(message = "Date Of Birth Should Be Specified")
     LocalDate dateOfBirth;

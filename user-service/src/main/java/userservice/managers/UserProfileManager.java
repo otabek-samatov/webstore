@@ -7,7 +7,6 @@ import org.springframework.transaction.annotation.Transactional;
 import userservice.dto.UserProfileDto;
 import userservice.entities.UserProfile;
 import userservice.mappers.UserProfileMapper;
-import userservice.repositories.AddressRepository;
 import userservice.repositories.UserProfileRepository;
 import userservice.repositories.UserRepository;
 import userservice.validators.UserProfileValidator;
@@ -17,7 +16,6 @@ import userservice.validators.UserProfileValidator;
 public class UserProfileManager {
     private final UserProfileRepository profileRepository;
     private final UserRepository userRepository;
-    private final AddressRepository addressRepository;
     private final UserProfileValidator validator;
     private final UserProfileMapper mapper;
 
@@ -33,13 +31,8 @@ public class UserProfileManager {
         UserProfile profile = new UserProfile();
         mapper.partialUpdate(dto, profile);
 
-        if (dto.getUserId() != null) {
-            profile.setUser(userRepository.getReferenceById(dto.getUserId()));
-        }
-
-        if (dto.getAddressId() != null) {
-            profile.setAddress(addressRepository.getReferenceById(dto.getAddressId()));
-        }
+        Long id = userRepository.getIdByUserName(dto.getUserName());
+        profile.setUser(userRepository.getReferenceById(id));
 
         return profileRepository.save(profile);
     }
@@ -52,13 +45,8 @@ public class UserProfileManager {
 
         mapper.partialUpdate(dto, profile);
 
-        if (dto.getUserId() != null) {
-            profile.setUser(userRepository.getReferenceById(dto.getUserId()));
-        }
-
-        if (dto.getAddressId() != null) {
-            profile.setAddress(addressRepository.getReferenceById(dto.getAddressId()));
-        }
+        Long id = userRepository.getIdByUserName(dto.getUserName());
+        profile.setUser(userRepository.getReferenceById(id));
 
         return profileRepository.save(profile);
     }
