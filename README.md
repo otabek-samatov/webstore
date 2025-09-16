@@ -43,11 +43,14 @@ Apache Kafka: For event-driven communication between services.
 
 ------------------------------------------------------------------------------
 
-Kafka events:
+Webstore is e-store project for selling books. It uses following technologies:
 
-Event	          Producer	          Consumer
------------------------------------------------------------------------------
-product-created	  Product Service	  Search/Recommendation Services
-order-placed	  Order Service	      Inventory Service, Notification Service
-stock-depleted	  Inventory Service	  Notification Service
-user-registered	  Auth Service	      Notification Service
+Java 21
+Spring Boot 3.5
+JPA (Hibernate implementation)
+Spring Security
+Spring Data
+PostresDB 17.
+Apache Kafka 4
+
+I am developing only backend part. So, this project does not have UI.

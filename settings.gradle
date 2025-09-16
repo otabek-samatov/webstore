@@ -6,4 +6,5 @@ include 'discovery-server'
 include 'product-service'
 include 'inventory-service'
 include 'user-service'
+include 'cart-service'
 
