@@ -2,7 +2,6 @@ package cartservice.entities;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Getter;
@@ -37,9 +36,8 @@ public class CartItem {
 
     @PositiveOrZero(message = "Unit Price cannot be negative")
     @Column(name = "unit_price", nullable = false, precision = 9, scale = 2)
-    private BigDecimal stockPrice;
+    private BigDecimal unitPrice;
 
-    @NotNull(message = "Quantity should be specified")
     @Positive(message = "Quantity should be greater than zero.")
     @Column(name = "quantity", nullable = false)
     private Long quantity = 0L;
