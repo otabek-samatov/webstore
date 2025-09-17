@@ -3,7 +3,7 @@ package inventoryservice.controllers;
 import inventoryservice.dto.InventoryDto;
 import inventoryservice.entities.Inventory;
 import inventoryservice.mappers.InventoryMapper;
-import inventoryservice.services.InventoryManager;
+import inventoryservice.managers.InventoryManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

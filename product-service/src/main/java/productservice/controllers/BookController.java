@@ -6,7 +6,7 @@ import org.springframework.web.bind.annotation.*;
 import productservice.dto.BookDto;
 import productservice.entities.Book;
 import productservice.mappers.BookMapper;
-import productservice.services.BookManager;
+import productservice.managers.BookManager;
 
 
 @RequiredArgsConstructor

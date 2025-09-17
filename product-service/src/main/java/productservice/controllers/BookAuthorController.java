@@ -10,7 +10,7 @@ import productservice.entities.Author;
 import productservice.entities.Book;
 import productservice.mappers.AuthorMapper;
 import productservice.mappers.BookMapper;
-import productservice.services.AuthorManager;
+import productservice.managers.AuthorManager;
 
 import java.util.List;
 

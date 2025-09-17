@@ -1,4 +1,4 @@
-package productservice.services;
+package productservice.managers;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;

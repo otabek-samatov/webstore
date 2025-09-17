@@ -10,7 +10,7 @@ import productservice.entities.Book;
 import productservice.entities.Category;
 import productservice.mappers.BookMapper;
 import productservice.mappers.CategoryMapper;
-import productservice.services.CategoryManager;
+import productservice.managers.CategoryManager;
 
 import java.util.List;
 

@@ -1,4 +1,4 @@
-package cartservice.services;
+package cartservice.managers;
 
 import cartservice.dto.CartDto;
 import cartservice.dto.CartItemDto;
