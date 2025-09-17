@@ -1,5 +1,6 @@
 package userservice.validators;
 
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Validator;
 import org.springframework.stereotype.Service;
 import userservice.dto.UserProfileDto;
@@ -20,7 +21,7 @@ public class UserProfileValidator extends BaseValidator {
 
         boolean f = userRepository.existsUserByUserName(dto.getUserName());
         if (!f) {
-            throw new IllegalArgumentException("User with username " + dto.getUserName() + " not found");
+            throw new EntityNotFoundException("User with username " + dto.getUserName() + " not found");
         }
     }
 }

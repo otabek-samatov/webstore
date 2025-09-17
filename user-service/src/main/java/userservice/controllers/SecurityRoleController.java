@@ -27,7 +27,7 @@ public class SecurityRoleController {
 
     @PutMapping("/{userID}")
     public ResponseEntity<Void> assignRole(@PathVariable Long userID, @RequestBody @Valid SecurityRoleDto securityRoleDto) {
-        securityRoleManager.assignRole(userID, securityRoleDto.getRoleType());
+        securityRoleManager.assignRole(userID, securityRoleDto);
         return ResponseEntity.noContent().build();
     }
 }

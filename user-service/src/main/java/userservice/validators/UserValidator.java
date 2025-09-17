@@ -1,5 +1,6 @@
 package userservice.validators;
 
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Validator;
 import org.springframework.stereotype.Service;
 import userservice.dto.UserDto;
@@ -31,7 +32,7 @@ public class UserValidator extends BaseValidator {
         if (dto.getSecurityRoleType() != null) {
             Long id = securityRoleRepository.getIDByRoleType(dto.getSecurityRoleType());
             if (id == null) {
-                throw new IllegalArgumentException("Security role with type " + dto.getSecurityRoleType() + " not found");
+                throw new EntityNotFoundException("Security role with type " + dto.getSecurityRoleType() + " not found");
             }
         }
 

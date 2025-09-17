@@ -37,8 +37,23 @@ public class Cart {
     @Column(name = "status", nullable = false)
     private CartStatus status;
 
+    @Setter(lombok.AccessLevel.NONE)
     @OneToMany(mappedBy = "cart", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<CartItem> cartItems = new LinkedHashSet<>();
+
+    public void addCartItem(CartItem cartItem) {
+        cartItems.add(cartItem);
+        cartItem.setCart(this);
+    }
+
+    public void removeCartItem(CartItem cartItem) {
+        cartItems.remove(cartItem);
+        cartItem.setCart(null);
+    }
+
+    public Set<CartItem> getCartItems() {
+        return Set.copyOf(cartItems);
+    }
 
     @Override
     public final boolean equals(Object o) {
