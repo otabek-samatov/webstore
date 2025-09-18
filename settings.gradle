@@ -1,8 +1,8 @@
 rootProject.name = 'webstore'
 
-include 'config-server'
-include 'api-gateway'
-include 'discovery-server'
+include 'config-service'
+include 'gateway-service'
+include 'discovery-service'
 include 'product-service'
 include 'inventory-service'
 include 'user-service'
