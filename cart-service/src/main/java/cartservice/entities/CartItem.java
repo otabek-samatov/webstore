@@ -14,7 +14,9 @@ import java.util.Objects;
 @Getter
 @Setter
 @Entity
-@Table(name = "cart_item")
+@Table(name = "cart_item", uniqueConstraints = {
+        @UniqueConstraint(name = "uc_cartitem_cart_id", columnNames = {"cart_id", "product_sku"})
+})
 public class CartItem {
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "cart_item_seq")
@@ -40,7 +42,7 @@ public class CartItem {
 
     @Positive(message = "Quantity should be greater than zero.")
     @Column(name = "quantity", nullable = false)
-    private Long quantity = 0L;
+    private Long quantity = 1L;
 
     @Override
     public final boolean equals(Object o) {

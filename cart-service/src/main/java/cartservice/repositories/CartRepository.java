@@ -9,9 +9,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface CartRepository extends JpaRepository<Cart, Long> {
 
-    @Query("select c from Cart c where c.status = 'Active' and c.userId = :userId")
+    @Query("select c from Cart c where c.status = 'IN_PROGRESS' and c.userId = :userId")
     Cart findActiveCartByUserId(@Param("userId") Long userId);
 
-    @Query("select c.id from Cart c where c.status = 'Active' and c.userId = :userId")
+    @Query("select c.id from Cart c where c.status = 'IN_PROGRESS' and c.userId = :userId")
     Long findActiveCartIdByUserId(@Param("userId") Long userId);
 }

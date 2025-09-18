@@ -1,7 +1,7 @@
 package cartservice.entities;
 
 public enum CartStatus {
-    ACTIVE,
+    IN_PROGRESS,
     ABANDONED,
     COMPLETED
 }

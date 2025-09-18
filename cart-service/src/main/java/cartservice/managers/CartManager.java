@@ -1,43 +1,32 @@
 package cartservice.managers;
 
-import cartservice.dto.CartDto;
 import cartservice.dto.CartItemDto;
 import cartservice.entities.Cart;
 import cartservice.entities.CartItem;
+import cartservice.entities.CartStatus;
 import cartservice.mappers.CartItemMapper;
-import cartservice.mappers.CartMapper;
 import cartservice.repositories.CartItemRepository;
 import cartservice.repositories.CartRepository;
 import cartservice.validators.CartItemValidator;
-import cartservice.validators.CartValidator;
 import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 
+@RequiredArgsConstructor
 @Service
 public class CartManager {
 
     private final CartRepository cartRepository;
     private final CartItemRepository cartItemRepository;
-    private final CartMapper cartMapper;
     private final CartItemMapper cartItemMapper;
-    private final CartValidator cartValidator;
     private final CartItemValidator cartItemValidator;
 
-
-    public CartManager(CartRepository cartRepository, CartItemRepository cartItemRepository, CartMapper cartMapper, CartItemMapper cartItemMapper, CartValidator cartValidator, CartItemValidator cartItemValidator) {
-        this.cartRepository = cartRepository;
-        this.cartItemRepository = cartItemRepository;
-        this.cartMapper = cartMapper;
-        this.cartItemMapper = cartItemMapper;
-        this.cartValidator = cartValidator;
-        this.cartItemValidator = cartItemValidator;
-    }
-
-    public CartDto getCart(Long userId) {
+    public Cart getCart(Long userId) {
         if (userId == null) {
             throw new IllegalArgumentException("userId is null");
         }
@@ -47,26 +36,26 @@ public class CartManager {
             throw new EntityNotFoundException("No cart found");
         }
 
-        return cartMapper.toDto(cart);
+        return cart;
     }
 
-    public List<CartItemDto> getCartItems(Long userId) {
+    public List<CartItem> getCartItems(Long userId) {
         if (userId == null) {
             throw new IllegalArgumentException("userId is null");
         }
 
-        return cartItemMapper.toDto(cartItemRepository.getItemsByUserID(userId));
+        return cartItemRepository.getItemsByUserID(userId);
     }
 
-    public CartItemDto getCartItem(Long cartItemId) {
+    public CartItem getCartItem(Long cartItemId) {
         if (cartItemId == null) {
             throw new IllegalArgumentException("cartItemId is null");
         }
 
-        CartItem item = cartItemRepository.findById(cartItemId).orElseThrow(() -> new EntityNotFoundException("Cart Item with = " + cartItemId + " not found"));
-        return cartItemMapper.toDto(item);
+        return cartItemRepository.findById(cartItemId).orElseThrow(() -> new EntityNotFoundException("Cart Item with = " + cartItemId + " not found"));
     }
 
+    @Transactional
     public void removeCartItem(Long cartItemId) {
         if (cartItemId == null) {
             throw new IllegalArgumentException("cartItemId is null");
@@ -77,6 +66,7 @@ public class CartManager {
         cart.removeCartItem(item);
         cartRepository.save(cart);
 
+        releaseStock(item);
     }
 
     @Transactional
@@ -88,7 +78,9 @@ public class CartManager {
         Cart cart = cartRepository.findActiveCartByUserId(userId);
         if (cart != null) {
             cartRepository.delete(cart);
+            releaseStocks(cart.getCartItems());
         }
+
     }
 
     public BigDecimal getTotal(Long userId) {
@@ -96,7 +88,12 @@ public class CartManager {
             throw new IllegalArgumentException("userId is null");
         }
 
-        return cartItemRepository.getSumByUserID(userId);
+        BigDecimal total = cartItemRepository.getSumByUserID(userId);
+        if (total == null) {
+            total = BigDecimal.ZERO;
+        }
+
+        return total;
     }
 
     @Transactional
@@ -110,11 +107,16 @@ public class CartManager {
         Cart cart = cartRepository.findActiveCartByUserId(userId);
         if (cart == null) {
             cart = new Cart();
+            cart.setUserId(userId);
+            cart.setStatus(CartStatus.IN_PROGRESS);
 
             for (CartItemDto cartItemDto : cartItemDtos) {
+                checkQuantity(cartItemDto);
+
                 CartItem cartItem = cartItemMapper.toEntity(cartItemDto);
                 cartItem.setUnitPrice(getUnitPrice(cartItemDto.getProductSKU()));
                 cart.addCartItem(cartItem);
+                reserveStock(cartItemDto);
             }
         } else {
             for (CartItemDto cartItemDto : cartItemDtos) {
@@ -123,9 +125,12 @@ public class CartManager {
                     throw new IllegalArgumentException("Product = " + cartItemDto.getProductSKU() + " already exists in cart");
                 }
 
+                checkQuantity(cartItemDto);
+
                 CartItem cartItem = cartItemMapper.toEntity(cartItemDto);
                 cartItem.setUnitPrice(getUnitPrice(cartItemDto.getProductSKU()));
                 cart.addCartItem(cartItem);
+                reserveStock(cartItemDto);
             }
         }
 
@@ -133,21 +138,56 @@ public class CartManager {
     }
 
     @Transactional
-    public void  updateQuantity(CartItemDto dto) {
+    public void updateQuantity(CartItemDto dto) {
         if (dto == null) {
             throw new IllegalArgumentException("cartItemDto is null");
         }
 
         cartItemValidator.validate(dto);
 
-       CartItem item = cartItemRepository.findById(dto.getId()).orElseThrow(() -> new EntityNotFoundException("Cart Item with = " + dto.getId() + " not found"));
-       item.setQuantity(dto.getQuantity());
+        checkQuantity(dto);
 
-       cartItemRepository.save(item);
+        cartItemRepository.updateQuantity(dto.getId(), dto.getQuantity());
     }
 
     private BigDecimal getUnitPrice(String productSKU) {
-        throw new UnsupportedOperationException("Not supported yet.");
+        throw new UnsupportedOperationException("getUnitPrice is not supported yet.");
     }
 
+    @Transactional
+    public void checkout(Long userId) {
+
+        if (userId == null) {
+            throw new IllegalArgumentException("userId is null");
+        }
+
+        Cart cart = cartRepository.findActiveCartByUserId(userId);
+        if (cart == null) {
+            throw new EntityNotFoundException("User with = " + userId + " does not have an active Cart");
+        }
+
+        cart.setStatus(CartStatus.COMPLETED);
+        cartRepository.save(cart);
+
+        createOrder(cart);
+    }
+
+    private void createOrder(Cart  cart) {
+        throw new UnsupportedOperationException("createOrder is not supported yet.");
+    }
+
+    private void checkQuantity(CartItemDto dto) {
+        throw new UnsupportedOperationException("checkQuantity is not supported yet.");
+    }
+
+    private void reserveStock(CartItemDto dto) {
+        throw new UnsupportedOperationException("reserveStock is not supported yet.");
+    }
+
+    private void releaseStock(CartItem item) {
+        throw new UnsupportedOperationException("releaseStock is not supported yet.");
+    }
+    private void releaseStocks(Collection<CartItem> items) {
+        throw new UnsupportedOperationException("releaseStocks is not supported yet.");
+    }
 }
