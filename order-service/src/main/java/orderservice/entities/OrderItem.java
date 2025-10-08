@@ -43,7 +43,6 @@ public class OrderItem {
     @JoinColumn(nullable = false)
     private Order order;
 
-    @Email
     @NotBlank(message = "Product Name should be Specified")
     @Column(name = "product_name", nullable = false)
     private String productName;

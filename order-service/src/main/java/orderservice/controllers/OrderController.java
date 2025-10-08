@@ -15,12 +15,18 @@ import java.util.List;
 
 @RequiredArgsConstructor
 @RestController
-@RequestMapping(value = "v1/inventories/inventory")
+@RequestMapping(value = "v1/orders")
 public class OrderController {
 
     private final OrderManager manager;
     private final OrderMapper orderMapper;
     private final OrderItemMapper itemMapper;
+
+    @PostMapping("/")
+    public ResponseEntity<Void> createOrder(OrderDto dto) {
+        manager.createOrder(dto);
+        return ResponseEntity.noContent().build();
+    }
 
     @GetMapping("/{orderID}")
     public ResponseEntity<OrderDto> getByOrderID(@PathVariable Long orderID) {
