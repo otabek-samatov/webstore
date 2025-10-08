@@ -1,6 +1,20 @@
-CREATE SEQUENCE IF NOT EXISTS order_seq START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE IF NOT EXISTS order_item_seq START WITH 1 INCREMENT BY 1;
 
-CREATE TABLE "order"
+CREATE SEQUENCE IF NOT EXISTS orders_seq START WITH 1 INCREMENT BY 1;
+
+CREATE TABLE order_item
+(
+    id           BIGINT        NOT NULL,
+    version      INTEGER,
+    product_sku  VARCHAR(255)  NOT NULL,
+    unit_price   DECIMAL(9, 2) NOT NULL,
+    quantity     BIGINT        NOT NULL,
+    order_id     BIGINT        NOT NULL,
+    product_name VARCHAR(255)  NOT NULL,
+    CONSTRAINT pk_order_item PRIMARY KEY (id)
+);
+
+CREATE TABLE orders
 (
     id            BIGINT                      NOT NULL,
     version       INTEGER,
@@ -16,5 +30,11 @@ CREATE TABLE "order"
     city          VARCHAR(255)                NOT NULL,
     street        VARCHAR(255)                NOT NULL,
     address_line  VARCHAR(255)                NOT NULL,
-    CONSTRAINT pk_order PRIMARY KEY (id)
+    CONSTRAINT pk_orders PRIMARY KEY (id)
 );
+
+ALTER TABLE order_item
+    ADD CONSTRAINT uc_orderitem_order_id UNIQUE (order_id, product_sku);
+
+ALTER TABLE order_item
+    ADD CONSTRAINT FK_ORDER_ITEM_ON_ORDER FOREIGN KEY (order_id) REFERENCES orders (id);

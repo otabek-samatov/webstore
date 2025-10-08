@@ -154,28 +154,6 @@ public class CartManager {
         throw new UnsupportedOperationException("getUnitPrice is not supported yet.");
     }
 
-    @Transactional
-    public void checkout(Long userId) {
-
-        if (userId == null) {
-            throw new IllegalArgumentException("userId is null");
-        }
-
-        Cart cart = cartRepository.findActiveCartByUserId(userId);
-        if (cart == null) {
-            throw new EntityNotFoundException("User with = " + userId + " does not have an active Cart");
-        }
-
-        cart.setStatus(CartStatus.COMPLETED);
-        cartRepository.save(cart);
-
-        createOrder(cart);
-    }
-
-    private void createOrder(Cart  cart) {
-        throw new UnsupportedOperationException("createOrder is not supported yet.");
-    }
-
     private void checkQuantity(CartItemDto dto) {
         throw new UnsupportedOperationException("checkQuantity is not supported yet.");
     }

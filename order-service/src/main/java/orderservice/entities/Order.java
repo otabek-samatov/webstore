@@ -10,16 +10,18 @@ import org.hibernate.proxy.HibernateProxy;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
 import java.util.Objects;
+import java.util.Set;
 
 @Getter
 @Setter
 @Entity
-@Table(name = "order")
+@Table(name = "orders")
 public class Order {
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "order_seq")
-    @SequenceGenerator(name = "order_seq", allocationSize = 1)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "orders_seq")
+    @SequenceGenerator(name = "orders_seq", allocationSize = 1)
     @Column(name = "id", nullable = false)
     private Long id;
 
@@ -55,7 +57,25 @@ public class Order {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "order_status", nullable = false)
-    private OrderStatus orderStatus;
+    private OrderStatus orderStatus = OrderStatus.CREATED;
+
+    @Setter(lombok.AccessLevel.NONE)
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<OrderItem> orderItems = new LinkedHashSet<>();
+
+    public void addItem(OrderItem cartItem) {
+        orderItems.add(cartItem);
+        cartItem.setOrder(this);
+    }
+
+    public void removeItem(OrderItem cartItem) {
+        orderItems.remove(cartItem);
+        cartItem.setOrder(null);
+    }
+
+    public Set<OrderItem> getItems() {
+        return Set.copyOf(orderItems);
+    }
 
     @Override
     public final boolean equals(Object o) {

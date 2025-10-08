@@ -1,7 +1,7 @@
 package orderservice.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import lombok.Value;
+import lombok.Data;
 import orderservice.entities.Address;
 
 import java.io.Serializable;
@@ -9,7 +9,7 @@ import java.io.Serializable;
 /**
  * DTO for {@link Address}
  */
-@Value
+@Data
 public class AddressDto implements Serializable {
     @NotBlank(message = "Country should be specified")
     String country;

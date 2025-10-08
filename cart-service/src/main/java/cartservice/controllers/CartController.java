@@ -78,9 +78,4 @@ public class CartController {
         return ResponseEntity.ok(cartItemMapper.toDto(items));
     }
 
-    @PostMapping("/{userID}/complete")
-    public ResponseEntity<Void> completeCart(@PathVariable Long userID) {
-        cartManager.checkout(userID);
-        return ResponseEntity.noContent().build();
-    }
 }
