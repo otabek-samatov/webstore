@@ -12,7 +12,7 @@ import userservice.mappers.SecurityRoleMapper;
 import java.util.List;
 
 @RequiredArgsConstructor
-@RequestMapping(value = "v1/users/role")
+@RequestMapping(value = "/v1/users/role")
 @RestController
 public class SecurityRoleController {
 

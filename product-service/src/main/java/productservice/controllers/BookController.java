@@ -11,7 +11,7 @@ import productservice.managers.BookManager;
 
 @RequiredArgsConstructor
 @RestController
-@RequestMapping(value = "v1/books/book")
+@RequestMapping(value = "/v1/books/book")
 public class BookController {
 
     private final BookManager manager;

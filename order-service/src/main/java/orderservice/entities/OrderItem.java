@@ -30,7 +30,7 @@ public class OrderItem {
     @Column(name = "product_sku", nullable = false)
     private String productSKU;
 
-    @PositiveOrZero(message = "Unit Price cannot be negative")
+    @Positive(message = "Unit Price  should be greater than zero")
     @Column(name = "unit_price", nullable = false, precision = 9, scale = 2)
     private BigDecimal unitPrice;
 

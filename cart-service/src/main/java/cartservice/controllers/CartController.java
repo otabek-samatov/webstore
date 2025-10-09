@@ -16,7 +16,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 @RequiredArgsConstructor
-@RequestMapping(value = "v1/carts/cart")
+@RequestMapping(value = "/v1/carts/cart")
 @RestController
 public class CartController {
     private final CartManager cartManager;

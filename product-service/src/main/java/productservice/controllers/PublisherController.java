@@ -16,7 +16,7 @@ import java.util.List;
 
 @RequiredArgsConstructor
 @RestController
-@RequestMapping(value = "v1/books/publisher")
+@RequestMapping(value = "/v1/books/publisher")
 public class PublisherController {
 
     private final PublisherManager manager;

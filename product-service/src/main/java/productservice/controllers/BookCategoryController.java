@@ -16,7 +16,7 @@ import java.util.List;
 
 @RequiredArgsConstructor
 @RestController
-@RequestMapping(value = "v1/books/category")
+@RequestMapping(value = "/v1/books/category")
 public class BookCategoryController {
 
 

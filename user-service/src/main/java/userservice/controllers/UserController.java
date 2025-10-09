@@ -10,7 +10,7 @@ import userservice.managers.UserManager;
 import userservice.mappers.UserMapper;
 
 @RequiredArgsConstructor
-@RequestMapping(value = "v1/users/user")
+@RequestMapping(value = "/v1/users/user")
 @RestController
 public class UserController {
 

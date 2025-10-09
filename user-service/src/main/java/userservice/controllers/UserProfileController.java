@@ -10,7 +10,7 @@ import userservice.managers.UserProfileManager;
 import userservice.mappers.UserProfileMapper;
 
 @RequiredArgsConstructor
-@RequestMapping(value = "v1/users/profile")
+@RequestMapping(value = "/v1/users/profile")
 @RestController
 public class UserProfileController {
 
