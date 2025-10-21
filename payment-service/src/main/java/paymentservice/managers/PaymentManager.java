@@ -51,7 +51,7 @@ public class PaymentManager {
         }
 
         Payment payment = new Payment();
-        payment = paymentMapper.partialUpdate(paymentDto, payment);
+        paymentMapper.partialUpdate(paymentDto, payment);
         boolean success = paymentProcess.processPayment(payment);
         if (success) {
             payment.setPaymentStatus(PaymentStatus.COMPLETED);
@@ -107,7 +107,7 @@ public class PaymentManager {
         }
 
         Refund refund = new Refund();
-        refund = refundMapper.partialUpdate(refundDto, refund);
+        refundMapper.partialUpdate(refundDto, refund);
 
         boolean success = paymentProcess.processRefund(payment);
         if (success) {
