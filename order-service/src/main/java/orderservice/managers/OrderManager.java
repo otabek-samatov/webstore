@@ -41,7 +41,7 @@ public class OrderManager {
         BigDecimal totalAmount = BigDecimal.ZERO;
 
         Order newOrder = orderMapper.toEntity(orderDto);
-        newOrder.setOrderStatus(OrderStatus.CREATED);
+        newOrder.setOrderStatus(OrderStatus.PENDING);
 
         for (CartItemDto cartItem : cartItems) {
             OrderItemDto orderItemDto = OrderItemDto.createFromCartItem(cartItem);
@@ -115,10 +115,6 @@ public class OrderManager {
 
         Order order = getOrderById(orderId);
         OrderStatus currentStatus = order.getOrderStatus();
-
-        if (currentStatus != OrderStatus.CREATED) {
-            throw new IllegalArgumentException("Only new orders may change their status");
-        }
 
         order.setOrderStatus(orderStatus);
 
