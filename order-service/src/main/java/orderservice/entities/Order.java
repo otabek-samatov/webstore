@@ -57,7 +57,7 @@ public class Order {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "order_status", nullable = false)
-    private OrderStatus orderStatus = OrderStatus.CREATED;
+    private OrderStatus orderStatus = OrderStatus.PENDING;
 
     @Setter(lombok.AccessLevel.NONE)
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)

@@ -118,7 +118,7 @@ public class OrderManager {
 
         order.setOrderStatus(orderStatus);
 
-        if (order.getOrderStatus() == OrderStatus.CANCELLED) {
+        if (order.getOrderStatus() == OrderStatus.CANCELLED || order.getOrderStatus() == OrderStatus.REFUNDED) {
             releaseStocks(order.getOrderItems());
         } else if (order.getOrderStatus() == OrderStatus.DELIVERED) {
             commitStocks(order.getOrderItems());

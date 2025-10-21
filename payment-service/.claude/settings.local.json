@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Projects/webstore/**)",
+      "Bash(if [ -f \"../order-service/CLAUDE.md\" ])",
+      "Bash(then cat \"../order-service/CLAUDE.md\")",
+      "Bash(else echo \"No CLAUDE.md found\")",
+      "Bash(fi)",
+      "Bash(./gradlew:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
