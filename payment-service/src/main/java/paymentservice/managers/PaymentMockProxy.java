@@ -8,13 +8,16 @@ import paymentservice.entities.Payment;
 @Service
 public class PaymentMockProxy implements PaymentProcess {
 
-    private final double SUCCESS_RATE = 0.01;
+    private final double SUCCESS_RATE = 99;
 
     @Override
     public boolean processPayment(Payment p) {
-        double t = 1 / SUCCESS_RATE;
+        long t = System.currentTimeMillis() % 100;
+        if (t == 0){
+            t = 100;
+        }
 
-        return System.currentTimeMillis() % t != 0;
+        return t < SUCCESS_RATE;
     }
 
     @Override

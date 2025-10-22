@@ -14,11 +14,16 @@ import java.math.BigDecimal;
 @Data
 public class PaymentDto implements Serializable {
     Long id;
+
     @NotNull(message = "Order ID should be specified")
     Long orderId;
-    @NotNull(message = "User ID Should be specified")
+
+    @NotNull(message = "User ID should be specified")
     Long userId;
+
     PaymentStatus paymentStatus;
+
+    @NotNull
     @PositiveOrZero(message = "Payment Amount should be non negative")
     BigDecimal amount;
 }

@@ -6,7 +6,14 @@
       "Bash(then cat \"../order-service/CLAUDE.md\")",
       "Bash(else echo \"No CLAUDE.md found\")",
       "Bash(fi)",
-      "Bash(./gradlew:*)"
+      "Bash(./gradlew:*)",
+      "Bash(if [ -f \"build.gradle\" ])",
+      "Bash(then cat \"build.gradle\")",
+      "Bash(elif [ -f \"build.gradle.kts\" ])",
+      "Bash(then cat \"build.gradle.kts\")",
+      "Bash(elif [ -f \"pom.xml\" ])",
+      "Bash(then cat \"pom.xml\")",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

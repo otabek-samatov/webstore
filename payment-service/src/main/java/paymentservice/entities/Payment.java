@@ -5,10 +5,14 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.proxy.HibernateProxy;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
 import java.util.Objects;
+import java.util.Set;
 
 @Getter
 @Setter
@@ -25,10 +29,14 @@ public class Payment {
     private Long id;
 
     @NotNull(message = "Order ID should be specified")
-    @Column(name = "order_id", nullable = false)
+    @Column(name = "order_id", nullable = false, unique = true)
     private Long orderId;
 
-    @NotNull(message = "User ID Should be specified")
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
+
+    @NotNull(message = "User ID should be specified")
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
@@ -36,13 +44,33 @@ public class Payment {
     @Column(name = "payment_status", nullable = false)
     private PaymentStatus paymentStatus;
 
+    @NotNull
     @PositiveOrZero(message = "Payment Amount should be non negative")
-    @Column(name = "amount", precision = 9, scale = 2)
+    @Column(name = "amount", nullable = false, precision = 9, scale = 2)
     private BigDecimal amount;
 
     @Version
     @Column(name = "version")
     private Integer version;
+
+    @Setter(lombok.AccessLevel.NONE)
+    @OneToMany(mappedBy = "payment", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<Refund> refunds = new LinkedHashSet<>();
+
+
+    public void addRefund(Refund refund) {
+        refunds.add(refund);
+        refund.setPayment(this);
+    }
+
+    public void removeRefund(Refund refund) {
+        refunds.remove(refund);
+        refund.setPayment(null);
+    }
+
+    public Set<Refund> getRefunds() {
+        return Set.copyOf(refunds);
+    }
 
     @Override
     public final boolean equals(Object o) {

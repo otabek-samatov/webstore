@@ -13,6 +13,8 @@ import paymentservice.managers.PaymentManager;
 import paymentservice.mappers.PaymentMapper;
 import paymentservice.mappers.RefundMapper;
 
+import java.util.List;
+
 @RequiredArgsConstructor
 @RestController
 @RequestMapping(value = "/v1/payments")
@@ -53,9 +55,9 @@ public class PaymentController {
     }
 
     @GetMapping("/refund/payment/{paymentID}")
-    public ResponseEntity<RefundDto> getRefundByPaymentID(@PathVariable Long paymentID) {
-        Refund p = manager.getRefundByPaymentId(paymentID);
-        return ResponseEntity.ok(refundMapper.toDto(p));
+    public ResponseEntity<List<RefundDto>> getRefundByPaymentID(@PathVariable Long paymentID) {
+        List<Refund> list = manager.getRefundByPaymentId(paymentID);
+        return ResponseEntity.ok(refundMapper.toDto(list));
     }
 
 }

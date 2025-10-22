@@ -1,0 +1,1 @@
+CREATE INDEX idx_refund_payment_id ON refund (payment_id);

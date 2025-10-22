@@ -16,6 +16,7 @@ import paymentservice.repositories.PaymentRepository;
 import paymentservice.repositories.RefundRepository;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 @RequiredArgsConstructor
@@ -50,8 +51,12 @@ public class PaymentManager {
             throw new IllegalArgumentException("payment amount should be non negative");
         }
 
-        Payment payment = new Payment();
-        paymentMapper.partialUpdate(paymentDto, payment);
+        Integer count = paymentRepository.getCountByOrderAndStatus(paymentDto.getOrderId(), PaymentStatus.COMPLETED);
+        if (count > 0) {
+            throw new IllegalArgumentException("payment has already been correctly processed !");
+        }
+
+        Payment payment = paymentMapper.toEntity(paymentDto);
         boolean success = paymentProcess.processPayment(payment);
         if (success) {
             payment.setPaymentStatus(PaymentStatus.COMPLETED);
@@ -102,12 +107,20 @@ public class PaymentManager {
 
         Payment payment = getPaymentById(refundDto.getPaymentId());
 
-        if (refundDto.getRefundAmount().compareTo(payment.getAmount()) > 0) {
-            throw new IllegalArgumentException("Refund amount cannot exceed payment amount");
+        if (payment.getPaymentStatus() != PaymentStatus.COMPLETED) {
+            throw new IllegalArgumentException("Can only refund completed payments");
         }
 
-        Refund refund = new Refund();
-        refundMapper.partialUpdate(refundDto, refund);
+        if (refundDto.getRefundAmount().compareTo(payment.getAmount()) != 0) {
+            throw new IllegalArgumentException("Refund amount should be equal to payment amount");
+        }
+
+        Integer refundedPaymentsCount = refundRepository.getCountByOrderAndStatus(payment.getOrderId(), RefundStatus.COMPLETED);
+        if (refundedPaymentsCount > 0) {
+            throw new IllegalArgumentException("payment has already been refunded !");
+        }
+
+        Refund refund = refundMapper.toEntity(refundDto);
 
         boolean success = paymentProcess.processRefund(payment);
         if (success) {
@@ -118,10 +131,9 @@ public class PaymentManager {
             refund.setRefundStatus(RefundStatus.FAILED);
         }
 
-        refund.setPayment(payment);
+        payment.addRefund(refund);
 
         paymentRepository.save(payment);
-        refundRepository.save(refund);
 
         return refund;
     }
@@ -136,15 +148,12 @@ public class PaymentManager {
         );
     }
 
-
-    public Refund getRefundByPaymentId(Long paymentId) {
+    public List<Refund> getRefundByPaymentId(Long paymentId) {
         if (paymentId == null) {
             throw new IllegalArgumentException("payment ID is null");
         }
 
-        return refundRepository.findRefundByPaymentId(paymentId).orElseThrow(() ->
-                new EntityNotFoundException("Refund with payment id = " + paymentId + " not found")
-        );
+        return refundRepository.findRefundByPaymentId(paymentId);
     }
 
 

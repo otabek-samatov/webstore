@@ -4,6 +4,8 @@ import org.mapstruct.*;
 import paymentservice.dto.RefundDto;
 import paymentservice.entities.Refund;
 
+import java.util.List;
+
 @Mapper(unmappedTargetPolicy = ReportingPolicy.IGNORE, componentModel = MappingConstants.ComponentModel.SPRING)
 public interface RefundMapper {
     @Mapping(target = "payment", ignore = true)
@@ -14,4 +16,6 @@ public interface RefundMapper {
     @Mapping(target = "payment", ignore = true)
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     Refund partialUpdate(RefundDto refundDto, @MappingTarget Refund refund);
+
+    List<RefundDto> toDto(List<Refund> refund);
 }

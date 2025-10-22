@@ -13,10 +13,14 @@ import java.math.BigDecimal;
  */
 @Data
 public class RefundDto implements Serializable {
+
+    Long id;
+
     @NotNull(message = "Payment ID should be specified")
     Long paymentId;
 
-    @Positive(message = "Payment Amount should be greater than zero")
+    @NotNull
+    @Positive(message = "Refund Amount should be greater than zero")
     BigDecimal refundAmount;
 
     RefundStatus refundStatus;
