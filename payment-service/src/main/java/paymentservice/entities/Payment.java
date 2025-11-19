@@ -54,6 +54,7 @@ public class Payment {
     private Integer version;
 
     @Setter(lombok.AccessLevel.NONE)
+    @Getter(lombok.AccessLevel.NONE)
     @OneToMany(mappedBy = "payment", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<Refund> refunds = new LinkedHashSet<>();
 

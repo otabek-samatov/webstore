@@ -132,7 +132,7 @@ public class OrderManager {
     }
 
     private void commitStocks(Collection<OrderItem> items) {
-        throw new UnsupportedOperationException("releaseStocks is not supported yet.");
+        throw new UnsupportedOperationException("commitStocks is not supported yet.");
     }
 
 

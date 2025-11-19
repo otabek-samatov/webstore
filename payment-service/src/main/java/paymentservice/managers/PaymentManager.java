@@ -158,7 +158,7 @@ public class PaymentManager {
 
 
     private void updateOrderStatus(Payment p) {
-        throw new UnsupportedOperationException("releaseStocks is not supported yet.");
+        throw new UnsupportedOperationException("updateOrderStatus is not supported yet.");
     }
 
 }
