@@ -1,5 +1,6 @@
 package cartservice.controllers;
 
+import exceptions.NotEnoughStockException;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -27,6 +28,12 @@ public class RestExceptionHandler {
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<String> handleException(IllegalStateException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Illegal State exception caught: " + ex.getMessage());
+    }
+
+
+    @ExceptionHandler(NotEnoughStockException.class)
+    public ResponseEntity<String> handleException(NotEnoughStockException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Not Enough Stock exception caught: " + ex.getMessage());
     }
 
     @ExceptionHandler(Exception.class)

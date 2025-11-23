@@ -78,4 +78,10 @@ public class CartController {
         return ResponseEntity.ok(cartItemMapper.toDto(items));
     }
 
+    @GetMapping("/items/{cartID}")
+    public ResponseEntity<List<CartItemDto>> getItemsByCartID(@PathVariable Long cartID) {
+        List<CartItem> items = cartManager.getCartItemsByCartID(cartID);
+        return ResponseEntity.ok(cartItemMapper.toDto(items));
+    }
+
 }

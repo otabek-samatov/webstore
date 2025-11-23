@@ -1,6 +1,7 @@
 package cartservice.managers;
 
 import cartservice.dto.CartItemDto;
+import cartservice.dto.InventoryDto;
 import cartservice.entities.Cart;
 import cartservice.entities.CartItem;
 import cartservice.entities.CartStatus;
@@ -8,10 +9,12 @@ import cartservice.mappers.CartItemMapper;
 import cartservice.repositories.CartItemRepository;
 import cartservice.repositories.CartRepository;
 import cartservice.validators.CartItemValidator;
+import exceptions.NotEnoughStockException;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
 import java.util.Collection;
@@ -25,6 +28,7 @@ public class CartManager {
     private final CartItemRepository cartItemRepository;
     private final CartItemMapper cartItemMapper;
     private final CartItemValidator cartItemValidator;
+    private final RestClient restClient;
 
     public Cart getCart(Long userId) {
         if (userId == null) {
@@ -45,6 +49,14 @@ public class CartManager {
         }
 
         return cartItemRepository.getItemsByUserID(userId);
+    }
+
+    public List<CartItem> getCartItemsByCartID(Long cartID) {
+        if (cartID == null) {
+            throw new IllegalArgumentException("cartID is null");
+        }
+
+        return cartItemRepository.getItemsByCartID(cartID);
     }
 
     public CartItem getCartItem(Long cartItemId) {
@@ -151,20 +163,39 @@ public class CartManager {
     }
 
     private BigDecimal getUnitPrice(String productSKU) {
-        throw new UnsupportedOperationException("getUnitPrice is not supported yet.");
+        InventoryDto inventoryDto = restClient.get()
+                .uri("http://inventory-service/v1/inventories/inventory/{sku}", productSKU)
+                .retrieve()
+                .body(InventoryDto.class);
+        if (inventoryDto == null) {
+            throw new EntityNotFoundException("Product with ID = " + productSKU + " not found");
+        }
+
+        return inventoryDto.getSellPrice();
     }
 
     private void checkQuantity(CartItemDto dto) {
-        throw new UnsupportedOperationException("checkQuantity is not supported yet.");
+        Long availableCount = restClient.get()
+                .uri("http://inventory-service/v1/inventories/available-count/{sku}", dto.getProductSKU())
+                .retrieve()
+                .body(Long.class);
+
+        if (availableCount == null || availableCount < dto.getQuantity()) {
+            throw new NotEnoughStockException(dto.getProductSKU());
+        }
     }
 
     private void reserveStock(CartItemDto dto) {
-        throw new UnsupportedOperationException("reserveStock is not supported yet.");
+        restClient.post()
+                .uri("http://inventory-service/v1/inventories/reserve-stock", dto)
+                .retrieve()
+                .toBodilessEntity();
     }
 
     private void releaseStock(CartItem item) {
         throw new UnsupportedOperationException("releaseStock is not supported yet.");
     }
+
     private void releaseStocks(Collection<CartItem> items) {
         throw new UnsupportedOperationException("releaseStocks is not supported yet.");
     }

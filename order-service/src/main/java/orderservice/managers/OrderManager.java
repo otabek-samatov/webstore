@@ -12,8 +12,10 @@ import orderservice.entities.OrderStatus;
 import orderservice.mappers.OrderItemMapper;
 import orderservice.mappers.OrderMapper;
 import orderservice.repositories.OrderRepository;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
 import java.util.Collection;
@@ -26,6 +28,7 @@ public class OrderManager {
     private final OrderMapper orderMapper;
     private final OrderItemMapper orderItemMapper;
     private final OrderRepository orderRepository;
+    private final RestClient restClient;
 
     @Transactional
     public Order createOrder(OrderDto orderDto) {
@@ -66,7 +69,11 @@ public class OrderManager {
     }
 
     private List<CartItemDto> getCartItemDtos(Long cartID) {
-        throw new UnsupportedOperationException("getCartItemDtos is not supported yet");
+        return restClient.get()
+                .uri("http://cart-service/v1/carts/cart/items/{cartID}", cartID)
+                .retrieve()
+                .body(new ParameterizedTypeReference<List<CartItemDto>>() {
+                });
     }
 
     private BigDecimal getTaxAmount(BigDecimal amount) {
