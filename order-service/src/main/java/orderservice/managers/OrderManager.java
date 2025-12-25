@@ -18,7 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
-import java.util.Collection;
 import java.util.List;
 
 @RequiredArgsConstructor
@@ -29,6 +28,7 @@ public class OrderManager {
     private final OrderItemMapper orderItemMapper;
     private final OrderRepository orderRepository;
     private final RestClient restClient;
+    private final KafkaService kafkaService;
 
     @Transactional
     public Order createOrder(OrderDto orderDto) {
@@ -72,7 +72,7 @@ public class OrderManager {
         return restClient.get()
                 .uri("http://cart-service/v1/carts/cart/items/{cartID}", cartID)
                 .retrieve()
-                .body(new ParameterizedTypeReference<List<CartItemDto>>() {
+                .body(new ParameterizedTypeReference<>() {
                 });
     }
 
@@ -125,21 +125,15 @@ public class OrderManager {
 
         order.setOrderStatus(orderStatus);
 
+        OrderDto orderDto = orderMapper.toDto(order);
+
         if (order.getOrderStatus() == OrderStatus.CANCELLED || order.getOrderStatus() == OrderStatus.REFUNDED) {
-            releaseStocks(order.getOrderItems());
+            kafkaService.sendStockStatus("release", orderDto);
         } else if (order.getOrderStatus() == OrderStatus.DELIVERED) {
-            commitStocks(order.getOrderItems());
+            kafkaService.sendStockStatus("commit", orderDto);
         }
 
         orderRepository.save(order);
-    }
-
-    private void releaseStocks(Collection<OrderItem> items) {
-        throw new UnsupportedOperationException("releaseStocks is not supported yet.");
-    }
-
-    private void commitStocks(Collection<OrderItem> items) {
-        throw new UnsupportedOperationException("commitStocks is not supported yet.");
     }
 
 
