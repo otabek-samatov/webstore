@@ -33,6 +33,8 @@ public class PaymentManager {
 
     private final RefundRepository refundRepository;
 
+    private final KafkaService kafkaService;
+
     @Transactional
     public Payment processPayment(PaymentDto paymentDto) {
         if (paymentDto == null) {
@@ -158,7 +160,7 @@ public class PaymentManager {
 
 
     private void updateOrderStatus(Payment p) {
-        throw new UnsupportedOperationException("updateOrderStatus is not supported yet.");
+        kafkaService.sendOrderStatus(p.getUserId(), p.getPaymentStatus().name(), p.getOrderId());
     }
 
 }
