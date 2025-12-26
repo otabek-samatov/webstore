@@ -8,6 +8,7 @@ import org.hibernate.proxy.HibernateProxy;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
@@ -51,8 +52,8 @@ public class Cart {
         cartItem.setCart(null);
     }
 
-    public Set<CartItem> getCartItems() {
-        return Set.copyOf(cartItems);
+    public List<CartItem> getCartItems() {
+        return List.copyOf(cartItems);
     }
 
     @Override

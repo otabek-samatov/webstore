@@ -1,6 +1,6 @@
-package orderservice.configs;
+package cartservice.configs;
 
-import orderservice.dto.kafka.StockStatusKafka;
+import cartservice.dto.kafka.StockStatusKafka;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;

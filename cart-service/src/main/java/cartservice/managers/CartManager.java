@@ -17,7 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
-import java.util.Collection;
 import java.util.List;
 
 @RequiredArgsConstructor
@@ -29,6 +28,7 @@ public class CartManager {
     private final CartItemMapper cartItemMapper;
     private final CartItemValidator cartItemValidator;
     private final RestClient restClient;
+    private final KafkaService kafkaService;
 
     public Cart getCart(Long userId) {
         if (userId == null) {
@@ -78,7 +78,8 @@ public class CartManager {
         cart.removeCartItem(item);
         cartRepository.save(cart);
 
-        releaseStock(item);
+        CartItemDto cartItemDto = cartItemMapper.toDto(item);
+        kafkaService.sendStockStatus("release", cart.getUserId(), cartItemDto);
     }
 
     @Transactional
@@ -89,8 +90,11 @@ public class CartManager {
 
         Cart cart = cartRepository.findActiveCartByUserId(userId);
         if (cart != null) {
+
+            List<CartItemDto> items = cartItemMapper.toDto(cart.getCartItems());
             cartRepository.delete(cart);
-            releaseStocks(cart.getCartItems());
+
+            kafkaService.sendStockStatus("release", cart.getUserId(), items);
         }
 
     }
@@ -192,11 +196,4 @@ public class CartManager {
                 .toBodilessEntity();
     }
 
-    private void releaseStock(CartItem item) {
-        throw new UnsupportedOperationException("releaseStock is not supported yet.");
-    }
-
-    private void releaseStocks(Collection<CartItem> items) {
-        throw new UnsupportedOperationException("releaseStocks is not supported yet.");
-    }
 }
