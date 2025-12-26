@@ -4,7 +4,13 @@
       "Bash(./gradlew tasks:*)",
       "Bash(./gradlew build:*)",
       "Bash(./gradlew test:*)",
-      "Bash(gradlew.bat build:*)"
+      "Bash(gradlew.bat build:*)",
+      "Bash(cat:*)",
+      "Bash(ls:*)",
+      "Bash(git -C /c/Projects/webstore log --oneline --all)",
+      "Bash(wc:*)",
+      "Bash(git -C /c/Projects/webstore diff --name-only HEAD~5..HEAD)",
+      "Bash(git -C /c/Projects/webstore status --short)"
     ],
     "deny": [],
     "ask": []
