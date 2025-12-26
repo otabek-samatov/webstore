@@ -18,7 +18,6 @@ import org.springframework.kafka.transaction.KafkaTransactionManager;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 @Configuration
 public class KafkaConfig {
@@ -37,6 +36,9 @@ public class KafkaConfig {
 
     @Value("${spring.application.name}")
     private String applicationName;
+
+    @Value("${server.port}")
+    private int serverPort;
 
 
     @Bean
@@ -57,7 +59,7 @@ public class KafkaConfig {
         // ============================================
 
         // Transactional ID - REQUIRED for exactly-once semantics
-        props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationName + "-tx-" + UUID.randomUUID());
+        props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationName + "-tx-" + serverPort);
 
         // Enable idempotent producer
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);

@@ -32,7 +32,7 @@ public class KafkaService {
         }
 
         StockStatusKafka event = new StockStatusKafka();
-        event.setCartItems(cartItemDtos);
+        event.addItems(cartItemDtos);
         event.setActionType(actionType);
         kafkaTemplate.send(stockStatusTopic, String.valueOf(userID), event);
     }

@@ -11,14 +11,22 @@ import java.util.Collection;
 @NoArgsConstructor
 public class StockStatusKafka {
 
-    private Collection<CartItemDto> cartItems;
+    private Collection<StockLevelDto> stockLevels = new ArrayList<>();
     private String actionType;
 
-    public void addCartItem(CartItemDto cartItem) {
-        if (cartItems == null) {
-            cartItems = new ArrayList<>();
+    public void addItem(CartItemDto cartItem) {
+
+        StockLevelDto stockLevel = new StockLevelDto();
+        stockLevel.setStockLevel(cartItem.getQuantity());
+        stockLevel.setProductSKU(cartItem.getProductSKU());
+
+        this.stockLevels.add(stockLevel);
+    }
+
+    public void addItems(Collection<CartItemDto> cartItems) {
+        for (CartItemDto cartItemDto : cartItems) {
+            addItem(cartItemDto);
         }
 
-        this.cartItems.add(cartItem);
     }
 }

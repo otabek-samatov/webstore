@@ -1,5 +1,6 @@
 package orderservice.configs;
 
+import orderservice.dto.kafka.OrderStatusKafka;
 import orderservice.dto.kafka.StockStatusKafka;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -18,7 +19,6 @@ import org.springframework.kafka.transaction.KafkaTransactionManager;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 @Configuration
 public class KafkaConfig {
@@ -38,6 +38,8 @@ public class KafkaConfig {
     @Value("${spring.application.name}")
     private String applicationName;
 
+    @Value("${server.port}")
+    private int serverPort;
 
     @Bean
     public NewTopic stockStatusTopic() {
@@ -57,7 +59,7 @@ public class KafkaConfig {
         // ============================================
 
         // Transactional ID - REQUIRED for exactly-once semantics
-        props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationName + "-tx-" + UUID.randomUUID());
+        props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationName + "-tx-" + serverPort);
 
         // Enable idempotent producer
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
@@ -104,15 +106,15 @@ public class KafkaConfig {
     }
 
     @Bean
-    public ConsumerFactory<String, StockStatusKafka> consumerFactory() {
+    public ConsumerFactory<String, OrderStatusKafka> consumerFactory() {
         return new DefaultKafkaConsumerFactory<>(consumerConfigs(),
                 new StringDeserializer(),
-                new JsonDeserializer<>(StockStatusKafka.class));
+                new JsonDeserializer<>(OrderStatusKafka.class));
     }
 
     @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, StockStatusKafka> kafkaListenerContainerFactory() {
-        ConcurrentKafkaListenerContainerFactory<String, StockStatusKafka> factory =
+    public ConcurrentKafkaListenerContainerFactory<String, OrderStatusKafka> kafkaListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, OrderStatusKafka> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory());
         factory.setConcurrency(partitions);

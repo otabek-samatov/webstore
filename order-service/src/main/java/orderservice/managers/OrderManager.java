@@ -28,7 +28,7 @@ public class OrderManager {
     private final OrderItemMapper orderItemMapper;
     private final OrderRepository orderRepository;
     private final RestClient restClient;
-    private final KafkaService kafkaService;
+    private final KafkaProducerService kafkaProducerService;
 
     @Transactional
     public Order createOrder(OrderDto orderDto) {
@@ -121,16 +121,15 @@ public class OrderManager {
         }
 
         Order order = getOrderById(orderId);
-        OrderStatus currentStatus = order.getOrderStatus();
 
         order.setOrderStatus(orderStatus);
 
         OrderDto orderDto = orderMapper.toDto(order);
 
         if (order.getOrderStatus() == OrderStatus.CANCELLED || order.getOrderStatus() == OrderStatus.REFUNDED) {
-            kafkaService.sendStockStatus("release", orderDto);
+            kafkaProducerService.sendStockStatus("release", orderDto);
         } else if (order.getOrderStatus() == OrderStatus.DELIVERED) {
-            kafkaService.sendStockStatus("commit", orderDto);
+            kafkaProducerService.sendStockStatus("commit", orderDto);
         }
 
         orderRepository.save(order);

@@ -11,7 +11,7 @@ import org.springframework.util.CollectionUtils;
 
 @RequiredArgsConstructor
 @Service
-public class KafkaService {
+public class KafkaProducerService {
     private final KafkaTemplate<String, StockStatusKafka> kafkaTemplate;
     @Value("${stock.status.topic}")
     private String stockStatusTopic;
@@ -24,7 +24,7 @@ public class KafkaService {
         }
 
         StockStatusKafka event = new StockStatusKafka();
-        event.setOrderItems(orderDto.getOrderItems());
+        event.addItems(orderDto.getOrderItems());
         event.setActionType(actionType);
         kafkaTemplate.send(stockStatusTopic, String.valueOf(orderDto.getUserId()), event);
     }
