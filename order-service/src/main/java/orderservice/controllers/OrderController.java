@@ -34,7 +34,6 @@ public class OrderController {
     public ResponseEntity<OrderDto> getByOrderID(@PathVariable Long orderID) {
         Order order = manager.getOrderById(orderID);
         OrderDto orderDto = orderMapper.toDto(order);
-        orderDto.setOrderItems(itemMapper.toDto(order.getItems()));
 
         return ResponseEntity.ok(orderDto);
     }
@@ -45,7 +44,6 @@ public class OrderController {
         List<OrderDto> dtoList = new ArrayList<>();
         for (Order order : orders) {
             OrderDto dto = orderMapper.toDto(order);
-            dto.setOrderItems(itemMapper.toDto(order.getItems()));
             dtoList.add(dto);
         }
         return ResponseEntity.ok(dtoList);

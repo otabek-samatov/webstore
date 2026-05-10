@@ -28,14 +28,5 @@ public class OrderItemDto implements Serializable {
     @NotBlank(message = "Product Name should be Specified")
     String productName;
 
-    public static OrderItemDto createFromCartItem(CartItemDto cartItemDto) {
-        OrderItemDto orderItem = new OrderItemDto();
-        orderItem.setProductSKU(cartItemDto.getProductSKU());
-        orderItem.setProductName(cartItemDto.getProductName());
-        orderItem.setUnitPrice(cartItemDto.getUnitPrice());
-        orderItem.setQuantity(cartItemDto.getQuantity());
 
-        return orderItem;
-
-    }
 }
