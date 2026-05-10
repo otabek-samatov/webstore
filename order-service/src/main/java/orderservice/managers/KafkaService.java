@@ -1,7 +1,6 @@
 package orderservice.managers;
 
 import lombok.RequiredArgsConstructor;
-import orderservice.dto.CartItemDto;
 import orderservice.dto.kafka.StockStatusKafka;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;

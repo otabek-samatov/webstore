@@ -2,17 +2,13 @@ package orderservice.managers;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
-import orderservice.dto.CartItemDto;
 import orderservice.dto.OrderDto;
-import orderservice.dto.OrderItemDto;
 import orderservice.entities.Address;
 import orderservice.entities.Order;
-import orderservice.entities.OrderItem;
 import orderservice.entities.OrderStatus;
 import orderservice.mappers.OrderItemMapper;
 import orderservice.mappers.OrderMapper;
 import orderservice.repositories.OrderRepository;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
@@ -36,22 +32,11 @@ public class OrderManager {
             throw new IllegalArgumentException("orderDTO is null");
         }
 
-        List<CartItemDto> cartItems = getCartItemDtos(orderDto.getCartId());
-        if (cartItems == null || cartItems.isEmpty()) {
-            throw new EntityNotFoundException("CartItems not found for cart id = " + orderDto.getCartId());
-        }
 
         BigDecimal totalAmount = BigDecimal.ZERO;
 
         Order newOrder = orderMapper.toEntity(orderDto);
         newOrder.setOrderStatus(OrderStatus.PENDING);
-
-        for (CartItemDto cartItem : cartItems) {
-            OrderItemDto orderItemDto = OrderItemDto.createFromCartItem(cartItem);
-            OrderItem orderItem = orderItemMapper.toEntity(orderItemDto);
-            newOrder.addItem(orderItem);
-            totalAmount = totalAmount.add(orderItem.getUnitPrice().multiply(BigDecimal.valueOf(orderItem.getQuantity())));
-        }
 
         BigDecimal taxAmount = getTaxAmount(totalAmount);
         BigDecimal shippingCost = getShippingCost(newOrder.getOrderAddress());
@@ -68,13 +53,6 @@ public class OrderManager {
         return newOrder;
     }
 
-    private List<CartItemDto> getCartItemDtos(Long cartID) {
-        return restClient.get()
-                .uri("http://cart-service/v1/carts/cart/items/{cartID}", cartID)
-                .retrieve()
-                .body(new ParameterizedTypeReference<>() {
-                });
-    }
 
     private BigDecimal getTaxAmount(BigDecimal amount) {
         return amount.multiply(BigDecimal.valueOf(0.2));

@@ -9,7 +9,6 @@ import orderservice.entities.OrderStatus;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.List;
 
 /**
  * DTO for {@link Order}
@@ -41,5 +40,4 @@ public class OrderDto implements Serializable {
 
     OrderStatus orderStatus;
 
-    List<OrderItemDto> orderItems;
 }

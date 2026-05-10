@@ -3,13 +3,12 @@ package orderservice.managers;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
-import orderservice.dto.CartItemDto;
 import orderservice.dto.InventoryDto;
+import orderservice.dto.OrderItemDto;
 import orderservice.entities.Cart;
 import orderservice.entities.CartItem;
 import orderservice.entities.CartStatus;
 import orderservice.exceptions.NotEnoughStockException;
-import orderservice.mappers.CartItemMapper;
 import orderservice.repositories.CartItemRepository;
 import orderservice.repositories.CartRepository;
 import orderservice.validators.CartItemValidator;
@@ -79,7 +78,7 @@ public class CartManager {
         cart.removeCartItem(item);
         cartRepository.save(cart);
 
-        CartItemDto cartItemDto = cartItemMapper.toDto(item);
+        OrderItemDto cartItemDto = cartItemMapper.toDto(item);
         kafkaService.sendStockStatus("release", cart.getUserId(), cartItemDto);
     }
 
@@ -92,7 +91,7 @@ public class CartManager {
         Cart cart = cartRepository.findActiveCartByUserId(userId);
         if (cart != null) {
 
-            List<CartItemDto> items = cartItemMapper.toDto(cart.getCartItems());
+            List<OrderItemDto> items = cartItemMapper.toDto(cart.getCartItems());
             cartRepository.delete(cart);
 
             kafkaService.sendStockStatus("release", cart.getUserId(), items);
@@ -114,7 +113,7 @@ public class CartManager {
     }
 
     @Transactional
-    public void addToCart(Long userId, List<CartItemDto> cartItemDtos) {
+    public void addToCart(Long userId, List<OrderItemDto> cartItemDtos) {
         if (userId == null) {
             throw new IllegalArgumentException("userId is null");
         }
@@ -127,7 +126,7 @@ public class CartManager {
             cart.setUserId(userId);
             cart.setStatus(CartStatus.IN_PROGRESS);
 
-            for (CartItemDto cartItemDto : cartItemDtos) {
+            for (OrderItemDto cartItemDto : cartItemDtos) {
                 checkQuantity(cartItemDto);
 
                 CartItem cartItem = cartItemMapper.toEntity(cartItemDto);
@@ -136,7 +135,7 @@ public class CartManager {
                 reserveStock(cartItemDto);
             }
         } else {
-            for (CartItemDto cartItemDto : cartItemDtos) {
+            for (OrderItemDto cartItemDto : cartItemDtos) {
                 Long itemID = cartItemRepository.getCartItemID(userId, cartItemDto.getProductSKU());
                 if (itemID != null) {
                     throw new IllegalArgumentException("Product = " + cartItemDto.getProductSKU() + " already exists in cart");
@@ -155,7 +154,7 @@ public class CartManager {
     }
 
     @Transactional
-    public void updateQuantity(CartItemDto dto) {
+    public void updateQuantity(OrderItemDto dto) {
         if (dto == null) {
             throw new IllegalArgumentException("cartItemDto is null");
         }
@@ -179,7 +178,7 @@ public class CartManager {
         return inventoryDto.getSellPrice();
     }
 
-    private void checkQuantity(CartItemDto dto) {
+    private void checkQuantity(OrderItemDto dto) {
         Long availableCount = restClient.get()
                 .uri("http://inventory-service/v1/inventories/available-count/{sku}", dto.getProductSKU())
                 .retrieve()
@@ -190,7 +189,7 @@ public class CartManager {
         }
     }
 
-    private void reserveStock(CartItemDto dto) {
+    private void reserveStock(OrderItemDto dto) {
         restClient.post()
                 .uri("http://inventory-service/v1/inventories/reserve-stock", dto)
                 .retrieve()

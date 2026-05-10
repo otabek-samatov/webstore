@@ -1,7 +1,6 @@
 package orderservice.validators;
 
 import jakarta.validation.Validator;
-import orderservice.dto.CartDto;
 import orderservice.repositories.CartRepository;
 import org.springframework.stereotype.Service;
 
