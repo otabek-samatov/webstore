@@ -18,8 +18,8 @@ import java.util.Set;
 @Table(name = "orders")
 public class Order extends CoreEntity {
 
-    @Column(name = "user_id", nullable = false)
-    private Long userId;
+    @Column(name = "customer_id", nullable = false)
+    private Long customerId;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false)

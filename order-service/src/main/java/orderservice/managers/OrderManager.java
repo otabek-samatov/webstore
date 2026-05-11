@@ -2,18 +2,23 @@ package orderservice.managers;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import orderservice.dto.CreateOrderDto;
 import orderservice.dto.OrderDto;
-import orderservice.entities.Address;
+import orderservice.dto.OrderItemDto;
 import orderservice.entities.Order;
+import orderservice.entities.OrderItem;
 import orderservice.entities.OrderStatus;
+import orderservice.mappers.AddressMapper;
 import orderservice.mappers.OrderItemMapper;
 import orderservice.mappers.OrderMapper;
 import orderservice.repositories.OrderRepository;
+import orderservice.validators.BaseValidator;
+import orderservice.validators.OrderItemValidator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 
 @RequiredArgsConstructor
@@ -23,50 +28,55 @@ public class OrderManager {
     private final OrderMapper orderMapper;
     private final OrderItemMapper orderItemMapper;
     private final OrderRepository orderRepository;
-    private final RestClient restClient;
     private final KafkaProducerService kafkaProducerService;
+    private final OrderItemValidator orderItemValidator;
+    private final BaseValidator baseValidator;
+    private final AddressMapper addressMapper;
 
     @Transactional
-    public Order createOrder(OrderDto orderDto) {
+    public Order createOrder(CreateOrderDto orderDto) {
         if (orderDto == null) {
             throw new IllegalArgumentException("orderDTO is null");
         }
 
+        baseValidator.validate(orderDto);
+        orderItemValidator.validate(orderDto.getOrderItems());
+
+        Order newOrder = new Order();
+        newOrder.setOrderStatus(OrderStatus.NEW);
 
         BigDecimal totalAmount = BigDecimal.ZERO;
 
-        Order newOrder = orderMapper.toEntity(orderDto);
-        newOrder.setOrderStatus(OrderStatus.NEW);
+        List<OrderItemDto> orderItems = orderDto.getOrderItems();
+        for (OrderItemDto orderItem : orderItems) {
+            totalAmount = totalAmount.add(orderItem.getItemPrice());
+            OrderItem orderItemEntity = orderItemMapper.toEntity(orderItem);
+            newOrder.addItem(orderItemEntity);
+        }
 
         BigDecimal taxAmount = getTaxAmount(totalAmount);
-        BigDecimal shippingCost = getShippingCost(newOrder.getOrderAddress());
+        BigDecimal shippingCost = getShippingCost();
 
         totalAmount = totalAmount.add(taxAmount);
         totalAmount = totalAmount.add(shippingCost);
+        totalAmount = totalAmount.setScale(2, RoundingMode.HALF_UP);
 
         newOrder.setTaxAmount(taxAmount);
         newOrder.setTotalAmount(totalAmount);
         newOrder.setShippingCost(shippingCost);
+        newOrder.setOrderAddress(addressMapper.toEntity(orderDto.getOrderAddress()));
+        newOrder.setCustomerId(orderDto.getCustomerId());
 
         orderRepository.save(newOrder);
 
         return newOrder;
     }
 
-
     private BigDecimal getTaxAmount(BigDecimal amount) {
-        return amount.multiply(BigDecimal.valueOf(0.2));
+        return amount.multiply(new BigDecimal("0.20")).setScale(2, RoundingMode.HALF_UP);
     }
 
-    private BigDecimal getShippingCost(Address address) {
-        if (address == null) {
-            throw new IllegalArgumentException("address not found");
-        }
-
-        if (address.getAddressLine() == null || address.getAddressLine().isBlank()) {
-            throw new IllegalArgumentException("address line not found");
-        }
-
+    private BigDecimal getShippingCost() {
         return BigDecimal.valueOf(100);
     }
 
@@ -106,7 +116,7 @@ public class OrderManager {
 
         if (order.getOrderStatus() == OrderStatus.CANCELLED || order.getOrderStatus() == OrderStatus.REFUNDED) {
             kafkaProducerService.sendStockStatus("release", orderDto);
-        } else if (order.getOrderStatus() == OrderStatus.DELIVERED) {
+        } else if (order.getOrderStatus() == OrderStatus.COMPLETED) {
             kafkaProducerService.sendStockStatus("commit", orderDto);
         }
 

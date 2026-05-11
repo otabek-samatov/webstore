@@ -28,8 +28,8 @@ This is a Gradle-based Spring Boot 3.5.5 project using Java 21.
 ### Service Role
 
 The order-service is a microservice responsible for managing customer orders in a distributed e-commerce system. It
-handles order creation from shopping carts, order status management, and coordinates with other services for inventory
-management and payment processing.
+handles order creation, order status management, and coordinates with other services (inventory via Kafka, payment via
+Kafka) for stock reservation and payment status updates.
 
 ### Layered Architecture
 
@@ -71,9 +71,9 @@ PostgreSQL Database
 
 **Synchronous (REST):**
 
-- Calls cart-service to fetch cart items during order creation
-- Uses Eureka-aware LoadBalanced `RestClient` from `RestConfig`
-- Endpoint: `GET http://cart-service/v1/carts/cart/items/{cartID}`
+- Eureka-aware LoadBalanced `RestClient` from `RestConfig` is wired into `OrderManager` for future
+  inter-service calls. The current `createOrder` flow does **not** call cart-service — order items
+  are supplied directly in the `CreateOrderDto` request body.
 
 **Asynchronous (Kafka):**
 
@@ -88,7 +88,7 @@ PostgreSQL Database
 - Transactional ID: `{application-name}-tx-{server-port}` (unique per instance)
 - Idempotence enabled with `acks=all`
 - Sends `StockStatusKafka` events with action types: "commit" or "release"
-- Triggered on order status changes: CANCELLED/REFUNDED → release, DELIVERED → commit
+- Triggered on order status changes: CANCELLED/REFUNDED → release, COMPLETED → commit
 
 **Consumer Configuration:**
 
@@ -131,47 +131,57 @@ The service uses Spring Cloud Config for externalized configuration:
 
 ### Order Lifecycle & Status Flow
 
-**OrderStatus Enum:** PENDING → PROCESSING → SHIPPED → DELIVERED (or CANCELLED/REFUNDED)
+**OrderStatus Enum:** `NEW`, `COMPLETED`, `CANCELLED`, `REFUNDED`
 
 **Status Change Triggers:**
 
-1. Order created → PENDING
-2. Payment confirmed (via Kafka) → PROCESSING
-3. Shipped by fulfillment → SHIPPED
-4. Completed delivery → DELIVERED (triggers stock "commit")
-5. User cancels → CANCELLED (triggers stock "release")
-6. Refund processed → REFUNDED (triggers stock "release")
+1. Order created → NEW
+2. Order fulfilled / delivery completed → COMPLETED (triggers stock "commit")
+3. User or system cancels → CANCELLED (triggers stock "release")
+4. Refund processed → REFUNDED (triggers stock "release")
 
 ### Business Logic Notes
 
-**Order Creation (OrderManager.createOrder):**
+**Order Creation (`OrderManager.createOrder`):**
 
-1. Fetches cart items from cart-service via REST
-2. Maps CartItemDto to OrderItemDto
-3. Calculates total = sum(item.unitPrice * item.quantity)
-4. Adds 20% tax: taxAmount = total * 0.20
-5. Adds fixed shipping: shippingCost = 50.00
-6. Sets initial status to PENDING
-7. Persists order with cascaded order items
+Accepts a `CreateOrderDto` (customerId + orderAddress + orderItems) directly from the API caller.
 
-**Order Status Updates (OrderManager.changeOrderStatus):**
+1. Null-check the incoming DTO
+2. `baseValidator.validate(orderDto)` — runs bean validation on the DTO (cascades into items and address)
+3. `orderItemValidator.validate(orderItems)` — re-validates items and rejects duplicate `productSKU`
+4. Build new `Order` with status `NEW`
+5. Iterate items: map each `OrderItemDto` → `OrderItem`, attach via `Order.addItem`, accumulate
+   `totalAmount += unitPrice * quantity` (via `OrderItemDto.getItemPrice()`)
+6. Compute `taxAmount = total * 0.20` (hardcoded in `getTaxAmount`)
+7. Compute `shippingCost = 100` flat (hardcoded in `getShippingCost`, which re-validates the address)
+8. `totalAmount += taxAmount + shippingCost`
+9. Set address (via `AddressMapper`), `customerId`, persist via `orderRepository.save`
 
-1. Validates order exists
-2. Updates status
-3. If CANCELLED, REFUNDED, or DELIVERED → triggers Kafka stock event
-4. Persists changes
+> Note: tax rate (0.20) and shipping cost (100) are hardcoded constants in `OrderManager`. If these
+> need to vary, externalize them via Config Server properties.
+
+**Order Status Updates (`OrderManager.changeOrderStatus`):**
+
+1. Validate `orderId` and `orderStatus` are non-null
+2. Load order (throws `EntityNotFoundException` if missing)
+3. Set new status
+4. Emit Kafka stock event based on new status:
+    - `CANCELLED` or `REFUNDED` → `sendStockStatus("release", orderDto)`
+    - `COMPLETED` → `sendStockStatus("commit", orderDto)`
+    - `NEW` → no event
+5. Persist changes
 
 ### API Endpoints
 
 Base path: `/v1/orders`
 
-| Method | Path                            | Request Body | Description         |
-|--------|---------------------------------|--------------|---------------------|
-| POST   | `/v1/orders`                    | OrderDto     | Create new order    |
-| GET    | `/v1/orders/{orderID}`          | -            | Get order by ID     |
-| GET    | `/v1/orders/user/{userID}`      | -            | Get all user orders |
-| PUT    | `/v1/orders/{orderID}/{status}` | -            | Update order status |
-| PUT    | `/v1/orders/{orderID}/cancel`   | -            | Cancel order        |
+| Method | Path                            | Request Body     | Response         | Description         |
+|--------|---------------------------------|------------------|------------------|---------------------|
+| POST   | `/v1/orders`                    | `CreateOrderDto` | 204 No Content   | Create new order    |
+| GET    | `/v1/orders/{orderID}`          | -                | `OrderDto`       | Get order by ID     |
+| GET    | `/v1/orders/user/{userID}`      | -                | `List<OrderDto>` | Get all user orders |
+| PUT    | `/v1/orders/{orderID}/{status}` | -                | 204 No Content   | Update order status |
+| PUT    | `/v1/orders/{orderID}/cancel`   | -                | 204 No Content   | Cancel order        |
 
 **Exception Handling:**
 
@@ -228,4 +238,3 @@ This service requires the following to be running:
 2. **Eureka Server** - For service discovery
 3. **PostgreSQL** - For data persistence
 4. **Kafka Broker** - For event streaming
-5. **cart-service** - For fetching cart items during order creation

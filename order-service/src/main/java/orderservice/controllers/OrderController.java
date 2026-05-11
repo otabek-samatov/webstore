@@ -3,6 +3,7 @@ package orderservice.controllers;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import orderservice.dto.CreateOrderDto;
 import orderservice.dto.OrderDto;
 import orderservice.entities.Order;
 import orderservice.entities.OrderStatus;
@@ -25,9 +26,10 @@ public class OrderController {
     private final OrderItemMapper itemMapper;
 
     @PostMapping
-    public ResponseEntity<Void> createOrder(@Valid @RequestBody OrderDto dto) {
-        manager.createOrder(dto);
-        return ResponseEntity.noContent().build();
+    public ResponseEntity<OrderDto> createOrder(@Valid @RequestBody CreateOrderDto dto) {
+        Order order = manager.createOrder(dto);
+        OrderDto orderDto = orderMapper.toDto(order);
+        return ResponseEntity.ok(orderDto);
     }
 
     @GetMapping("/{orderID}")

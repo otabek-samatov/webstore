@@ -8,7 +8,6 @@ import orderservice.entities.OrderStatus;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 
 /**
  * DTO for {@link Order}
@@ -17,12 +16,8 @@ import java.time.LocalDateTime;
 public class OrderDto implements Serializable {
     Long id;
 
-    @NotNull(message = "User ID Should be specified")
-    Long userId;
-
-    @NotNull(message = "Cart ID Should be specified")
-
-    LocalDateTime createdAt;
+    @NotNull(message = "Customer ID Should be specified")
+    Long customerId;
 
     @PositiveOrZero(message = "Total Amount cannot be negative")
     BigDecimal totalAmount;

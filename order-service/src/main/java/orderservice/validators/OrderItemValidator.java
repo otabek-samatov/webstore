@@ -19,9 +19,6 @@ public class OrderItemValidator extends BaseValidator {
         this.orderItemRepository = orderItemRepository;
     }
 
-    public void validate(OrderItemDto dto) {
-        super.validate(dto);
-    }
 
     public void validate(Collection<OrderItemDto> dtos) {
         List<String> products = dtos.stream().map(OrderItemDto::getProductSKU).toList();
@@ -30,8 +27,8 @@ public class OrderItemValidator extends BaseValidator {
             throw new IllegalArgumentException("Duplicate products found in item list");
         }
 
-        for (OrderItemDto cartItemDto : dtos) {
-            validate(cartItemDto);
+        for (OrderItemDto itemDto : dtos) {
+            validate(itemDto);
         }
     }
 }
