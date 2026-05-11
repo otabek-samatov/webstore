@@ -22,8 +22,6 @@ public class OrderDto implements Serializable {
 
     @NotNull(message = "Cart ID Should be specified")
 
-    Long cartId;
-
     LocalDateTime createdAt;
 
     @PositiveOrZero(message = "Total Amount cannot be negative")

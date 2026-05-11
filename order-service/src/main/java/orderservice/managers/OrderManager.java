@@ -36,7 +36,7 @@ public class OrderManager {
         BigDecimal totalAmount = BigDecimal.ZERO;
 
         Order newOrder = orderMapper.toEntity(orderDto);
-        newOrder.setOrderStatus(OrderStatus.PENDING);
+        newOrder.setOrderStatus(OrderStatus.NEW);
 
         BigDecimal taxAmount = getTaxAmount(totalAmount);
         BigDecimal shippingCost = getShippingCost(newOrder.getOrderAddress());

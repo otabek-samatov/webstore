@@ -13,8 +13,6 @@ Product Service – Handles product catalog (CRUD operations, categories, etc.)
 
 Inventory Service – Manages stock levels.
 
-Cart Service – Each user’s shopping cart logic.
-
 Order Service – Order placement and tracking.
 
 User Service – Registration, login, profile.

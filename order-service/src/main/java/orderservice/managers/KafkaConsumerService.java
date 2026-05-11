@@ -22,7 +22,7 @@ public class KafkaConsumerService {
         if ("Completed".equalsIgnoreCase(orderStatusKafka.getActionType())) {
             status = OrderStatus.PROCESSING;
         } else if ("Failed".equalsIgnoreCase(orderStatusKafka.getActionType())) {
-            status = OrderStatus.PENDING;
+            status = OrderStatus.NEW;
         } else if ("Refunded".equalsIgnoreCase(orderStatusKafka.getActionType())) {
             status = OrderStatus.REFUNDED;
         }

@@ -15,7 +15,7 @@ public class KafkaService {
     private String stockStatusTopic;
 
     @Transactional("kafkaTransactionManager")
-    public void sendOrderStatus(long userID, String actionType, Long orderId) {
+    public void sendOrderStatus(String actionType, Long orderId) {
 
         if (orderId == null || orderId <= 0) {
             return;
@@ -24,6 +24,6 @@ public class KafkaService {
         OrderStatusKafka event = new OrderStatusKafka();
         event.setOrderId(orderId);
         event.setActionType(actionType);
-        kafkaTemplate.send(stockStatusTopic, String.valueOf(userID), event);
+        kafkaTemplate.send(stockStatusTopic, "payment-service-" + orderId, event);
     }
 }

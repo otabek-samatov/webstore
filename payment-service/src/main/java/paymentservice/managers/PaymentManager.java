@@ -160,7 +160,7 @@ public class PaymentManager {
 
 
     private void updateOrderStatus(Payment p) {
-        kafkaService.sendOrderStatus(p.getUserId(), p.getPaymentStatus().name(), p.getOrderId());
+        kafkaService.sendOrderStatus(p.getPaymentStatus().name(), p.getOrderId());
     }
 
 }

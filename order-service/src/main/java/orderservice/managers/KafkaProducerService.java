@@ -21,6 +21,6 @@ public class KafkaProducerService {
 
         StockStatusKafka event = new StockStatusKafka();
         event.setActionType(actionType);
-        kafkaTemplate.send(stockStatusTopic, String.valueOf(orderDto.getUserId()), event);
+        kafkaTemplate.send(stockStatusTopic, "order-service-" + orderDto.getId(), event);
     }
 }
