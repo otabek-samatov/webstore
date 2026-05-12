@@ -28,8 +28,4 @@ public class OrderItemDto implements Serializable {
     @NotBlank(message = "Product Name should be Specified")
     String productName;
 
-    public BigDecimal getItemPrice() {
-        return unitPrice.multiply(BigDecimal.valueOf(quantity));
-    }
-
 }

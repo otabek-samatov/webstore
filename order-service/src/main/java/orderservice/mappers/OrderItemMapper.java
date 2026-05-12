@@ -2,7 +2,10 @@ package orderservice.mappers;
 
 import orderservice.dto.OrderItemDto;
 import orderservice.entities.OrderItem;
-import org.mapstruct.*;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.MappingConstants;
+import org.mapstruct.ReportingPolicy;
 
 import java.util.Collection;
 import java.util.List;

@@ -1,6 +1,7 @@
 package orderservice.controllers;
 
 import jakarta.persistence.EntityNotFoundException;
+import orderservice.exceptions.NotEnoughStockException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -24,5 +25,8 @@ public class RestExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Null pointer exception caught: " + ex.getMessage());
     }
 
-
+    @ExceptionHandler(NotEnoughStockException.class)
+    public ResponseEntity<String> handleException(NotEnoughStockException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Not Enough Stock level exception caught: " + ex.getMessage());
+    }
 }

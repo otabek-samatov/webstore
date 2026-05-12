@@ -3,7 +3,7 @@ package orderservice.managers;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import orderservice.dto.CreateOrderDto;
-import orderservice.dto.OrderDto;
+import orderservice.dto.InventoryDto;
 import orderservice.dto.OrderItemDto;
 import orderservice.entities.Order;
 import orderservice.entities.OrderItem;
@@ -49,26 +49,18 @@ public class OrderManager {
         Order newOrder = new Order();
         newOrder.setOrderStatus(OrderStatus.NEW);
 
-        BigDecimal totalAmount = BigDecimal.ZERO;
-
         List<OrderItemDto> orderItems = orderDto.getOrderItems();
         for (OrderItemDto orderItemDto : orderItems) {
             checkQuantity(orderItemDto);
 
-            totalAmount = totalAmount.add(orderItemDto.getItemPrice());
             OrderItem orderItem = orderItemMapper.toEntity(orderItemDto);
             newOrder.addItem(orderItem);
             reserveStock(orderItemDto);
         }
 
-        BigDecimal taxAmount = getTaxAmount(totalAmount);
         BigDecimal shippingCost = getShippingCost();
 
-        totalAmount = totalAmount.add(taxAmount);
-        totalAmount = totalAmount.add(shippingCost);
 
-        newOrder.setTaxAmount(taxAmount);
-        newOrder.setTotalAmount(totalAmount);
         newOrder.setShippingCost(shippingCost);
         newOrder.setOrderAddress(addressMapper.toEntity(orderDto.getOrderAddress()));
         newOrder.setCustomerId(orderDto.getCustomerId());
@@ -76,10 +68,6 @@ public class OrderManager {
         orderRepository.save(newOrder);
 
         return newOrder;
-    }
-
-    private BigDecimal getTaxAmount(BigDecimal amount) {
-        return amount.multiply(new BigDecimal("0.20"));
     }
 
     private BigDecimal getShippingCost() {
@@ -105,25 +93,29 @@ public class OrderManager {
     }
 
     @Transactional
-    public void changeOrderStatus(Long orderId, OrderStatus orderStatus) {
+    public void changeOrderStatus(Long orderId, OrderStatus newOrderStatus) {
         if (orderId == null) {
             throw new IllegalArgumentException("orderId is null");
         }
 
-        if (orderStatus == null) {
-            throw new IllegalArgumentException("orderStatus is null");
+        if (newOrderStatus == null) {
+            throw new IllegalArgumentException("newOrderStatus is null");
         }
 
         Order order = getOrderById(orderId);
 
-        order.setOrderStatus(orderStatus);
+        OrderStatus oldOrderStatus = order.getOrderStatus();
+        if (!oldOrderStatus.getNextPossibleStatuses().contains(newOrderStatus)) {
+            throw new IllegalArgumentException("order =  " + orderId + " cannot be changed to " + newOrderStatus);
 
-        OrderDto orderDto = orderMapper.toDto(order);
+        }
+
+        order.setOrderStatus(newOrderStatus);
 
         if (order.getOrderStatus() == OrderStatus.CANCELLED || order.getOrderStatus() == OrderStatus.REFUNDED) {
-            kafkaProducerService.sendStockStatus("release", orderDto);
+            kafkaProducerService.sendStockStatus("release", orderItemMapper.toDto(order.getItems()));
         } else if (order.getOrderStatus() == OrderStatus.COMPLETED) {
-            kafkaProducerService.sendStockStatus("commit", orderDto);
+            kafkaProducerService.sendStockStatus("commit", orderItemMapper.toDto(order.getItems()));
         }
 
         orderRepository.save(order);
@@ -131,7 +123,7 @@ public class OrderManager {
 
     public List<OrderItem> getItemsByOrderID(Long orderID) {
         if (orderID == null) {
-            throw new IllegalArgumentException("cartID is null");
+            throw new IllegalArgumentException("orderID is null");
         }
 
         return orderItemRepository.findAllByOrderId(orderID);
@@ -142,7 +134,7 @@ public class OrderManager {
             throw new IllegalArgumentException("orderItemId is null");
         }
 
-        return orderItemRepository.findById(orderItemId).orElseThrow(() -> new EntityNotFoundException("Order Item with = " + orderItemId + " not found"));
+        return orderItemRepository.findById(orderItemId).orElseThrow(() -> new EntityNotFoundException("Order Item ID = " + orderItemId + " not found"));
     }
 
     @Transactional
@@ -176,7 +168,7 @@ public class OrderManager {
         for (OrderItemDto orderItemDto : orderItemDtos) {
             Long itemID = orderItemRepository.findIdByOrderIdAndProductSKU(orderID, orderItemDto.getProductSKU());
             if (itemID != null) {
-                throw new IllegalArgumentException("Product = " + orderItemDto.getProductSKU() + " already exists in cart");
+                throw new IllegalArgumentException("Product = " + orderItemDto.getProductSKU() + " already exists in Order");
             }
 
             checkQuantity(orderItemDto);
@@ -192,7 +184,7 @@ public class OrderManager {
 
     private void checkQuantity(OrderItemDto dto) {
         Long availableCount = restClient.get()
-                .uri("http://inventory-service/v1/inventories/available-count/{sku}", dto.getProductSKU())
+                .uri("http://inventory-service/v1/inventory/available-count/{sku}", dto.getProductSKU())
                 .retrieve()
                 .body(Long.class);
 
@@ -202,8 +194,13 @@ public class OrderManager {
     }
 
     private void reserveStock(OrderItemDto dto) {
+        InventoryDto inventoryDto = new InventoryDto();
+        inventoryDto.setProductSKU(dto.getProductSKU());
+        inventoryDto.setReservedStock(dto.getQuantity());
+
         restClient.post()
-                .uri("http://inventory-service/v1/inventories/reserve-stock", dto)
+                .uri("http://inventory-service/v1/inventory/reserve-stock")
+                .body(inventoryDto)
                 .retrieve()
                 .toBodilessEntity();
     }

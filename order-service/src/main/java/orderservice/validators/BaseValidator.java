@@ -16,7 +16,7 @@ public class BaseValidator {
 
     public void validate(Object obj) {
         if (obj == null) {
-            throw new NullPointerException("Object to validate cannot be null");
+            throw new IllegalArgumentException("Object to validate cannot be null");
         }
 
         Set<ConstraintViolation<Object>> violations = validator.validate(obj);

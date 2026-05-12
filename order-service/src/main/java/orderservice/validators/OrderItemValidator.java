@@ -21,6 +21,10 @@ public class OrderItemValidator extends BaseValidator {
 
 
     public void validate(Collection<OrderItemDto> dtos) {
+        if (dtos == null) {
+            throw new IllegalArgumentException("dtos cannot be null");
+        }
+
         List<String> products = dtos.stream().map(OrderItemDto::getProductSKU).toList();
         HashSet<String> productSet = new HashSet<>(products);
         if (products.size() != productSet.size()) {

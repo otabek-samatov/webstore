@@ -21,8 +21,6 @@ public class KafkaConsumerService {
         OrderStatus status = null;
         if ("Completed".equalsIgnoreCase(orderStatusKafka.getActionType())) {
             status = OrderStatus.COMPLETED;
-        } else if ("Failed".equalsIgnoreCase(orderStatusKafka.getActionType())) {
-            status = OrderStatus.NEW;
         } else if ("Refunded".equalsIgnoreCase(orderStatusKafka.getActionType())) {
             status = OrderStatus.REFUNDED;
         }

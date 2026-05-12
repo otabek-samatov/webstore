@@ -19,6 +19,6 @@ public class AddressDto implements Serializable {
     String city;
     @NotBlank(message = "Street should be specified")
     String street;
-    @NotBlank
+    @NotBlank(message = "AddressLine should be specified")
     String addressLine;
 }

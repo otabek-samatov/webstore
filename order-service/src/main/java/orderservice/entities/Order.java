@@ -9,7 +9,7 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
@@ -26,19 +26,15 @@ public class Order extends CoreEntity {
     @Setter(AccessLevel.NONE)
     @CreationTimestamp
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
-
-    @PositiveOrZero(message = "Total Amount cannot be negative")
-    @Column(name = "total_amount", nullable = false)
-    private BigDecimal totalAmount;
+    private Instant createdAt;
 
     @PositiveOrZero(message = "Tax Amount cannot be negative")
     @Column(name = "tax_amount", nullable = false)
-    private BigDecimal taxAmount;
+    private BigDecimal taxAmount = BigDecimal.ZERO;
 
     @PositiveOrZero(message = "Shipping Cost cannot be negative")
     @Column(name = "shipping_cost")
-    private BigDecimal shippingCost;
+    private BigDecimal shippingCost = BigDecimal.ZERO;
 
     @NotNull(message = "Address Should be specified")
     @Embedded
@@ -60,7 +56,6 @@ public class Order extends CoreEntity {
 
     public void removeItem(OrderItem item) {
         orderItems.remove(item);
-        item.setOrder(null);
     }
 
     public Set<OrderItem> getItems() {

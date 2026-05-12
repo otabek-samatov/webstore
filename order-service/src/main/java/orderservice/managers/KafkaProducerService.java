@@ -1,13 +1,14 @@
 package orderservice.managers;
 
 import lombok.RequiredArgsConstructor;
-import orderservice.dto.OrderDto;
 import orderservice.dto.OrderItemDto;
 import orderservice.dto.kafka.StockStatusKafka;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 @RequiredArgsConstructor
 @Service
@@ -17,20 +18,21 @@ public class KafkaProducerService {
     private String stockStatusTopic;
 
     @Transactional("kafkaTransactionManager")
-    public void sendStockStatus(String actionType, OrderDto dto) {
-
+    public void sendStockStatus(String actionType, List<OrderItemDto> dtos) {
 
         StockStatusKafka event = new StockStatusKafka();
         event.setActionType(actionType);
-        kafkaTemplate.send(stockStatusTopic, "order-" + dto.getId(), event);
+        event.addItems(dtos);
+
+        kafkaTemplate.send(stockStatusTopic, "orderItem", event);
     }
 
     @Transactional("kafkaTransactionManager")
     public void sendStockStatus(String actionType, OrderItemDto dto) {
 
-
         StockStatusKafka event = new StockStatusKafka();
+        event.addItem(dto);
         event.setActionType(actionType);
-        kafkaTemplate.send(stockStatusTopic, "orderItem-" + dto.getId(), event);
+        kafkaTemplate.send(stockStatusTopic, "orderItem", event);
     }
 }

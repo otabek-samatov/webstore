@@ -65,19 +65,19 @@ public class OrderController {
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/{orderID}/items/")
+    @GetMapping("/{orderID}/items")
     public ResponseEntity<List<OrderItemDto>> getItemsByOrderID(@PathVariable Long orderID) {
         List<OrderItem> items = manager.getItemsByOrderID(orderID);
         return ResponseEntity.ok(itemMapper.toDto(items));
     }
 
-    @GetMapping("/item/{itemID}")
+    @GetMapping("/items/{itemID}")
     public ResponseEntity<OrderItemDto> getItem(@PathVariable Long itemID) {
         OrderItem item = manager.getOrderItem(itemID);
         return ResponseEntity.ok(itemMapper.toDto(item));
     }
 
-    @DeleteMapping("/item/{itemID}")
+    @DeleteMapping("/items/{itemID}")
     public ResponseEntity<Void> removeItem(@PathVariable Long itemID) {
         manager.removeOrderItem(itemID);
         return ResponseEntity.noContent().build();
