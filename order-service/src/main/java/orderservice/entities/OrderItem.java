@@ -22,7 +22,7 @@ public class OrderItem extends CoreEntity {
     private String productSKU;
 
     @Positive(message = "Unit Price  should be greater than zero")
-    @Column(name = "unit_price", nullable = false, precision = 9, scale = 2)
+    @Column(name = "unit_price", nullable = false)
     private BigDecimal unitPrice;
 
     @Positive(message = "Quantity should be greater than zero.")

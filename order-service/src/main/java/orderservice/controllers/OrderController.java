@@ -5,7 +5,9 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import orderservice.dto.CreateOrderDto;
 import orderservice.dto.OrderDto;
+import orderservice.dto.OrderItemDto;
 import orderservice.entities.Order;
+import orderservice.entities.OrderItem;
 import orderservice.entities.OrderStatus;
 import orderservice.managers.OrderManager;
 import orderservice.mappers.OrderItemMapper;
@@ -42,7 +44,7 @@ public class OrderController {
 
     @GetMapping("/user/{userID}")
     public ResponseEntity<List<OrderDto>> getUserOrders(@PathVariable Long userID) {
-        List<Order> orders = manager.getOrderByUserId(userID);
+        List<Order> orders = manager.getOrderByCustomerId(userID);
         List<OrderDto> dtoList = new ArrayList<>();
         for (Order order : orders) {
             OrderDto dto = orderMapper.toDto(order);
@@ -60,6 +62,30 @@ public class OrderController {
     @PutMapping("/{orderID}/cancel")
     public ResponseEntity<Void> cancelOrder(@PathVariable Long orderID) {
         manager.changeOrderStatus(orderID, OrderStatus.CANCELLED);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{orderID}/items/")
+    public ResponseEntity<List<OrderItemDto>> getItemsByOrderID(@PathVariable Long orderID) {
+        List<OrderItem> items = manager.getItemsByOrderID(orderID);
+        return ResponseEntity.ok(itemMapper.toDto(items));
+    }
+
+    @GetMapping("/item/{itemID}")
+    public ResponseEntity<OrderItemDto> getItem(@PathVariable Long itemID) {
+        OrderItem item = manager.getOrderItem(itemID);
+        return ResponseEntity.ok(itemMapper.toDto(item));
+    }
+
+    @DeleteMapping("/item/{itemID}")
+    public ResponseEntity<Void> removeItem(@PathVariable Long itemID) {
+        manager.removeOrderItem(itemID);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{orderID}/items")
+    public ResponseEntity<Void> addItems(@PathVariable Long orderID, @Valid @RequestBody List<OrderItemDto> items) {
+        manager.addItemsToOrder(orderID, items);
         return ResponseEntity.noContent().build();
     }
 

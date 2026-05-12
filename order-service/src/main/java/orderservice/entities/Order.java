@@ -29,15 +29,15 @@ public class Order extends CoreEntity {
     private LocalDateTime createdAt;
 
     @PositiveOrZero(message = "Total Amount cannot be negative")
-    @Column(name = "total_amount", nullable = false, precision = 9, scale = 2)
+    @Column(name = "total_amount", nullable = false)
     private BigDecimal totalAmount;
 
     @PositiveOrZero(message = "Tax Amount cannot be negative")
-    @Column(name = "tax_amount", nullable = false, precision = 9, scale = 2)
+    @Column(name = "tax_amount", nullable = false)
     private BigDecimal taxAmount;
 
     @PositiveOrZero(message = "Shipping Cost cannot be negative")
-    @Column(name = "shipping_cost", nullable = false, precision = 9, scale = 2)
+    @Column(name = "shipping_cost")
     private BigDecimal shippingCost;
 
     @NotNull(message = "Address Should be specified")
