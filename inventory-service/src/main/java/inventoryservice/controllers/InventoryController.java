@@ -8,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RequiredArgsConstructor
 @RestController
 @RequestMapping(value = "/v1/inventory/")
@@ -35,8 +37,8 @@ public class InventoryController {
     }
 
     @PostMapping("/reserve-stock")
-    public ResponseEntity<Void> reserveStock(@RequestBody InventoryDto dto) {
-        manager.reserveStock(dto);
+    public ResponseEntity<Void> reserveStock(@RequestBody List<InventoryDto> dtos) {
+        manager.reserveStocks(dtos);
         return ResponseEntity.noContent().build();
     }
 

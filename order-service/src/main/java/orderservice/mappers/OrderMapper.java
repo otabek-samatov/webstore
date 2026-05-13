@@ -12,6 +12,7 @@ import java.util.List;
 public interface OrderMapper {
 
     OrderDto toDto(Order order);
+
     List<OrderDto> toDto(List<Order> order);
 
 }

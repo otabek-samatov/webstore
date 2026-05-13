@@ -21,10 +21,9 @@ public enum OrderStatus {
         }
     }
 
-    public List<OrderStatus> getNextPossibleStatuses() {
-        return nextPossibleStatuses;
+    public boolean isAcceptableNextStatus(OrderStatus nextStatus) {
+        return nextPossibleStatuses.contains(nextStatus);
     }
-
 
 }
 

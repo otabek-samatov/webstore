@@ -13,8 +13,10 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
+import java.util.List;
 import java.util.Optional;
 
 @RequiredArgsConstructor
@@ -31,8 +33,7 @@ public class InventoryManager {
         return inventoryRepository.getAvailableStockLevel(productSKU).orElse(0L);
     }
 
-    @Transactional
-    public void reserveStock(InventoryDto dto) {
+    private void reserveStock(InventoryDto dto) {
 
         validator.validate(dto);
 
@@ -48,6 +49,16 @@ public class InventoryManager {
         inv.setReservedStock(inv.getReservedStock() + quantity);
 
         saveChanges(inv, quantity, ReasonType.RESERVE_STOCK);
+    }
+
+    @Transactional
+    public void reserveStocks(List<InventoryDto> dtos) {
+
+        if (CollectionUtils.isEmpty(dtos)) {
+            return;
+        }
+
+        dtos.forEach(this::reserveStock);
     }
 
     @Transactional

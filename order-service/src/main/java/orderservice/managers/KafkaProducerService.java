@@ -20,20 +20,16 @@ public class KafkaProducerService {
     private String stockStatusTopic;
 
     @Transactional("kafkaTransactionManager")
-    public void sendStockStatus(String actionType, List<OrderItemDto> dtos) {
-        dtos.forEach(dto -> sendStockStatus(actionType, dto));
-    }
-
-    @Transactional("kafkaTransactionManager")
-    public void sendStockStatus(String actionType, OrderItemDto dto) {
+    public void sendStockStatus(String actionType, long orderId, List<OrderItemDto> dtos) {
 
         StockStatusKafka event = new StockStatusKafka();
-        event.addItem(dto);
+        event.addItems(dtos);
         event.setActionType(actionType);
 
-        log.info("Publishing stock-status event topic={} actionType={} sku={} quantity={}",
-                stockStatusTopic, actionType, dto.getProductSKU(), dto.getQuantity());
+        log.info("Publishing stock-status event topic={} actionType={} order id={}",
+                stockStatusTopic, actionType, orderId);
 
-        kafkaTemplate.send(stockStatusTopic, "orderItem-" + dto.getProductSKU(), event);
+        kafkaTemplate.send(stockStatusTopic, "order-" + orderId, event);
     }
+
 }
