@@ -83,6 +83,7 @@ public class OrderManager {
         return BigDecimal.valueOf(100);
     }
 
+    @Transactional(readOnly = true)
     public Order getOrderById(Long orderId) {
         if (orderId == null) {
             throw new IllegalArgumentException("orderId is null");
