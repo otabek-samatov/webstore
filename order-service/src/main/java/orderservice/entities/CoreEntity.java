@@ -13,8 +13,7 @@ import java.util.Objects;
 @MappedSuperclass
 public abstract class CoreEntity {
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "order_service_seq")
-    @SequenceGenerator(name = "order_service_seq")
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "entity_seq")
     @Column(name = "id", nullable = false)
     private Long id;
 

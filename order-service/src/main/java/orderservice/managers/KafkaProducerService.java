@@ -14,17 +14,12 @@ import java.util.List;
 @Service
 public class KafkaProducerService {
     private final KafkaTemplate<String, StockStatusKafka> kafkaTemplate;
-    @Value("${stock.status.topic}")
+    @Value("${topic.stock.status}")
     private String stockStatusTopic;
 
     @Transactional("kafkaTransactionManager")
     public void sendStockStatus(String actionType, List<OrderItemDto> dtos) {
-
-        StockStatusKafka event = new StockStatusKafka();
-        event.setActionType(actionType);
-        event.addItems(dtos);
-
-        kafkaTemplate.send(stockStatusTopic, "orderItem", event);
+        dtos.forEach(dto -> sendStockStatus(actionType, dto));
     }
 
     @Transactional("kafkaTransactionManager")
@@ -33,6 +28,6 @@ public class KafkaProducerService {
         StockStatusKafka event = new StockStatusKafka();
         event.addItem(dto);
         event.setActionType(actionType);
-        kafkaTemplate.send(stockStatusTopic, "orderItem", event);
+        kafkaTemplate.send(stockStatusTopic, "orderItem-" + dto.getProductSKU(), event);
     }
 }

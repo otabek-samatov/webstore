@@ -17,6 +17,7 @@ import java.util.Set;
 @Setter
 @Entity
 @Table(name = "orders")
+@SequenceGenerator(name = "entity_seq", sequenceName = "orders_seq")
 public class Order extends CoreEntity {
 
     @NotNull

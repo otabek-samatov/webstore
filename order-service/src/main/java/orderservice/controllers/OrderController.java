@@ -15,7 +15,6 @@ import orderservice.mappers.OrderMapper;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.ArrayList;
 import java.util.List;
 
 @RequiredArgsConstructor
@@ -42,26 +41,15 @@ public class OrderController {
         return ResponseEntity.ok(orderDto);
     }
 
-    @GetMapping("/user/{userID}")
-    public ResponseEntity<List<OrderDto>> getUserOrders(@PathVariable Long userID) {
-        List<Order> orders = manager.getOrderByCustomerId(userID);
-        List<OrderDto> dtoList = new ArrayList<>();
-        for (Order order : orders) {
-            OrderDto dto = orderMapper.toDto(order);
-            dtoList.add(dto);
-        }
-        return ResponseEntity.ok(dtoList);
+    @GetMapping("/customer/{customerId}")
+    public ResponseEntity<List<OrderDto>> getUserOrders(@PathVariable Long customerId) {
+        List<Order> orders = manager.getOrderByCustomerId(customerId);
+        return ResponseEntity.ok(orderMapper.toDto(orders));
     }
 
     @PutMapping("/{orderID}/{status}")
     public ResponseEntity<Void> updateOrderStatus(@PathVariable Long orderID, @PathVariable OrderStatus status) {
         manager.changeOrderStatus(orderID, status);
-        return ResponseEntity.noContent().build();
-    }
-
-    @PutMapping("/{orderID}/cancel")
-    public ResponseEntity<Void> cancelOrder(@PathVariable Long orderID) {
-        manager.changeOrderStatus(orderID, OrderStatus.CANCELLED);
         return ResponseEntity.noContent().build();
     }
 

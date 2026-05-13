@@ -22,7 +22,7 @@ public class RestExceptionHandler {
 
     @ExceptionHandler(NullPointerException.class)
     public ResponseEntity<String> handleException(NullPointerException ex) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Null pointer exception caught: " + ex.getMessage());
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Null pointer exception caught: " + ex.getMessage());
     }
 
     @ExceptionHandler(NotEnoughStockException.class)

@@ -16,6 +16,7 @@ import orderservice.repositories.OrderItemRepository;
 import orderservice.repositories.OrderRepository;
 import orderservice.validators.BaseValidator;
 import orderservice.validators.OrderItemValidator;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
@@ -40,7 +41,7 @@ public class OrderManager {
     @Transactional
     public Order createOrder(CreateOrderDto orderDto) {
         if (orderDto == null) {
-            throw new IllegalArgumentException("orderDTO is null");
+            throw new IllegalArgumentException("orderDto is null");
         }
 
         baseValidator.validate(orderDto);
@@ -51,8 +52,6 @@ public class OrderManager {
 
         List<OrderItemDto> orderItems = orderDto.getOrderItems();
         for (OrderItemDto orderItemDto : orderItems) {
-            checkQuantity(orderItemDto);
-
             OrderItem orderItem = orderItemMapper.toEntity(orderItemDto);
             newOrder.addItem(orderItem);
             reserveStock(orderItemDto);
@@ -84,6 +83,7 @@ public class OrderManager {
         );
     }
 
+    @Transactional(readOnly = true)
     public List<Order> getOrderByCustomerId(Long customerID) {
         if (customerID == null) {
             throw new IllegalArgumentException("customerID is null");
@@ -106,7 +106,7 @@ public class OrderManager {
 
         OrderStatus oldOrderStatus = order.getOrderStatus();
         if (!oldOrderStatus.getNextPossibleStatuses().contains(newOrderStatus)) {
-            throw new IllegalArgumentException("order =  " + orderId + " cannot be changed to " + newOrderStatus);
+            throw new IllegalArgumentException("order = " + orderId + " cannot be changed to " + newOrderStatus);
 
         }
 
@@ -121,6 +121,7 @@ public class OrderManager {
         orderRepository.save(order);
     }
 
+    @Transactional(readOnly = true)
     public List<OrderItem> getItemsByOrderID(Long orderID) {
         if (orderID == null) {
             throw new IllegalArgumentException("orderID is null");
@@ -129,6 +130,7 @@ public class OrderManager {
         return orderItemRepository.findAllByOrderId(orderID);
     }
 
+    @Transactional(readOnly = true)
     public OrderItem getOrderItem(Long orderItemId) {
         if (orderItemId == null) {
             throw new IllegalArgumentException("orderItemId is null");
@@ -143,7 +145,7 @@ public class OrderManager {
             throw new IllegalArgumentException("orderItemId is null");
         }
 
-        OrderItem item = orderItemRepository.findById(orderItemId).orElseThrow(() -> new EntityNotFoundException("Order Item with = " + orderItemId + " not found"));
+        OrderItem item = orderItemRepository.findById(orderItemId).orElseThrow(() -> new EntityNotFoundException("Order Item ID = " + orderItemId + " not found"));
         Order order = item.getOrder();
         order.removeItem(item);
         orderRepository.save(order);
@@ -159,11 +161,7 @@ public class OrderManager {
 
         orderItemValidator.validate(orderItemDtos);
 
-        Order order = orderRepository.findByIdAndOrderStatus(orderID, OrderStatus.NEW);
-
-        if (order == null) {
-            throw new EntityNotFoundException("New Order with id = " + orderID + " not found");
-        }
+        Order order = orderRepository.findByIdAndOrderStatus(orderID, OrderStatus.NEW).orElseThrow(() -> new EntityNotFoundException("Order ID = " + orderID + " not found"));
 
         for (OrderItemDto orderItemDto : orderItemDtos) {
             Long itemID = orderItemRepository.findIdByOrderIdAndProductSKU(orderID, orderItemDto.getProductSKU());
@@ -171,26 +169,12 @@ public class OrderManager {
                 throw new IllegalArgumentException("Product = " + orderItemDto.getProductSKU() + " already exists in Order");
             }
 
-            checkQuantity(orderItemDto);
-
             OrderItem orderItem = orderItemMapper.toEntity(orderItemDto);
             order.addItem(orderItem);
             reserveStock(orderItemDto);
         }
 
         orderRepository.save(order);
-    }
-
-
-    private void checkQuantity(OrderItemDto dto) {
-        Long availableCount = restClient.get()
-                .uri("http://inventory-service/v1/inventory/available-count/{sku}", dto.getProductSKU())
-                .retrieve()
-                .body(Long.class);
-
-        if (availableCount == null || availableCount < dto.getQuantity()) {
-            throw new NotEnoughStockException(dto.getProductSKU());
-        }
     }
 
     private void reserveStock(OrderItemDto dto) {
@@ -202,7 +186,15 @@ public class OrderManager {
                 .uri("http://inventory-service/v1/inventory/reserve-stock")
                 .body(inventoryDto)
                 .retrieve()
-                .toBodilessEntity();
+                .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {
+                    // inventory uses 400 for NotEnoughStock; treat 4xx as a domain error
+                    throw new NotEnoughStockException(dto.getProductSKU());
+                })
+                .onStatus(HttpStatusCode::is5xxServerError, (req, res) -> {
+                    throw new IllegalStateException(
+                            "inventory-service failed for SKU " + dto.getProductSKU()
+                                    + ": " + res.getStatusCode());
+                }).toBodilessEntity();
     }
 
 

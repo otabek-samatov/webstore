@@ -11,7 +11,7 @@ public enum OrderStatus {
     COMPLETED(REFUNDED),
     NEW(COMPLETED, CANCELLED);
 
-    final List<OrderStatus> nextPossibleStatuses;
+    private final List<OrderStatus> nextPossibleStatuses;
 
     OrderStatus(OrderStatus... orderStatuses) {
         if (orderStatuses == null) {

@@ -1,6 +1,7 @@
 package orderservice.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.Data;
 
@@ -17,9 +18,11 @@ public class OrderItemDto implements Serializable {
     @NotBlank(message = "Product SKU should be specified")
     String productSKU;
 
+    @NotNull
     @Positive(message = "Unit Price should be greater than zero")
     BigDecimal unitPrice;
 
+    @NotNull
     @Positive(message = "Quantity should be greater than zero.")
     Long quantity;
 

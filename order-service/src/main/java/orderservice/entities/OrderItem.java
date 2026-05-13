@@ -15,6 +15,7 @@ import java.math.BigDecimal;
 @Table(name = "order_item", uniqueConstraints = {
         @UniqueConstraint(name = "uc_orderitem_order_id", columnNames = {"order_id", "product_sku"})
 })
+@SequenceGenerator(name = "entity_seq", sequenceName = "order_item_seq")
 public class OrderItem extends CoreEntity {
 
     @NotBlank(message = "Product SKU should be specified")

@@ -2,7 +2,6 @@ package orderservice.validators;
 
 import jakarta.validation.Validator;
 import orderservice.dto.OrderItemDto;
-import orderservice.repositories.OrderItemRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
@@ -12,13 +11,10 @@ import java.util.List;
 @Service
 public class OrderItemValidator extends BaseValidator {
 
-    private final OrderItemRepository orderItemRepository;
 
-    public OrderItemValidator(Validator validator, OrderItemRepository orderItemRepository) {
+    public OrderItemValidator(Validator validator) {
         super(validator);
-        this.orderItemRepository = orderItemRepository;
     }
-
 
     public void validate(Collection<OrderItemDto> dtos) {
         if (dtos == null) {

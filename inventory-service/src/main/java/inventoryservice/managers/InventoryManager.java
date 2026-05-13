@@ -147,7 +147,6 @@ public class InventoryManager {
             throw new IllegalArgumentException("productSKU is empty");
         }
 
-
         Inventory inventory = findInventoryByProductSKU(sku);
         inventoryChangeRepository.deleteByInventoryProductSKU(sku);
         inventoryRepository.delete(inventory);
