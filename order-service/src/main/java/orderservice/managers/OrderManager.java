@@ -2,6 +2,7 @@ package orderservice.managers;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import orderservice.dto.CreateOrderDto;
 import orderservice.dto.InventoryDto;
 import orderservice.dto.OrderItemDto;
@@ -24,6 +25,7 @@ import org.springframework.web.client.RestClient;
 import java.math.BigDecimal;
 import java.util.List;
 
+@Slf4j
 @RequiredArgsConstructor
 @Service
 public class OrderManager {
@@ -43,6 +45,10 @@ public class OrderManager {
         if (orderDto == null) {
             throw new IllegalArgumentException("orderDto is null");
         }
+
+        log.info("Creating order customerId={} itemCount={}",
+                orderDto.getCustomerId(),
+                orderDto.getOrderItems() == null ? 0 : orderDto.getOrderItems().size());
 
         baseValidator.validate(orderDto);
         orderItemValidator.validate(orderDto.getOrderItems());
@@ -65,6 +71,9 @@ public class OrderManager {
         newOrder.setCustomerId(orderDto.getCustomerId());
 
         orderRepository.save(newOrder);
+
+        log.info("Order created orderId={} customerId={} itemCount={}",
+                newOrder.getId(), newOrder.getCustomerId(), orderItems.size());
 
         return newOrder;
     }
@@ -106,9 +115,14 @@ public class OrderManager {
 
         OrderStatus oldOrderStatus = order.getOrderStatus();
         if (!oldOrderStatus.getNextPossibleStatuses().contains(newOrderStatus)) {
+            log.warn("Rejected status transition orderId={} from={} to={}",
+                    orderId, oldOrderStatus, newOrderStatus);
             throw new IllegalArgumentException("order = " + orderId + " cannot be changed to " + newOrderStatus);
 
         }
+
+        log.info("Changing order status orderId={} from={} to={}",
+                orderId, oldOrderStatus, newOrderStatus);
 
         order.setOrderStatus(newOrderStatus);
 
@@ -150,6 +164,9 @@ public class OrderManager {
         order.removeItem(item);
         orderRepository.save(order);
 
+        log.info("Removed order item itemId={} orderId={} sku={}",
+                orderItemId, order.getId(), item.getProductSKU());
+
         kafkaProducerService.sendStockStatus("release", orderItemMapper.toDto(item));
     }
 
@@ -160,6 +177,8 @@ public class OrderManager {
         }
 
         orderItemValidator.validate(orderItemDtos);
+
+        log.info("Adding items to order orderId={} count={}", orderID, orderItemDtos.size());
 
         Order order = orderRepository.findByIdAndOrderStatus(orderID, OrderStatus.NEW).orElseThrow(() -> new EntityNotFoundException("Order ID = " + orderID + " not found"));
 
@@ -175,6 +194,8 @@ public class OrderManager {
         }
 
         orderRepository.save(order);
+
+        log.info("Items added to order orderId={} count={}", orderID, orderItemDtos.size());
     }
 
     private void reserveStock(OrderItemDto dto) {
@@ -182,15 +203,21 @@ public class OrderManager {
         inventoryDto.setProductSKU(dto.getProductSKU());
         inventoryDto.setReservedStock(dto.getQuantity());
 
+        log.debug("Reserving stock sku={} quantity={}", dto.getProductSKU(), dto.getQuantity());
+
         restClient.post()
                 .uri("http://inventory-service/v1/inventory/reserve-stock")
                 .body(inventoryDto)
                 .retrieve()
                 .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {
                     // inventory uses 400 for NotEnoughStock; treat 4xx as a domain error
+                    log.warn("Reserve stock rejected by inventory sku={} quantity={} status={}",
+                            dto.getProductSKU(), dto.getQuantity(), res.getStatusCode());
                     throw new NotEnoughStockException(dto.getProductSKU());
                 })
                 .onStatus(HttpStatusCode::is5xxServerError, (req, res) -> {
+                    log.error("inventory-service 5xx for sku={} status={}",
+                            dto.getProductSKU(), res.getStatusCode());
                     throw new IllegalStateException(
                             "inventory-service failed for SKU " + dto.getProductSKU()
                                     + ": " + res.getStatusCode());

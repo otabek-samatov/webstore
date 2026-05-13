@@ -1,6 +1,7 @@
 package orderservice.managers;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import orderservice.dto.OrderItemDto;
 import orderservice.dto.kafka.StockStatusKafka;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+@Slf4j
 @RequiredArgsConstructor
 @Service
 public class KafkaProducerService {
@@ -28,6 +30,10 @@ public class KafkaProducerService {
         StockStatusKafka event = new StockStatusKafka();
         event.addItem(dto);
         event.setActionType(actionType);
+
+        log.info("Publishing stock-status event topic={} actionType={} sku={} quantity={}",
+                stockStatusTopic, actionType, dto.getProductSKU(), dto.getQuantity());
+
         kafkaTemplate.send(stockStatusTopic, "orderItem-" + dto.getProductSKU(), event);
     }
 }
