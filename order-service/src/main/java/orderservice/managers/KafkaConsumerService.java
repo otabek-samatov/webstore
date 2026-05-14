@@ -23,6 +23,11 @@ public class KafkaConsumerService {
         log.info("Received order-status event orderId={} actionType={}",
                 orderStatusKafka.getOrderId(), orderStatusKafka.getActionType());
 
+        if (orderStatusKafka.getOrderId() == null) {
+            log.warn("Ignoring event with null orderId actionType={}", orderStatusKafka.getActionType());
+            return;
+        }
+
         OrderStatus status = null;
         if ("Completed".equalsIgnoreCase(orderStatusKafka.getActionType())) {
             status = OrderStatus.COMPLETED;

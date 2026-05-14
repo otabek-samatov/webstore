@@ -24,7 +24,7 @@ import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
-import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.List;
 
 @Slf4j
@@ -113,19 +113,16 @@ public class OrderManager {
             throw new IllegalArgumentException("newOrderStatus is null");
         }
 
-        Order order = getOrderById(orderId);
-
+        Order order = orderRepository.findByIdForUpdate(orderId).orElseThrow(() -> new EntityNotFoundException("Order ID = " + orderId + " not found"));
         OrderStatus oldOrderStatus = order.getOrderStatus();
-        if (!oldOrderStatus.isAcceptableNextStatus(newOrderStatus)) {
-            log.error("Rejected status transition orderId={} from={} to={}",
-                    orderId, oldOrderStatus, newOrderStatus);
-            throw new IllegalArgumentException("order = " + orderId + " cannot be changed to " + newOrderStatus);
+        if (oldOrderStatus == newOrderStatus) {
+            log.info("Order status unchanged, skipping orderId={} status={}", orderId, oldOrderStatus);
+            return;
         }
 
-        log.info("Changing order status orderId={} from={} to={}",
-                orderId, oldOrderStatus, newOrderStatus);
-
         order.setOrderStatus(newOrderStatus);
+        log.info("Changed order status orderId={} from={} to={}",
+                orderId, oldOrderStatus, newOrderStatus);
 
         String actionType = null;
         if (order.getOrderStatus() == OrderStatus.CANCELLED || order.getOrderStatus() == OrderStatus.REFUNDED) {
@@ -160,18 +157,18 @@ public class OrderManager {
     }
 
     @Transactional
-    public void removeOrderItem(Long orderItemId) {
+    public void removeOrderItem(Long orderId, Long orderItemId) {
+        if (orderId == null) {
+            throw new IllegalArgumentException("orderId is null");
+        }
+
         if (orderItemId == null) {
             throw new IllegalArgumentException("orderItemId is null");
         }
 
-        OrderItem item = orderItemRepository.findById(orderItemId).orElseThrow(() -> new EntityNotFoundException("Order Item ID = " + orderItemId + " not found"));
-        Order order = item.getOrder();
-
-        if (order.getOrderStatus() != OrderStatus.NEW) {
-            throw new IllegalArgumentException(
-                    "Cannot remove items from order " + order.getId() + " in status " + order.getOrderStatus());
-        }
+        OrderItem item = orderItemRepository.findByIdAndOrderId(orderItemId, orderId).orElseThrow(() -> new EntityNotFoundException("Order Item ID = " + orderItemId + " not found"));
+        Order order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new EntityNotFoundException("Order ID = " + orderId + " not found"));
 
         order.removeItem(item);
         orderRepository.save(order);
@@ -183,16 +180,17 @@ public class OrderManager {
     }
 
     @Transactional
-    public void addItemsToOrder(Long orderID, List<OrderItemDto> orderItemDtos) {
-        if (orderID == null) {
-            throw new IllegalArgumentException("orderID is null");
+    public void addItemsToOrder(Long orderId, List<OrderItemDto> orderItemDtos) {
+        if (orderId == null) {
+            throw new IllegalArgumentException("orderId is null");
         }
 
         orderItemValidator.validate(orderItemDtos);
 
-        log.info("Adding items to order orderId={} count={}", orderID, orderItemDtos.size());
+        log.info("Adding items to order orderId={} count={}", orderId, orderItemDtos.size());
 
-        Order order = orderRepository.findByIdAndOrderStatus(orderID, OrderStatus.NEW).orElseThrow(() -> new EntityNotFoundException("Order ID = " + orderID + " not found"));
+        Order order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new EntityNotFoundException("Order ID = " + orderId + " not found"));
 
         for (OrderItemDto orderItemDto : orderItemDtos) {
             OrderItem orderItem = orderItemMapper.toEntity(orderItemDto);
@@ -203,11 +201,11 @@ public class OrderManager {
 
         orderRepository.save(order);
 
-        log.info("Items added to order orderId={} count={}", orderID, orderItemDtos.size());
+        log.info("Items added to order orderId={} count={}", orderId, orderItemDtos.size());
     }
 
     private void reserveStock(List<OrderItemDto> dtos) {
-        List<InventoryDto> invList = new LinkedList<>();
+        List<InventoryDto> invList = new ArrayList<>(dtos.size());
         for (OrderItemDto dto : dtos) {
             InventoryDto inventoryDto = new InventoryDto();
             inventoryDto.setProductSKU(dto.getProductSKU());

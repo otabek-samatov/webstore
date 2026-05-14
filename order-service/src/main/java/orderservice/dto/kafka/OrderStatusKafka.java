@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class OrderStatusKafka {
 
-    private long orderId;
+    private Long orderId;
     private String actionType;
 
 }

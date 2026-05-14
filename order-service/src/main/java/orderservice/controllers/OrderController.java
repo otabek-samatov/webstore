@@ -33,9 +33,9 @@ public class OrderController {
         return ResponseEntity.ok(orderDto);
     }
 
-    @GetMapping("/{orderID}")
-    public ResponseEntity<OrderDto> getByOrderID(@PathVariable Long orderID) {
-        Order order = manager.getOrderById(orderID);
+    @GetMapping("/{orderId}")
+    public ResponseEntity<OrderDto> getByOrderID(@PathVariable Long orderId) {
+        Order order = manager.getOrderById(orderId);
         OrderDto orderDto = orderMapper.toDto(order);
 
         return ResponseEntity.ok(orderDto);
@@ -47,15 +47,15 @@ public class OrderController {
         return ResponseEntity.ok(orderMapper.toDto(orders));
     }
 
-    @PutMapping("/{orderID}/{status}")
-    public ResponseEntity<Void> updateOrderStatus(@PathVariable Long orderID, @PathVariable OrderStatus status) {
-        manager.changeOrderStatus(orderID, status);
+    @PutMapping("/{orderId}/{status}")
+    public ResponseEntity<Void> updateOrderStatus(@PathVariable Long orderId, @PathVariable OrderStatus status) {
+        manager.changeOrderStatus(orderId, status);
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/{orderID}/items")
-    public ResponseEntity<List<OrderItemDto>> getItemsByOrderID(@PathVariable Long orderID) {
-        List<OrderItem> items = manager.getItemsByOrderID(orderID);
+    @GetMapping("/{orderId}/items")
+    public ResponseEntity<List<OrderItemDto>> getItemsByOrderID(@PathVariable Long orderId) {
+        List<OrderItem> items = manager.getItemsByOrderID(orderId);
         return ResponseEntity.ok(itemMapper.toDto(items));
     }
 
@@ -65,15 +65,15 @@ public class OrderController {
         return ResponseEntity.ok(itemMapper.toDto(item));
     }
 
-    @DeleteMapping("/items/{itemID}")
-    public ResponseEntity<Void> removeItem(@PathVariable Long itemID) {
-        manager.removeOrderItem(itemID);
+    @DeleteMapping("/{orderId}/items/{itemID}")
+    public ResponseEntity<Void> removeItem(@PathVariable Long orderId, @PathVariable Long itemID) {
+        manager.removeOrderItem(orderId, itemID);
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping("/{orderID}/items")
-    public ResponseEntity<Void> addItems(@PathVariable Long orderID, @Valid @RequestBody List<OrderItemDto> items) {
-        manager.addItemsToOrder(orderID, items);
+    @PostMapping("/{orderId}/items")
+    public ResponseEntity<Void> addItems(@PathVariable Long orderId, @Valid @RequestBody List<OrderItemDto> items) {
+        manager.addItemsToOrder(orderId, items);
         return ResponseEntity.noContent().build();
     }
 

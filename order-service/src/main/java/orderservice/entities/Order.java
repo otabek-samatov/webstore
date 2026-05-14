@@ -41,6 +41,7 @@ public class Order extends CoreEntity {
     @Embedded
     private Address orderAddress;
 
+    @Setter(AccessLevel.NONE)
     @Enumerated(EnumType.STRING)
     @Column(name = "order_status", nullable = false)
     private OrderStatus orderStatus = OrderStatus.NEW;
@@ -51,11 +52,21 @@ public class Order extends CoreEntity {
     private Set<OrderItem> orderItems = new LinkedHashSet<>();
 
     public void addItem(OrderItem item) {
+        if (orderStatus != OrderStatus.NEW) {
+            throw new IllegalArgumentException(
+                    "Cannot add items to order " + getId() + " in status " + orderStatus);
+        }
+
         orderItems.add(item);
         item.setOrder(this);
     }
 
     public void removeItem(OrderItem item) {
+        if (orderStatus != OrderStatus.NEW) {
+            throw new IllegalArgumentException(
+                    "Cannot remove items from order " + getId() + " in status " + orderStatus);
+        }
+
         orderItems.remove(item);
     }
 
@@ -63,4 +74,15 @@ public class Order extends CoreEntity {
         return Set.copyOf(orderItems);
     }
 
+    public void setOrderStatus(OrderStatus newOrderStatus) {
+        if (this.orderStatus == newOrderStatus) {
+            return;
+        }
+
+        if (!orderStatus.isAcceptableNextStatus(newOrderStatus)) {
+            throw new IllegalArgumentException("order = " + getId() + " cannot be changed to " + newOrderStatus);
+        }
+
+        this.orderStatus = newOrderStatus;
+    }
 }
