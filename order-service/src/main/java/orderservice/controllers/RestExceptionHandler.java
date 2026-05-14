@@ -43,9 +43,4 @@ public class RestExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body("Conflict: " + ex.getMostSpecificCause().getMessage());
     }
 
-    @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<String> handleException(RuntimeException ex) {
-        log.warn("RuntimeException: {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("RuntimeException exception caught: " + ex.getMessage());
-    }
 }

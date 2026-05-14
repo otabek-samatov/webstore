@@ -245,10 +245,14 @@ public class OrderManager {
                 .uri("http://inventory-service/v1/inventory/prices")
                 .body(productList)
                 .retrieve()
-                .onStatus(HttpStatusCode::isError, (req, res) -> {
+                .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {
                     String body = new String(res.getBody().readAllBytes(), StandardCharsets.UTF_8);
-                    log.warn("Cannot retrieve prices status={} body={}", res.getStatusCode(), body);
-                    throw new RuntimeException(body);
+                    log.warn("Price lookup rejected status={} body={}", res.getStatusCode(), body);
+                    throw new IllegalArgumentException("Inventory rejected price request: " + body);
+                })
+                .onStatus(HttpStatusCode::is5xxServerError, (req, res) -> {
+                    log.error("inventory-service 5xx for prices status={}", res.getStatusCode());
+                    throw new IllegalStateException("inventory-service price lookup failed: " + res.getStatusCode());
                 }).body(new ParameterizedTypeReference<>() {
                 });
 
