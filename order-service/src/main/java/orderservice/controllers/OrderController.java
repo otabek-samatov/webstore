@@ -55,12 +55,12 @@ public class OrderController {
 
     @GetMapping("/{orderId}/items")
     public ResponseEntity<List<OrderItemDto>> getItemsByOrderID(@PathVariable Long orderId) {
-        List<OrderItem> items = manager.getItemsByOrderID(orderId);
+        List<OrderItem> items = manager.getItemsByOrderId(orderId);
         return ResponseEntity.ok(itemMapper.toDto(items));
     }
 
-    @GetMapping("/items/{itemID}")
-    public ResponseEntity<OrderItemDto> getItem(@PathVariable Long itemID) {
+    @GetMapping("/{orderId}/items/{itemID}")
+    public ResponseEntity<OrderItemDto> getItem(@PathVariable String orderId, @PathVariable Long itemID) {
         OrderItem item = manager.getOrderItem(itemID);
         return ResponseEntity.ok(itemMapper.toDto(item));
     }

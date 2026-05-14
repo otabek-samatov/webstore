@@ -16,16 +16,21 @@ import orderservice.repositories.OrderItemRepository;
 import orderservice.repositories.OrderRepository;
 import orderservice.validators.BaseValidator;
 import orderservice.validators.OrderItemValidator;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -54,22 +59,14 @@ public class OrderManager {
         baseValidator.validate(orderDto);
         orderItemValidator.validate(orderDto.getOrderItems());
 
+        List<OrderItemDto> orderItems = orderDto.getOrderItems();
+
         Order newOrder = new Order();
         newOrder.setOrderStatus(OrderStatus.NEW);
-
-        List<OrderItemDto> orderItems = orderDto.getOrderItems();
-        for (OrderItemDto orderItemDto : orderItems) {
-            OrderItem orderItem = orderItemMapper.toEntity(orderItemDto);
-            newOrder.addItem(orderItem);
-        }
-
-        reserveStock(orderItems);
-
-        BigDecimal shippingCost = getShippingCost();
-
-        newOrder.setShippingCost(shippingCost);
+        newOrder.setShippingCost(getShippingCost());
         newOrder.setOrderAddress(addressMapper.toEntity(orderDto.getOrderAddress()));
         newOrder.setCustomerId(orderDto.getCustomerId());
+        addItems(newOrder, orderDto.getOrderItems());
 
         orderRepository.save(newOrder);
 
@@ -95,12 +92,12 @@ public class OrderManager {
     }
 
     @Transactional(readOnly = true)
-    public List<Order> getOrderByCustomerId(Long customerID) {
-        if (customerID == null) {
-            throw new IllegalArgumentException("customerID is null");
+    public List<Order> getOrderByCustomerId(Long customerId) {
+        if (customerId == null) {
+            throw new IllegalArgumentException("customerId is null");
         }
 
-        return orderRepository.findByCustomerId(customerID);
+        return orderRepository.findByCustomerId(customerId);
     }
 
     @Transactional
@@ -113,7 +110,7 @@ public class OrderManager {
             throw new IllegalArgumentException("newOrderStatus is null");
         }
 
-        Order order = orderRepository.findByIdForUpdate(orderId).orElseThrow(() -> new EntityNotFoundException("Order ID = " + orderId + " not found"));
+        Order order = orderRepository.findByIdForUpdate(orderId).orElseThrow(() -> new EntityNotFoundException("Order Id = " + orderId + " not found"));
         OrderStatus oldOrderStatus = order.getOrderStatus();
         if (oldOrderStatus == newOrderStatus) {
             log.info("Order status unchanged, skipping orderId={} status={}", orderId, oldOrderStatus);
@@ -139,12 +136,12 @@ public class OrderManager {
     }
 
     @Transactional(readOnly = true)
-    public List<OrderItem> getItemsByOrderID(Long orderID) {
-        if (orderID == null) {
-            throw new IllegalArgumentException("orderID is null");
+    public List<OrderItem> getItemsByOrderId(Long orderId) {
+        if (orderId == null) {
+            throw new IllegalArgumentException("orderId is null");
         }
 
-        return orderItemRepository.findAllByOrderId(orderID);
+        return orderItemRepository.findAllByOrderId(orderId);
     }
 
     @Transactional(readOnly = true)
@@ -153,7 +150,7 @@ public class OrderManager {
             throw new IllegalArgumentException("orderItemId is null");
         }
 
-        return orderItemRepository.findById(orderItemId).orElseThrow(() -> new EntityNotFoundException("Order Item ID = " + orderItemId + " not found"));
+        return orderItemRepository.findById(orderItemId).orElseThrow(() -> new EntityNotFoundException("Order Item Id = " + orderItemId + " not found"));
     }
 
     @Transactional
@@ -166,9 +163,9 @@ public class OrderManager {
             throw new IllegalArgumentException("orderItemId is null");
         }
 
-        OrderItem item = orderItemRepository.findByIdAndOrderId(orderItemId, orderId).orElseThrow(() -> new EntityNotFoundException("Order Item ID = " + orderItemId + " not found"));
+        OrderItem item = orderItemRepository.findByIdAndOrderId(orderItemId, orderId).orElseThrow(() -> new EntityNotFoundException("Order Item Id = " + orderItemId + " not found"));
         Order order = orderRepository.findByIdForUpdate(orderId)
-                .orElseThrow(() -> new EntityNotFoundException("Order ID = " + orderId + " not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Order Id = " + orderId + " not found"));
 
         order.removeItem(item);
         orderRepository.save(order);
@@ -187,21 +184,25 @@ public class OrderManager {
 
         orderItemValidator.validate(orderItemDtos);
 
-        log.info("Adding items to order orderId={} count={}", orderId, orderItemDtos.size());
-
         Order order = orderRepository.findByIdForUpdate(orderId)
-                .orElseThrow(() -> new EntityNotFoundException("Order ID = " + orderId + " not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Order Id = " + orderId + " not found"));
 
-        for (OrderItemDto orderItemDto : orderItemDtos) {
-            OrderItem orderItem = orderItemMapper.toEntity(orderItemDto);
-            order.addItem(orderItem);
-        }
-
-        reserveStock(orderItemDtos);
+        addItems(order, orderItemDtos);
 
         orderRepository.save(order);
 
         log.info("Items added to order orderId={} count={}", orderId, orderItemDtos.size());
+    }
+
+    private void addItems(Order order, List<OrderItemDto> orderItems) {
+        Map<String, BigDecimal> prices = getPrices(orderItems);
+        for (OrderItemDto orderItemDto : orderItems) {
+            OrderItem orderItem = orderItemMapper.toEntity(orderItemDto);
+            orderItem.setUnitPrice(prices.getOrDefault(orderItem.getProductSKU(), BigDecimal.ZERO));
+            order.addItem(orderItem);
+        }
+
+        reserveStock(orderItems);
     }
 
     private void reserveStock(List<OrderItemDto> dtos) {
@@ -227,6 +228,39 @@ public class OrderManager {
                     log.error("inventory-service 5xx for status={}", res.getStatusCode());
                     throw new IllegalStateException("inventory-service failed : " + res.getStatusCode());
                 }).toBodilessEntity();
+    }
+
+    private Map<String, BigDecimal> getPrices(List<OrderItemDto> dtos) {
+        if (CollectionUtils.isEmpty(dtos)) {
+            return Collections.emptyMap();
+        }
+
+        List<String> productList = new ArrayList<>(dtos.size());
+        for (OrderItemDto dto : dtos) {
+            productList.add(dto.getProductSKU());
+            log.debug("Getting prices stock sku={} quantity={}", dto.getProductSKU(), dto.getQuantity());
+        }
+
+        List<InventoryDto> prices = restClient.post()
+                .uri("http://inventory-service/v1/inventory/prices")
+                .body(productList)
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, (req, res) -> {
+                    String body = new String(res.getBody().readAllBytes(), StandardCharsets.UTF_8);
+                    log.warn("Cannot retrieve prices status={} body={}", res.getStatusCode(), body);
+                    throw new RuntimeException(body);
+                }).body(new ParameterizedTypeReference<>() {
+                });
+
+        if (CollectionUtils.isEmpty(prices)) {
+            return Collections.emptyMap();
+        }
+
+        return prices.stream()
+                .collect(Collectors.toMap(
+                        InventoryDto::getProductSKU,
+                        InventoryDto::getSellPrice
+                ));
     }
 
 

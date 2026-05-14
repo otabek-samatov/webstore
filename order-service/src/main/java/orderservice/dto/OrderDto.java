@@ -19,9 +19,6 @@ public class OrderDto implements Serializable {
     @NotNull(message = "Customer ID Should be specified")
     Long customerId;
 
-    @PositiveOrZero(message = "Total Amount cannot be negative")
-    BigDecimal totalAmount;
-
     @PositiveOrZero(message = "Tax Amount cannot be negative")
     BigDecimal taxAmount;
 

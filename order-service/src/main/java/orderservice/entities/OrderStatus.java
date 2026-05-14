@@ -1,7 +1,5 @@
 package orderservice.entities;
 
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 public enum OrderStatus {
@@ -14,11 +12,7 @@ public enum OrderStatus {
     private final List<OrderStatus> nextPossibleStatuses;
 
     OrderStatus(OrderStatus... orderStatuses) {
-        if (orderStatuses == null) {
-            nextPossibleStatuses = new ArrayList<>();
-        } else {
-            nextPossibleStatuses = Arrays.asList(orderStatuses);
-        }
+        this.nextPossibleStatuses = List.of(orderStatuses);
     }
 
     public boolean isAcceptableNextStatus(OrderStatus nextStatus) {

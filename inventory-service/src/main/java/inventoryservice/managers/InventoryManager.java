@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -150,6 +151,14 @@ public class InventoryManager {
         Optional<Inventory> inv = inventoryRepository.findInventoryByProductSKU(productSKU);
 
         return inv.orElseThrow(() -> new EntityNotFoundException("Product with ID = " + productSKU + " not found"));
+    }
+
+    public List<InventoryDto> getPrices(List<String> products) {
+        if (CollectionUtils.isEmpty(products)) {
+            return Collections.emptyList();
+        }
+
+        return inventoryRepository.getInventoryPrices(products);
     }
 
     @Transactional

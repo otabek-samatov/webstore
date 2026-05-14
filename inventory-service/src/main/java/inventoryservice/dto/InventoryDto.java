@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
@@ -12,6 +13,7 @@ import java.math.BigDecimal;
 /**
  * DTO for {@link inventoryservice.entities.Inventory}
  */
+@NoArgsConstructor
 @Data
 public class InventoryDto implements Serializable {
     Long id;
@@ -34,5 +36,10 @@ public class InventoryDto implements Serializable {
     private BigDecimal stockPrice = BigDecimal.ZERO;
 
     @PositiveOrZero(message = "Sell price cannot be negative")
-    private BigDecimal sellPrice =  BigDecimal.ZERO;
+    private BigDecimal sellPrice = BigDecimal.ZERO;
+
+    public InventoryDto(String productSKU, BigDecimal sellPrice) {
+        this.productSKU = productSKU;
+        this.sellPrice = sellPrice;
+    }
 }

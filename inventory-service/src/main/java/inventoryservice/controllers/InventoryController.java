@@ -24,6 +24,11 @@ public class InventoryController {
         return ResponseEntity.ok(inventoryMapper.toDto(inv));
     }
 
+    @PostMapping("/prices")
+    public ResponseEntity<List<InventoryDto>> getPrices(@RequestBody List<String> sku) {
+        return ResponseEntity.ok(manager.getPrices(sku));
+    }
+
     @GetMapping("/available-count/{sku}")
     public ResponseEntity<Long> getAvailableCount(@PathVariable String sku) {
         long c = manager.getAvailableProductCount(sku);
