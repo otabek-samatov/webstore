@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(claude update:*)",
-      "Bash(git -C C:/Projects/webstore status)"
+      "Bash(git -C C:/Projects/webstore status)",
+      "Bash(git -C C:/Projects/webstore diff order-service/)"
     ]
   }
 }

@@ -15,7 +15,7 @@ import java.util.Optional;
 public interface OrderRepository extends JpaRepository<Order, Long> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT o FROM Order o WHERE o.id = :id")
+    @Query("SELECT o FROM Order o join fetch o.orderItems WHERE o.id = :id")
     Optional<Order> findByIdForUpdate(@Param("id") Long id);
 
     List<Order> findByCustomerId(Long userId);
