@@ -16,9 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 @Service
@@ -153,12 +152,21 @@ public class InventoryManager {
         return inv.orElseThrow(() -> new EntityNotFoundException("Product with ID = " + productSKU + " not found"));
     }
 
+    @Transactional(readOnly = true)
     public List<InventoryDto> getPrices(List<String> products) {
         if (CollectionUtils.isEmpty(products)) {
             return Collections.emptyList();
         }
 
-        return inventoryRepository.getInventoryPrices(products);
+        Set<String> productSKUs = new HashSet<>(products);
+        List<InventoryDto> prices = inventoryRepository.getInventoryPrices(productSKUs);
+        if (prices.size() != productSKUs.size()) {
+            Set<String> found = prices.stream().map(InventoryDto::getProductSKU).collect(Collectors.toSet());
+            productSKUs.removeAll(found);
+            throw new EntityNotFoundException("Products not found: " + productSKUs);
+        }
+
+        return prices;
     }
 
     @Transactional

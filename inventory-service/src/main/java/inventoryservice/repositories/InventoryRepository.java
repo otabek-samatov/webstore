@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -22,7 +23,7 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
     Optional<Long> getAvailableStockLevel(String productSKU);
 
     @Query("select new inventoryservice.dto.InventoryDto (p.productSKU, p.sellPrice) from Inventory p where p.productSKU in :productList")
-    List<InventoryDto> getInventoryPrices(List<String> productList);
+    List<InventoryDto> getInventoryPrices(Collection<String> productList);
 
 
 }
