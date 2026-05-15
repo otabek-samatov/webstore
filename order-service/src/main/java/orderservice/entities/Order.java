@@ -16,8 +16,10 @@ import java.util.Set;
 @Getter
 @Setter
 @Entity
-@Table(name = "orders")
-@SequenceGenerator(name = "entity_seq", sequenceName = "orders_seq")
+@Table(name = "orders", indexes = {
+        @Index(name = "idx_order_customer_id", columnList = "customer_id")
+})
+@SequenceGenerator(name = "entity_seq", sequenceName = "orders_seq", allocationSize = 50, initialValue = 1)
 public class Order extends CoreEntity {
 
     @NotNull
@@ -34,7 +36,7 @@ public class Order extends CoreEntity {
     private BigDecimal taxAmount = BigDecimal.ZERO;
 
     @PositiveOrZero(message = "Shipping Cost cannot be negative")
-    @Column(name = "shipping_cost")
+    @Column(name = "shipping_cost", nullable = false)
     private BigDecimal shippingCost = BigDecimal.ZERO;
 
     @NotNull(message = "Address Should be specified")

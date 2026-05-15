@@ -2,11 +2,11 @@ package orderservice.validators;
 
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 import java.util.Set;
 
-@Service
+@Component
 public class BaseValidator {
     protected final Validator validator;
 

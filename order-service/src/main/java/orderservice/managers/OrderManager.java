@@ -145,12 +145,12 @@ public class OrderManager {
     }
 
     @Transactional(readOnly = true)
-    public OrderItem getOrderItem(Long orderItemId) {
-        if (orderItemId == null) {
-            throw new IllegalArgumentException("orderItemId is null");
+    public OrderItem getOrderItem(Long orderId, Long itemId) {
+        if (itemId == null || orderId == null) {
+            throw new IllegalArgumentException("orderId or itemId cannot be null");
         }
 
-        return orderItemRepository.findById(orderItemId).orElseThrow(() -> new EntityNotFoundException("Order Item Id = " + orderItemId + " not found"));
+        return orderItemRepository.findByIdAndOrderId(itemId, orderId).orElseThrow(() -> new EntityNotFoundException("Order Item Id = " + itemId + " not found"));
     }
 
     @Transactional
@@ -195,6 +195,10 @@ public class OrderManager {
     }
 
     private void addItems(Order order, List<OrderItemDto> orderItems) {
+        if (CollectionUtils.isEmpty(orderItems)) {
+            return;
+        }
+
         Map<String, BigDecimal> prices = getPrices(orderItems);
         for (OrderItemDto orderItemDto : orderItems) {
             OrderItem orderItem = orderItemMapper.toEntity(orderItemDto);
@@ -206,6 +210,10 @@ public class OrderManager {
     }
 
     private void reserveStock(List<OrderItemDto> dtos) {
+        if (CollectionUtils.isEmpty(dtos)) {
+            return;
+        }
+
         List<InventoryDto> invList = new ArrayList<>(dtos.size());
         for (OrderItemDto dto : dtos) {
             InventoryDto inventoryDto = new InventoryDto();

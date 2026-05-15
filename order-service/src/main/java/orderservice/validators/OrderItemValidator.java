@@ -2,13 +2,14 @@ package orderservice.validators;
 
 import jakarta.validation.Validator;
 import orderservice.dto.OrderItemDto;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
+import org.springframework.util.CollectionUtils;
 
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 
-@Service
+@Component
 public class OrderItemValidator extends BaseValidator {
 
 
@@ -17,8 +18,8 @@ public class OrderItemValidator extends BaseValidator {
     }
 
     public void validate(Collection<OrderItemDto> dtos) {
-        if (dtos == null) {
-            throw new IllegalArgumentException("dtos cannot be null");
+        if (CollectionUtils.isEmpty(dtos)) {
+            throw new IllegalArgumentException("dtos cannot be empty");
         }
 
         List<String> products = dtos.stream().map(OrderItemDto::getProductSKU).toList();

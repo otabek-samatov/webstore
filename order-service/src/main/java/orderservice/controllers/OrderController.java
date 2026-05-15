@@ -59,9 +59,9 @@ public class OrderController {
         return ResponseEntity.ok(itemMapper.toDto(items));
     }
 
-    @GetMapping("/{orderId}/items/{itemID}")
-    public ResponseEntity<OrderItemDto> getItem(@PathVariable Long orderId, @PathVariable Long itemID) {
-        OrderItem item = manager.getOrderItem(itemID);
+    @GetMapping("/{orderId}/items/{itemId}")
+    public ResponseEntity<OrderItemDto> getItem(@PathVariable Long orderId, @PathVariable Long itemId) {
+        OrderItem item = manager.getOrderItem(orderId, itemId);
         return ResponseEntity.ok(itemMapper.toDto(item));
     }
 

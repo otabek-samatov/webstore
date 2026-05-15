@@ -5,7 +5,7 @@ CREATE SEQUENCE IF NOT EXISTS orders_seq START WITH 1 INCREMENT BY 50;
 CREATE TABLE order_item
 (
     id           BIGINT       NOT NULL,
-    version      INTEGER,
+    version INTEGER NOT NULL,
     product_sku  VARCHAR(255) NOT NULL,
     unit_price   DECIMAL      NOT NULL,
     quantity     BIGINT       NOT NULL,
@@ -17,11 +17,11 @@ CREATE TABLE order_item
 CREATE TABLE orders
 (
     id            BIGINT                      NOT NULL,
-    version       INTEGER,
+    version       INTEGER NOT NULL,
     customer_id   BIGINT                      NOT NULL,
     created_at    TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     tax_amount    DECIMAL                     NOT NULL,
-    shipping_cost DECIMAL,
+    shipping_cost DECIMAL NOT NULL,
     order_status  VARCHAR(255)                NOT NULL,
     country       VARCHAR(255)                NOT NULL,
     region        VARCHAR(255)                NOT NULL,
@@ -34,5 +34,11 @@ CREATE TABLE orders
 ALTER TABLE order_item
     ADD CONSTRAINT uc_orderitem_order_id UNIQUE (order_id, product_sku);
 
+CREATE INDEX idx_order_customer_id ON orders (customer_id);
+
+CREATE INDEX idx_orderitem_product_sku ON order_item (product_sku);
+
 ALTER TABLE order_item
     ADD CONSTRAINT FK_ORDER_ITEM_ON_ORDER FOREIGN KEY (order_id) REFERENCES orders (id);
+
+CREATE INDEX idx_orderitem_order_id ON order_item (order_id);

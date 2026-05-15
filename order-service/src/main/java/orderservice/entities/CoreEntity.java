@@ -10,6 +10,8 @@ import java.util.Objects;
 
 @Getter
 @Setter
+// Subclasses must declare @SequenceGenerator(name = "entity_seq", sequenceName = "<table>_seq",
+// allocationSize = 50, initialValue = 1) at the class level.
 @MappedSuperclass
 public abstract class CoreEntity {
     @Id
@@ -18,7 +20,7 @@ public abstract class CoreEntity {
     private Long id;
 
     @Version
-    @Column(name = "version")
+    @Column(name = "version", nullable = false)
     private Integer version;
 
     @Override
