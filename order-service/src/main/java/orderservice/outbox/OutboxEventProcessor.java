@@ -24,18 +24,10 @@ public class OutboxEventProcessor {
     @Transactional
     public void processEvent(OutboxEvent event) {
 
-        int claimed = repository.claimEvent(event.getId());
-
-        if (claimed == 0) {
-            log.debug("Event {} already claimed by another instance", event.getId());
-            return;
-        }
-
         try {
-            String topic = resolveTopic(event);
 
             CompletableFuture<SendResult<String, String>> future =
-                    kafkaTemplate.send(topic, event.getAggregateId(), event.getPayload());
+                    kafkaTemplate.send(event.getTopicName(), event.getAggregateId(), event.getPayload());
 
             SendResult<String, String> result = future.get();
 
@@ -53,9 +45,5 @@ public class OutboxEventProcessor {
             log.error("Failed to publish event {}: {}", event.getId(), e.getMessage());
             repository.markPendingForRetry(event.getId());
         }
-    }
-
-    private String resolveTopic(OutboxEvent event) {
-        return event.getAggregateType().toLowerCase() + "-events";
     }
 }

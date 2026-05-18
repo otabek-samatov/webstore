@@ -10,6 +10,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
@@ -31,31 +32,21 @@ public class OutboxCleaner {
                 properties.getRetentionDays(), ChronoUnit.DAYS);
 
         int totalDeleted = 0;
-        int deleted;
+        Integer deleted;
 
         do {
             deleted = transactionTemplate.execute(status ->
                     repository.deleteSentBefore(threshold, BATCH_SIZE)
             );
 
-            totalDeleted += deleted;
+            deleted = Optional.ofNullable(deleted).orElse(0);
 
-            if (deleted == BATCH_SIZE) {
-                sleep(100);  // brief pause to let the poller breathe
-            }
+            totalDeleted += deleted;
 
         } while (deleted == BATCH_SIZE);
 
         if (totalDeleted > 0) {
             log.info("Outbox cleanup: deleted {} old events", totalDeleted);
-        }
-    }
-
-    private void sleep(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
         }
     }
 }

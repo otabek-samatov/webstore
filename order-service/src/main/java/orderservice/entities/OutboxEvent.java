@@ -5,6 +5,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -29,6 +30,9 @@ public class OutboxEvent {
     @Column(nullable = false)
     private String eventType;       // e.g. "OrderCreated", "OrderCancelled"
 
+    @Column(nullable = false)
+    private String topicName;
+
     @Column(columnDefinition = "TEXT", nullable = false)
     private String payload;         // JSON payload
 
@@ -36,15 +40,17 @@ public class OutboxEvent {
     @Column(nullable = false)
     private OutboxStatus status = OutboxStatus.PENDING;
 
+    @CreationTimestamp
     @Column(nullable = false)
-    private Instant createdAt = Instant.now();
+    private Instant createdAt;
 
     private Instant processedAt;
 
     public OutboxEvent(String aggregateType, String aggregateId,
-                       String eventType, String payload) {
+                       String eventType, String topicName, String payload) {
         this.aggregateType = aggregateType;
         this.aggregateId = aggregateId;
+        this.topicName = topicName;
         this.eventType = eventType;
         this.payload = payload;
     }

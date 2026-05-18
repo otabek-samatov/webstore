@@ -4,11 +4,15 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import orderservice.dto.OrderItemDto;
 import orderservice.entities.OutboxEvent;
 import orderservice.repositories.OutboxEventRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 /**
  * The public API of the outbox starter.
@@ -24,6 +28,8 @@ public class OutboxPublisher {
 
     private final OutboxEventRepository repository;
     private final ObjectMapper objectMapper;
+    @Value("${topic.stock.status}")
+    private String stockStatusTopic;
 
     /**
      * Records an event in the outbox table.
@@ -32,7 +38,7 @@ public class OutboxPublisher {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void publish(String aggregateType, String aggregateId,
-                        String eventType, Object payload) {
+                        String eventType, String topicName, Object payload) {
 
         String json = serialize(payload);
 
@@ -40,6 +46,7 @@ public class OutboxPublisher {
                 aggregateType,
                 aggregateId,
                 eventType,
+                topicName,
                 json
         );
 
@@ -47,6 +54,26 @@ public class OutboxPublisher {
 
         log.debug("Outbox event recorded: type={}, aggregateId={}",
                 eventType, aggregateId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void publishOrderItemEvent(Long orderId,
+                                      String eventType, List<OrderItemDto> payload) {
+
+        String json = serialize(payload);
+
+        OutboxEvent event = new OutboxEvent(
+                "order-service",
+                String.valueOf(orderId),
+                eventType,
+                stockStatusTopic,
+                json
+        );
+
+        repository.save(event);
+
+        log.debug("Outbox event recorded: type={}, aggregateId={}",
+                eventType, orderId);
     }
 
     private String serialize(Object payload) {

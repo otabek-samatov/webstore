@@ -29,7 +29,7 @@ public class Order extends CoreEntity {
     @Setter(AccessLevel.NONE)
     @CreationTimestamp
     @Column(name = "created_at", nullable = false)
-    private Instant createdAt = Instant.now();
+    private Instant createdAt;
 
     @PositiveOrZero(message = "Tax Amount cannot be negative")
     @Column(name = "tax_amount", nullable = false)

@@ -1,8 +1,10 @@
 package orderservice.repositories;
 
+import jakarta.persistence.LockModeType;
 import orderservice.entities.OutboxEvent;
 import orderservice.entities.OutboxStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -13,16 +15,8 @@ import java.util.UUID;
 
 public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> {
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     List<OutboxEvent> findTop50ByStatusOrderByCreatedAtAsc(OutboxStatus status);
-
-    @Modifying
-    @Query("""
-            UPDATE OutboxEvent e
-               SET e.status = 'PROCESSING'
-             WHERE e.id = :id
-               AND e.status = 'PENDING'
-            """)
-    int claimEvent(@Param("id") UUID id);
 
     @Modifying
     @Query("""
@@ -31,7 +25,7 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
                    e.processedAt = :now
              WHERE e.id = :id
             """)
-    int markSent(@Param("id") UUID id, @Param("now") Instant now);
+    void markSent(@Param("id") UUID id, @Param("now") Instant now);
 
     @Modifying
     @Query("""
@@ -40,7 +34,7 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
              WHERE e.id = :id
                AND e.status IN ('PROCESSING', 'FAILED')
             """)
-    int markPendingForRetry(@Param("id") UUID id);
+    void markPendingForRetry(@Param("id") UUID id);
 
     @Modifying
     @Query("""
@@ -65,6 +59,6 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
                   LIMIT :batchSize
              )
             """, nativeQuery = true)
-    int deleteSentBefore(@Param("threshold") Instant threshold,
+    Integer deleteSentBefore(@Param("threshold") Instant threshold,
                          @Param("batchSize") int batchSize);
 }
