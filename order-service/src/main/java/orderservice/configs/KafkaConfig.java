@@ -36,14 +36,10 @@ public class KafkaConfig {
     @Value("${spring.application.name}")
     private String applicationName;
 
-    @Value("${server.port}")
-    private int serverPort;
-
     @Bean
     public NewTopic stockStatusTopic() {
         return new NewTopic(stockStatusTopic, partitions, replicationFactor);
     }
-
 
     private Map<String, Object> producerConfigs() {
         Map<String, Object> props = new HashMap<>();
@@ -52,23 +48,10 @@ public class KafkaConfig {
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
 
-        // ============================================
-        // IDEMPOTENCE SEMANTICS CONFIGURATION
-        // ============================================
-
-        // Transactional ID - REQUIRED for exactly-once semantics
-        props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationName + "-tx-" + serverPort);
-
-        // Enable idempotent producer
+        // Idempotent producer: dedupes retries within a single producer session.
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
-
-        // All replicas must acknowledge
         props.put(ProducerConfig.ACKS_CONFIG, "all");
-
-        // Retry configuration
         props.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
-
-        // Max in-flight requests
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 5);
 
         return props;
@@ -111,7 +94,6 @@ public class KafkaConfig {
     public ProducerFactory<String, String> stringProducerFactory() {
         Map<String, Object> props = new HashMap<>(producerConfigs());
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.remove(ProducerConfig.TRANSACTIONAL_ID_CONFIG);   // ← outbox is non-tx
         return new DefaultKafkaProducerFactory<>(props);
     }
 
@@ -120,6 +102,4 @@ public class KafkaConfig {
             ProducerFactory<String, String> stringProducerFactory) {
         return new KafkaTemplate<>(stringProducerFactory);
     }
-
-
 }
