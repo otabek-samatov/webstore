@@ -4,13 +4,14 @@
 CREATE TABLE outbox_events
 (
     id             UUID PRIMARY KEY,
+    version    INTEGER                  NOT NULL,
     aggregate_type VARCHAR(255)             NOT NULL,
     aggregate_id   VARCHAR(255)             NOT NULL,
     event_type     VARCHAR(255)             NOT NULL,
-    topic_name VARCHAR(255) NOT NULL,
+    topic_name VARCHAR(255)             NOT NULL,
     payload        TEXT                     NOT NULL,
     status         VARCHAR(20)              NOT NULL DEFAULT 'PENDING',
-    created_at     TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
     processed_at   TIMESTAMP WITH TIME ZONE
 );
 

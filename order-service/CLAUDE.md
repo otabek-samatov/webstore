@@ -156,9 +156,28 @@ Builds a `StockStatusKafka` from `List<OrderItemDto>` (each maps to a `StockLeve
 The service uses Spring Cloud Config for externalized configuration:
 
 - Config Server URI: `http://localhost:8071`
-- `application.yml` only contains bootstrap config (application name + config import)
-- Runtime properties resolved from Config Server include: `bootstrap.servers`, `topic.stock.status`,
-  `topic.order.status`, `num.partitions`, `replication.factor`, datasource, server port, etc.
+- Config source (Git, local clone): **`C:\Projects\webstore-config`**
+    - Shared defaults: `config/application.yml`
+    - Order-service overrides: `config/order-service.yml`
+- `application.yml` (in this service's source tree) only contains bootstrap config
+  (application name + `config.import: optional:configserver:`)
+
+**Order-service defaults pulled from the config repo:**
+
+- `server.port`: **8077** (from `order-service.yml`)
+- `service.schemaName`: **`order_schema`** — injected into the shared datasource URL
+  (`jdbc:postgresql://localhost:5432/webstore?currentSchema=order_schema`)
+- `topic.stock.status`: **`stock-status-event`** (from `application.yml`)
+- `topic.order.status`: **`order-status-event`** (from `application.yml`)
+- `num.partitions`: **12**, `replication.factor`: **3**
+- `bootstrap.servers`: `localhost:9092`
+- Eureka registry: `http://localhost:8070/eureka/`
+
+> Property names in code use the path form (`topic.stock.status`); the topic **value** that actually
+> lands on the wire is `stock-status-event`. The two are easy to confuse when grepping.
+
+To change any of the above, edit the file under `C:\Projects\webstore-config\config\`, commit, and push —
+the Config Server reads from Git, not the local working copy, so an un-pushed change won't take effect.
 
 ### Database Schema
 

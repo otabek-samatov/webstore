@@ -25,7 +25,6 @@ public class OutboxPoller {
 
 
     @Scheduled(fixedDelayString = "${outbox.poll-interval-ms:5000}")
-    @Transactional
     public void poll() {
         List<OutboxEvent> pending = repository
                 .findTop50ByStatusOrderByCreatedAtAsc(OutboxStatus.PENDING);

@@ -59,6 +59,6 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
                   LIMIT :batchSize
              )
             """, nativeQuery = true)
-    Integer deleteSentBefore(@Param("threshold") Instant threshold,
+    int deleteSentBefore(@Param("threshold") Instant threshold,
                          @Param("batchSize") int batchSize);
 }

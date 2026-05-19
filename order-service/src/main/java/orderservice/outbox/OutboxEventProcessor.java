@@ -42,7 +42,7 @@ public class OutboxEventProcessor {
             repository.markSent(event.getId(), Instant.now());
 
         } catch (Exception e) {
-            log.error("Failed to publish event {}: {}", event.getId(), e.getMessage());
+            log.error("Failed to publish event {}: {}", event.getId(), e);
             repository.markPendingForRetry(event.getId());
         }
     }
