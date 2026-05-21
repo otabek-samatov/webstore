@@ -33,7 +33,7 @@ system. Responsibilities include:
 - Order creation, retrieval, and status management
 - Order item management (add / remove items on existing orders)
 - Synchronous price lookup and stock reservation against `inventory-service` (REST)
-- Publishing stock lifecycle events to inventory-service (Kafka)
+- Publishing stock lifecycle events to inventory-service (Kafka, via a **transactional outbox**)
 - Reacting to payment lifecycle events from payment-service (Kafka)
 
 ### Layered Architecture
@@ -48,11 +48,15 @@ Repositories (Spring Data JPA)
 PostgreSQL Database
 ```
 
-Manager layer is split into three `@Service` beans:
+Manager layer:
 
-- `OrderManager` — core order/order-item business logic and persistence
-- `KafkaProducerService` — outbound stock-status events
-- `KafkaConsumerService` — inbound order-status (payment) events
+- `OrderManager` (`@Service`) — core order/order-item business logic and persistence. Writes
+  outbound events to the outbox **in the same DB transaction** as the order mutation, via
+  `OutboxPublisher`.
+- `KafkaConsumerService` (`@Service`) — inbound order-status (payment) events.
+
+Outbox infrastructure (package `orderservice.outbox`) handles outbound publishing
+asynchronously — see the [Outbox Pattern](#outbox-pattern) section.
 
 ### Key Architectural Patterns
 
@@ -86,8 +90,15 @@ Manager layer is split into three `@Service` beans:
 
 - `OrderManager` write methods use `@Transactional`; read methods use `@Transactional(readOnly = true)`
 - `KafkaConsumerService` listener is `@Transactional` (DB transaction)
-- `KafkaProducerService.sendStockStatus` uses `@Transactional("kafkaTransactionManager")` for Kafka-side
-  transactional sends
+- `OutboxPublisher.publish` / `.publishOrderItemEvent` use `@Transactional(propagation = MANDATORY)` —
+  they must run inside the caller's DB transaction so the outbox row and the business change commit
+  atomically. There is no Kafka-side transaction; the Kafka send is performed later by the poller
+  with an **idempotent** (not transactional) producer.
+
+**6. Transactional Outbox (outbound Kafka)**
+
+- Replaces the previous Kafka-transactional producer pattern. See the
+  [Outbox Pattern](#outbox-pattern) section for the full design.
 
 ### Inter-Service Communication
 
@@ -109,24 +120,36 @@ Both calls send/receive `List<InventoryDto>` payloads. `InventoryDto` carries `p
 
 **Asynchronous (Kafka):**
 
-- **Produces:** `StockStatusKafka` events on `${topic.stock.status}` (key: `"order-" + orderId`)
-- **Consumes:** `OrderStatusKafka` events from `${topic.order.status}` (payment-service is the producer)
-- Exactly-once semantics with transactional producer/consumer
+- **Produces:** stock-status events on `${topic.stock.status}` (key: `orderId` as a string).
+  Payload is a JSON-serialized `List<OrderItemDto>` (whatever was passed to
+  `OutboxPublisher.publishOrderItemEvent`). Publishing is **outbox-driven** — see the
+  [Outbox Pattern](#outbox-pattern) section.
+- **Consumes:** `OrderStatusKafka` events from `${topic.order.status}` (payment-service is the producer).
+- **Delivery semantics:** at-least-once on the producer side (consumers must be idempotent). The
+  consumer side uses `read_committed` + manual offset commit inside a DB transaction.
 
 ### Kafka Integration Details
 
 **Producer Configuration (`KafkaConfig`):**
 
-- Transactional ID: `{spring.application.name}-tx-{server.port}` (unique per instance)
-- `enable.idempotence=true`, `acks=all`, `retries=Integer.MAX_VALUE`, `max.in.flight.requests.per.connection=5`
-- Topic `${topic.stock.status}` is auto-created via `NewTopic` bean with `${num.partitions}` /
-  `${replication.factor}` from Config Server
-- Wrapped with a `KafkaTransactionManager` bean
+- **Idempotent**, **non-transactional** producer (`enable.idempotence=true`, `acks=all`,
+  `retries=Integer.MAX_VALUE`, `max.in.flight.requests.per.connection=5`). There is no
+  `transactional.id` and no `KafkaTransactionManager` bean — the transactional outbox replaces
+  Kafka-side transactions.
+- Single `KafkaTemplate<String, String>` (`stringKafkaTemplate`) bean — both the key and the value
+  are strings (the value is the pre-serialized JSON payload column from the outbox row).
+- Topic `${topic.stock.status}` is auto-created via a `NewTopic` bean with `${num.partitions}` /
+  `${replication.factor}` from Config Server.
 
-**Producer Usage (`KafkaProducerService.sendStockStatus`):**
+**Producer Usage (via outbox):**
 
-Builds a `StockStatusKafka` from `List<OrderItemDto>` (each maps to a `StockLevelDto`) and sends to
-`${topic.stock.status}` with key `"order-" + orderId`. Action types in use:
+`OrderManager` does **not** call the `KafkaTemplate` directly. Instead it calls
+`OutboxPublisher.publishOrderItemEvent(orderId, actionType, items)` inside its existing
+`@Transactional` boundary, which inserts a row into `outbox_events`. `OutboxPoller` later picks
+up the row and `OutboxEventProcessor` performs the actual `kafkaTemplate.send(topic, key, payload)`.
+
+Action types in use (the `eventType` column of the outbox row, also the `actionType` semantically
+consumed by inventory-service):
 
 - `"release"` — emitted on `CANCELLED` / `REFUNDED` status, and on item removal via `removeOrderItem`
 - `"commit"` — emitted on `COMPLETED` status
@@ -147,9 +170,98 @@ Builds a `StockStatusKafka` from `List<OrderItemDto>` (each maps to a `StockLeve
 
 **Multi-Instance Deployment:**
 
-- Each instance MUST run on a different port (e.g., 8080, 8081, 8082)
-- This ensures unique Kafka transactional IDs per instance
-- Without unique ports, producer fencing will occur
+- Multiple instances are safe to run concurrently. The previous "unique port for unique
+  transactional ID" requirement no longer applies — there is no Kafka transactional ID.
+- The outbox handles cross-instance coordination at the **row level** via
+  `OutboxEventRepository.claimEvent` (atomic `UPDATE ... WHERE id = ? AND status = 'PENDING'`).
+  Only one instance wins the claim; the others see `claimed = false` and skip the row.
+
+### Outbox Pattern
+
+The order-service publishes outbound Kafka events via a **transactional outbox** (package
+`orderservice.outbox`). The pattern guarantees that an event is recorded **iff** the business
+DB change commits, eliminating the dual-write inconsistency window between "DB committed"
+and "Kafka send acknowledged".
+
+**Components:**
+
+| Class                   | Role                                                                                                                                                                                                                                                                           |
+|-------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `OutboxEvent`           | JPA entity for the `outbox_events` row (UUID id, `@Version`, status, payload, etc.)                                                                                                                                                                                            |
+| `OutboxStatus`          | Enum: `PENDING`, `PROCESSING`, `SENT`, `FAILED`                                                                                                                                                                                                                                |
+| `OutboxEventRepository` | JPA repo with `claimEvent`, `markSent`, `markPendingForRetry`, `recoverStuckEvents`, `deleteSentBefore`                                                                                                                                                                        |
+| `OutboxPublisher`       | Write-side API. `@Transactional(MANDATORY)` — must be called inside an existing DB tx. Serializes payload to JSON and inserts an `OutboxEvent` row.                                                                                                                            |
+| `OutboxPoller`          | `@Scheduled` job: every `outbox.poll-interval-ms` (default 5 s) loads up to 50 oldest PENDING events and hands each to `OutboxEventProcessor`. Also runs `recoverStuckEvents` every `outbox.recovery-interval-ms` (default 60 s).                                              |
+| `OutboxEventProcessor`  | Per-event flow: claim (PENDING → PROCESSING), Kafka send (blocking `future.get()`), then `markSent`. On exception → `markPendingForRetry`. **No method-level `@Transactional`** — each repo method runs in its own short tx so the row lock is released before the Kafka send. |
+| `OutboxCleaner`         | `@Scheduled(cron = ${outbox.cleanup-cron})` (default `0 0 3 * * *` = 3 AM daily). Deletes SENT events older than `outbox.retention-days` (default 3) in batches of 1000 via a native `DELETE ... WHERE id IN (SELECT ... LIMIT ...)` query.                                    |
+| `OutboxProperties`      | `@ConfigurationProperties("outbox")` — see [Outbox configuration](#outbox-configuration) below.                                                                                                                                                                                |
+
+`@EnableScheduling` and `@EnableConfigurationProperties(OutboxProperties.class)` are declared
+on `OrderServiceApplication`.
+
+**End-to-end flow (status-change example):**
+
+1. `OrderManager.changeOrderStatus` runs in a `@Transactional` boundary.
+2. It mutates `Order`, then calls `outboxPublisher.publishOrderItemEvent(orderId, actionType, items)`.
+3. `OutboxPublisher` (propagation `MANDATORY`) inserts an `outbox_events` row in the **same** tx.
+4. The tx commits — the order change and the outbox row are durably linked.
+5. Within seconds, `OutboxPoller` picks up the PENDING row.
+6. `OutboxEventProcessor.processEvent` claims the row (atomic conditional UPDATE), sends via
+   `KafkaTemplate`, then marks it SENT.
+7. If the send fails, `markPendingForRetry` flips it back to PENDING for the next poll cycle.
+8. If the processor crashes mid-send (row stuck in PROCESSING), `recoverStuckEvents` resets
+   rows whose `createdAt` is older than `outbox.stuck-threshold-minutes` (default 5).
+
+**Outbox row schema (column → field):**
+
+- `id` UUID — `OutboxEvent.id` (`GenerationType.UUID`)
+- `version` INT — `@Version`
+- `aggregate_type` — currently `"order-service"` for stock-status events (note: this is the
+  service name; the generic `publish(...)` API expects an aggregate name like `"Order"`)
+- `aggregate_id` — the order id as a string; also used as the Kafka message key
+- `event_type` — `"release"` or `"commit"` for stock events
+- `topic_name` — captured at publish time (currently `${topic.stock.status}`)
+- `payload` TEXT — Jackson-serialized JSON of the input object
+- `status` — `PENDING` / `PROCESSING` / `SENT` / `FAILED`
+- `created_at` (`@CreationTimestamp`), `processed_at` (set when marked SENT)
+
+**Indexes** (partial, filtered on status — see `V2__create_outbox_table.sql`):
+
+- `idx_outbox_status_created (status, created_at) WHERE status = 'PENDING'` — poller query
+- `idx_outbox_processing (status, created_at) WHERE status = 'PROCESSING'` — recovery query
+
+**Delivery semantics & idempotency:**
+
+- **At-least-once**, not exactly-once. The Kafka producer is `enable.idempotence=true` (dedupes
+  retries within a single producer session) but the outbox pattern itself can cause duplicates
+  in two cases:
+    1. Processor sends successfully but crashes before `markSent` commits → next poll re-claims
+       and re-sends.
+    2. A slow send takes longer than `stuck-threshold-minutes` → recovery resets the row to
+       PENDING and another instance re-sends while the first send is still in flight.
+- **Downstream consumers (inventory-service) MUST be idempotent.** Use `aggregate_id`
+  (= orderId) plus `event_type` as the idempotency key, or fold idempotency into the
+  business operation (e.g., set-based stock reservation).
+
+**Multi-instance coordination:**
+
+- `claimEvent` is the linearization point: `UPDATE outbox_events SET status='PROCESSING'
+  WHERE id = ? AND status = 'PENDING'`. Exactly one instance gets `rowcount = 1`; others
+  get 0 and skip.
+
+<a id="outbox-configuration"></a>**Configuration (`outbox.*`):**
+
+| Property                         | Default       | Purpose                                                      |
+|----------------------------------|---------------|--------------------------------------------------------------|
+| `outbox.poll-interval-ms`        | `5000`        | `@Scheduled(fixedDelay)` between poll runs                   |
+| `outbox.recovery-interval-ms`    | `60000`       | `@Scheduled(fixedDelay)` between stuck-event recovery runs   |
+| `outbox.stuck-threshold-minutes` | `5`           | Age (from `created_at`) at which PROCESSING events are reset |
+| `outbox.retention-days`          | `3`           | How long SENT events are kept before cleanup deletes them    |
+| `outbox.cleanup-cron`            | `0 0 3 * * *` | Cron for `OutboxCleaner.cleanup`                             |
+
+None of these properties are currently set in `webstore-config` — defaults from
+`OutboxProperties` are used. To override, add them under `outbox:` in
+`C:\Projects\webstore-config\config\order-service.yml` and commit/push.
 
 ### Configuration Management
 
@@ -188,16 +300,23 @@ the Config Server reads from Git, not the local working copy, so an un-pushed ch
 - `order_item` — line items with FK to `orders(id)` and unique constraint
   `uc_orderitem_order_id (order_id, product_sku)`; columns: `product_sku`, `unit_price`, `quantity`,
   `product_name`, `version`
+- `outbox_events` — transactional outbox rows. Columns: `id UUID PK`, `version`, `aggregate_type`,
+  `aggregate_id`, `event_type`, `topic_name`, `payload TEXT`, `status` (`PENDING` /
+  `PROCESSING` / `SENT` / `FAILED`, default `'PENDING'`), `created_at`, `processed_at`. Two
+  partial indexes: `idx_outbox_status_created` filtered on `status='PENDING'` (poller query),
+  `idx_outbox_processing` filtered on `status='PROCESSING'` (recovery query).
 
 **Sequences:**
 
 - `orders_seq` (start 1, increment 50)
 - `order_item_seq` (start 1, increment 50)
+- (outbox uses `GenerationType.UUID`, not a DB sequence)
 
 **Flyway Migrations:**
 
 - Located in `src/main/resources/db/migration/`
-- Initial schema: `V1__init_tables.sql`
+- `V1__init_tables.sql` — initial `orders` / `order_item` schema
+- `V2__create_outbox_table.sql` — `outbox_events` table and partial indexes
 
 ### Order Lifecycle & Status Flow
 
@@ -215,14 +334,16 @@ NEW ──► COMPLETED ──► REFUNDED
 
 **Status-change side effects (in `OrderManager.changeOrderStatus`):**
 
-| New status  | Kafka stock-status event |
-|-------------|--------------------------|
-| `CANCELLED` | `"release"`              |
-| `REFUNDED`  | `"release"`              |
-| `COMPLETED` | `"commit"`               |
-| `NEW`       | none                     |
+| New status  | Outbox event (`event_type`) → eventually published on `${topic.stock.status}` |
+|-------------|-------------------------------------------------------------------------------|
+| `CANCELLED` | `"release"`                                                                   |
+| `REFUNDED`  | `"release"`                                                                   |
+| `COMPLETED` | `"commit"`                                                                    |
+| `NEW`       | none                                                                          |
 
-If the new status equals the current status, the method is a no-op (no DB write, no Kafka event).
+The outbox row and the order update commit atomically. The Kafka send happens asynchronously
+via `OutboxPoller` / `OutboxEventProcessor`. If the new status equals the current status, the
+method is a no-op (no DB write, no outbox row).
 
 ### Business Logic Notes
 
@@ -248,11 +369,12 @@ If the new status equals the current status, the method is a no-op (no DB write,
 
 1. Null-check both arguments
 2. Load order with `findByIdForUpdate` (pessimistic write lock); throw `EntityNotFoundException` if absent
-3. If new status == old status, log and return (no save, no event)
+3. If new status == old status, log and return (no save, no outbox row)
 4. Call `order.setOrderStatus(newOrderStatus)` — entity validates the transition
 5. Determine action type: `CANCELLED`/`REFUNDED` → `"release"`, `COMPLETED` → `"commit"`
-6. If action type was assigned, call `kafkaProducerService.sendStockStatus(...)`
-7. `orderRepository.save(order)`
+6. If action type was assigned, call `outboxPublisher.publishOrderItemEvent(orderId, actionType,
+   orderItemMapper.toDto(order.getItems()))` — inserts an outbox row in the **same** transaction
+7. `orderRepository.save(order)` — the outbox row and order update commit together
 
 **`OrderManager.addItemsToOrder(orderId, List<OrderItemDto>)`**
 
@@ -270,7 +392,8 @@ If the new status equals the current status, the method is a no-op (no DB write,
 3. Load `Order` via `findByIdForUpdate` (404 if not found)
 4. `order.removeItem(item)` — enforces `orderStatus == NEW`
 5. `orderRepository.save(order)` — orphan removal deletes the item row
-6. Publish `"release"` stock-status event for the removed item
+6. `outboxPublisher.publishOrderItemEvent(orderId, "release", List.of(itemDto))` — inserts a
+   `"release"` outbox row for the removed item, in the **same** transaction
 
 **Read methods (`@Transactional(readOnly = true)`):**
 
@@ -309,13 +432,27 @@ triggering Bean Validation before reaching `OrderManager`.
 
 ### Important Implementation Details
 
-**When adding new Kafka event types:**
+**When adding new outbound (produced) Kafka event types:**
 
-1. Create DTO in `orderservice.dto.kafka` package
-2. Add a consumer factory + container factory in `KafkaConfig` (if consuming) or extend producer wiring
-3. Use `@Transactional` on consumer methods; use `@Transactional("kafkaTransactionManager")` on producer
-   methods that need to participate in a Kafka transaction
-4. Add null/validation checks in handlers (see `KafkaConsumerService` for the pattern)
+1. Create the payload DTO in `orderservice.dto.kafka` (or reuse an existing DTO — it's just
+   what gets JSON-serialized into the `payload` column).
+2. From inside a `@Transactional` business method on a manager, call
+   `outboxPublisher.publish(aggregateType, aggregateId, eventType, topicName, payload)`. Do
+   **not** call `KafkaTemplate` directly — that re-opens the dual-write window the outbox
+   exists to close.
+3. If the new event has its own topic, add a `NewTopic` bean in `KafkaConfig` so it is
+   auto-created on startup.
+4. Make sure the consumer side is idempotent (see "Delivery semantics & idempotency" in the
+   [Outbox Pattern](#outbox-pattern) section).
+
+**When adding new inbound (consumed) Kafka event types:**
+
+1. Create the DTO in `orderservice.dto.kafka`.
+2. Add a `ConsumerFactory` + `ConcurrentKafkaListenerContainerFactory` bean in `KafkaConfig`.
+3. Add a `@KafkaListener`-annotated method on a `@Service`, annotated `@Transactional` (DB tx);
+   the existing `RECORD` ack mode + `enable.auto.commit=false` will commit offsets inside the tx.
+4. Validate input (null checks, unknown `actionType` etc. — follow `KafkaConsumerService` for
+   the pattern).
 
 **When modifying entities:**
 
@@ -344,11 +481,17 @@ triggering Bean Validation before reaching `OrderManager`.
 
 Current test coverage is minimal (only context-load test exists). When adding tests:
 
-- Unit tests should mock `OrderRepository`, `OrderItemRepository`, `RestClient`, and the Kafka services
-- Integration tests should use `@SpringBootTest` with Testcontainers for PostgreSQL and Kafka
-- Use `@Transactional` on test methods for automatic rollback
+- Unit tests should mock `OrderRepository`, `OrderItemRepository`, `RestClient`, `OutboxPublisher`,
+  and (for the processor) `OutboxEventRepository` + `KafkaTemplate`.
+- Integration tests should use `@SpringBootTest` with Testcontainers for PostgreSQL and Kafka.
+- Use `@Transactional` on test methods for automatic rollback.
 - Pay particular attention to: state-machine transitions in `OrderStatus`, duplicate-SKU rejection,
-  pessimistic-lock contention paths, and 4xx/5xx fan-out from the inventory-service REST calls
+  pessimistic-lock contention paths, 4xx/5xx fan-out from the inventory-service REST calls, and
+  the **outbox happy path + failure modes** (claim race between two instances, send failure →
+  `markPendingForRetry`, stuck-event recovery, cleanup of SENT rows).
+- `OutboxPublisher.publish` uses `Propagation.MANDATORY`; tests calling it directly must wrap
+  the call in `TransactionTemplate` / `@Transactional` or it will throw
+  `IllegalTransactionStateException`.
 
 ### Dependencies to Be Aware Of
 
@@ -356,7 +499,10 @@ Current test coverage is minimal (only context-load test exists). When adding te
 - **Lombok** — annotation processor required for IDE compilation
 - **Flyway 10.20.0** — runs migrations on startup
 - **Spring Cloud (2024.0.1 / 2025.0.0)** — Eureka client, Config client, LoadBalancer
-- **Spring Kafka** — producer/consumer + transactional support
+- **Spring Kafka** — idempotent producer + consumer (no Kafka transactions; outbox replaces them)
+- **Spring `@Scheduled`** — drives `OutboxPoller`, recovery, and `OutboxCleaner`
+  (enabled by `@EnableScheduling` on `OrderServiceApplication`)
+- **Jackson `ObjectMapper`** — serializes outbox payloads to JSON
 - **PostgreSQL JDBC** — runtime dependency
 - **Bean Validation (Jakarta)** — DTO and entity constraints
 
