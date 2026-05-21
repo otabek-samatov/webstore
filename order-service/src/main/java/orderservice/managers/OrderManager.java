@@ -12,6 +12,7 @@ import orderservice.entities.OrderStatus;
 import orderservice.exceptions.NotEnoughStockException;
 import orderservice.mappers.AddressMapper;
 import orderservice.mappers.OrderItemMapper;
+import orderservice.outbox.OutboxPublisher;
 import orderservice.repositories.OrderItemRepository;
 import orderservice.repositories.OrderRepository;
 import orderservice.validators.BaseValidator;
@@ -39,12 +40,12 @@ public class OrderManager {
 
     private final OrderItemMapper orderItemMapper;
     private final OrderRepository orderRepository;
-    private final KafkaProducerService kafkaProducerService;
     private final OrderItemValidator orderItemValidator;
     private final BaseValidator baseValidator;
     private final AddressMapper addressMapper;
     private final RestClient restClient;
     private final OrderItemRepository orderItemRepository;
+    private final OutboxPublisher outboxPublisher;
 
     @Transactional
     public Order createOrder(CreateOrderDto orderDto) {
@@ -129,7 +130,7 @@ public class OrderManager {
         }
 
         if (StringUtils.hasText(actionType)) {
-            kafkaProducerService.sendStockStatus(actionType, orderId, orderItemMapper.toDto(order.getItems()));
+            outboxPublisher.publishOrderItemEvent(orderId, actionType, orderItemMapper.toDto(order.getItems()));
         }
 
         orderRepository.save(order);
@@ -173,7 +174,8 @@ public class OrderManager {
         log.info("Removed order item itemId={} orderId={} sku={}",
                 orderItemId, order.getId(), item.getProductSKU());
 
-        kafkaProducerService.sendStockStatus("release", order.getId(), List.of(orderItemMapper.toDto(item)));
+        outboxPublisher.publishOrderItemEvent(orderId, "release", List.of(orderItemMapper.toDto(item)));
+
     }
 
     @Transactional

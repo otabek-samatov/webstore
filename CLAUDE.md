@@ -58,17 +58,20 @@ This is a Gradle-based multi-module project using Gradle 8.10.2.
 
 The system consists of 9 microservices defined in `settings.gradle`:
 
-| Service               | Port | Purpose                                            | Database   |
-|-----------------------|------|----------------------------------------------------|------------|
-| **config-service**    | 8071 | Centralized configuration via Spring Cloud Config  | N/A        |
-| **discovery-service** | 8761 | Service registry using Netflix Eureka              | N/A        |
-| **gateway-service**   | 8080 | API Gateway using Spring Cloud Gateway MVC         | N/A        |
-| **product-service**   | 808x | Book catalog with authors, publishers, categories  | PostgreSQL |
-| **inventory-service** | 808x | Stock level management and reservation tracking    | PostgreSQL |
-| **user-service**      | 808x | User registration, authentication, profiles, roles | PostgreSQL |
-| **cart-service**      | 808x | Shopping cart logic per user                       | PostgreSQL |
-| **order-service**     | 808x | Order placement and tracking                       | PostgreSQL |
-| **payment-service**   | 808x | Payment processing and refunds                     | PostgreSQL |
+| Service               | Port | Purpose                                                                                                             | Database                        |
+|-----------------------|------|---------------------------------------------------------------------------------------------------------------------|---------------------------------|
+| **discovery-service** | 8070 | Service registry using Netflix Eureka + Spring Boot Admin (`/admin`). Spring `application.name`: `discovery-server` | N/A                             |
+| **config-service**    | 8071 | Centralized configuration via Spring Cloud Config                                                                   | N/A                             |
+| **gateway-service**   | 8072 | API Gateway using Spring Cloud Gateway MVC                                                                          | N/A                             |
+| **product-service**   | 8073 | Book catalog with authors, publishers, categories                                                                   | PostgreSQL (`product_schema`)   |
+| **inventory-service** | 8074 | Stock level management and reservation tracking                                                                     | PostgreSQL (`inventory_schema`) |
+| **user-service**      | 8075 | User registration, authentication, profiles, roles                                                                  | PostgreSQL (`user_schema`)      |
+| **cart-service**      | 8076 | Shopping cart logic per user                                                                                        | PostgreSQL (`cart_schema`)      |
+| **order-service**     | 8077 | Order placement and tracking                                                                                        | PostgreSQL (`order_schema`)     |
+| **payment-service**   | 8078 | Payment processing and refunds                                                                                      | PostgreSQL (`payment_schema`)   |
+
+> Ports and schema names above are the **defaults** from `webstore-config/config/<service>.yml`. Multi-instance
+> deployments override `server.port` per instance (required for unique Kafka transactional IDs — see Kafka section).
 
 **Service-Specific Documentation:** Each service has its own `CLAUDE.md` file in its directory with detailed
 implementation guidance.
@@ -78,14 +81,14 @@ implementation guidance.
 Services must be started in this order for proper operation:
 
 1. **config-service** (8071) - Required by all other services for configuration
-2. **discovery-service** (8761) - Required for service discovery
+2. **discovery-service** (8070) - Required for service discovery (Eureka)
 3. **Infrastructure Services:**
     - PostgreSQL (5432)
-    - Kafka Broker
+   - Kafka Broker (9092)
 4. **Business Services** (any order):
-    - product-service, inventory-service, user-service
-    - cart-service, order-service, payment-service
-5. **gateway-service** (8080) - API Gateway (routes to other services)
+    - product-service (8073), inventory-service (8074), user-service (8075)
+    - cart-service (8076), order-service (8077), payment-service (8078)
+5. **gateway-service** (8072) - API Gateway (routes to other services)
 
 ## System Architecture
 
@@ -132,10 +135,68 @@ Services must be started in this order for proper operation:
 **Spring Cloud Config Server (port 8071):**
 
 - Git-backed configuration: https://github.com/otabek-samatov/webstore-config
+- Local clone (authoritative source for all runtime properties): **`C:\Projects\webstore-config`**
 - All services fetch configuration from Config Server on startup
 - Database connections, Kafka topics, and service-specific properties externalized
 
-**Application Properties Pattern:**
+**`webstore-config` repository layout:**
+
+```
+webstore-config/
+└── config/
+    ├── application.yml          # shared defaults applied to every service
+    ├── discovery-service.yml    # per-service overrides (one file per service)
+    ├── gateway-service.yml
+    ├── product-service.yml
+    ├── inventory-service.yml
+    ├── user-service.yml
+    ├── cart-service.yml
+    ├── order-service.yml
+    └── payment-service.yml
+```
+
+Spring Cloud Config matches each service's `spring.application.name` to the corresponding `<name>.yml` file
+and merges it on top of `application.yml`. To change runtime config (Kafka topic names, partition count,
+DB credentials, ports, gateway routes, etc.), edit a file under `C:\Projects\webstore-config\config\` and
+commit; the Config Server serves the latest commit from the configured Git remote.
+
+**What lives in `application.yml` (shared by all services):**
+
+- **Eureka client:** `defaultZone: http://localhost:8070/eureka/`, `preferIpAddress: true`
+- **Actuator:** `management.endpoints.web.exposure.include: "*"`
+- **Datasource:** `jdbc:postgresql://localhost:5432/webstore?currentSchema=${service.schemaName}`,
+  user `user` / password `password`, driver `org.postgresql.Driver`
+- **JPA/Hibernate:** `ddl-auto: validate` (Flyway is authoritative for schema), `show-sql: true`,
+  PostgreSQL dialect
+- **Kafka:** `bootstrap.servers: localhost:9092`, `num.partitions: 12`, `replication.factor: 3`
+- **Kafka topics:** `topic.stock.status: stock-status-event`, `topic.order.status: order-status-event`
+
+> Note: the Kafka topic names in the running config are `stock-status-event` / `order-status-event`,
+> not `stock-status-topic` / `order-status-topic`. Older references to the `*-topic` names elsewhere in
+> docs are stale.
+
+**What lives in each `<service>.yml`:**
+
+- `server.port` — fixed default for the service (see Service Inventory table above)
+- `service.schemaName` — PostgreSQL schema injected into the shared datasource URL
+- Service-specific overrides (e.g., `gateway-service.yml` defines `spring.cloud.gateway.routes`;
+  `discovery-service.yml` overrides Eureka to act as the server with `registerWithEureka: false` /
+  `fetchRegistry: false`)
+
+**Gateway routes (defined in `gateway-service.yml`):**
+
+| External path   | Routed to (Eureka name)  |
+|-----------------|--------------------------|
+| `/cart/**`      | `lb://cart-service`      |
+| `/inventory/**` | `lb://inventory-service` |
+| `/order/**`     | `lb://order-service`     |
+| `/payment/**`   | `lb://payment-service`   |
+| `/product/**`   | `lb://product-service`   |
+| `/user/**`      | `lb://user-service`      |
+
+Each route strips its prefix via `RewritePath=/<prefix>/(?<path>.*), /$\{path}` before forwarding.
+
+**Application Properties Pattern (per service, in source tree):**
 
 - Each service has `application.yml` with minimal bootstrap config:
   ```yaml
@@ -148,6 +209,14 @@ Services must be started in this order for proper operation:
       config:
         uri: http://localhost:8071
   ```
+- Everything else (DB, Kafka, port, schema, etc.) is resolved from the Config Server at startup —
+  do **not** duplicate those values into the service's source-tree `application.yml`.
+
+**Editing config: workflow**
+
+1. Edit the relevant file in `C:\Projects\webstore-config\config\`.
+2. Commit and push to the Git remote — Config Server reads from Git, not the local working copy.
+3. Restart the affected service(s) or hit `/actuator/refresh` on a service with `@RefreshScope` beans.
 
 ### Database Architecture
 

@@ -1,7 +1,6 @@
 package orderservice.configs;
 
 import orderservice.dto.kafka.OrderStatusKafka;
-import orderservice.dto.kafka.StockStatusKafka;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -15,7 +14,6 @@ import org.springframework.kafka.core.*;
 import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
-import org.springframework.kafka.transaction.KafkaTransactionManager;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -38,60 +36,25 @@ public class KafkaConfig {
     @Value("${spring.application.name}")
     private String applicationName;
 
-    @Value("${server.port}")
-    private int serverPort;
-
     @Bean
     public NewTopic stockStatusTopic() {
         return new NewTopic(stockStatusTopic, partitions, replicationFactor);
     }
 
-    @Bean
-    public Map<String, Object> producerConfigs() {
+    private Map<String, Object> producerConfigs() {
         Map<String, Object> props = new HashMap<>();
 
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
 
-        // ============================================
-        // EXACTLY-ONCE SEMANTICS CONFIGURATION
-        // ============================================
-
-        // Transactional ID - REQUIRED for exactly-once semantics
-        props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationName + "-tx-" + serverPort);
-
-        // Enable idempotent producer
+        // Idempotent producer: dedupes retries within a single producer session.
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
-
-        // All replicas must acknowledge
         props.put(ProducerConfig.ACKS_CONFIG, "all");
-
-        // Retry configuration
         props.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
-
-        // Max in-flight requests
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 5);
 
         return props;
-    }
-
-    @Bean
-    public ProducerFactory<String, StockStatusKafka> producerFactory() {
-        DefaultKafkaProducerFactory<String, StockStatusKafka> factory =
-                new DefaultKafkaProducerFactory<>(producerConfigs());
-        return factory;
-    }
-
-    @Bean
-    public KafkaTemplate<String, StockStatusKafka> kafkaTemplate() {
-        return new KafkaTemplate<>(producerFactory());
-    }
-
-    @Bean
-    public KafkaTransactionManager<String, StockStatusKafka> kafkaTransactionManager(
-            ProducerFactory<String, StockStatusKafka> producerFactory) {
-        return new KafkaTransactionManager<>(producerFactory);
     }
 
     private Map<String, Object> consumerConfigs() {
@@ -125,5 +88,18 @@ public class KafkaConfig {
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.RECORD);
 
         return factory;
+    }
+
+    @Bean
+    public ProducerFactory<String, String> stringProducerFactory() {
+        Map<String, Object> props = new HashMap<>(producerConfigs());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        return new DefaultKafkaProducerFactory<>(props);
+    }
+
+    @Bean
+    public KafkaTemplate<String, String> stringKafkaTemplate(
+            ProducerFactory<String, String> stringProducerFactory) {
+        return new KafkaTemplate<>(stringProducerFactory);
     }
 }

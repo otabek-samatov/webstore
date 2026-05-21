@@ -10,7 +10,9 @@
       "Bash(git -C /c/Projects/webstore log --oneline --all)",
       "Bash(wc:*)",
       "Bash(git -C /c/Projects/webstore diff --name-only HEAD~5..HEAD)",
-      "Bash(git -C /c/Projects/webstore status --short)"
+      "Bash(git -C /c/Projects/webstore status --short)",
+      "Bash(ls C:/Projects/webstore)",
+      "Bash(ls C:/Projects/webstore-config)"
     ],
     "deny": [],
     "ask": []
