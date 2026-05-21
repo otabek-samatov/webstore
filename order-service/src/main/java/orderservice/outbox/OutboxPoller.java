@@ -2,10 +2,6 @@ package orderservice.outbox;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import orderservice.configs.OutboxProperties;
-import orderservice.entities.OutboxEvent;
-import orderservice.entities.OutboxStatus;
-import orderservice.repositories.OutboxEventRepository;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;

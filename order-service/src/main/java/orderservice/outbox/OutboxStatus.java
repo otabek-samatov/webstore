@@ -1,4 +1,4 @@
-package orderservice.entities;
+package orderservice.outbox;
 
 public enum OutboxStatus {
     PENDING,

@@ -1,4 +1,4 @@
-package orderservice.configs;
+package orderservice.outbox;
 
 import lombok.Getter;
 import lombok.Setter;

@@ -1,4 +1,4 @@
-package orderservice.entities;
+package orderservice.outbox;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;
