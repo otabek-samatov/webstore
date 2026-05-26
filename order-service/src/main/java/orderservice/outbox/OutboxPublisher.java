@@ -61,7 +61,7 @@ public class OutboxPublisher {
         String json = serialize(payload);
 
         OutboxEvent event = new OutboxEvent(
-                "order-service",
+                "Order",
                 String.valueOf(orderId),
                 eventType,
                 stockStatusTopic,

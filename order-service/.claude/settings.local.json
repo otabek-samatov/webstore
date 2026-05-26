@@ -12,7 +12,11 @@
       "Bash(git -C /c/Projects/webstore diff --name-only HEAD~5..HEAD)",
       "Bash(git -C /c/Projects/webstore status --short)",
       "Bash(ls C:/Projects/webstore)",
-      "Bash(ls C:/Projects/webstore-config)"
+      "Bash(ls C:/Projects/webstore-config)",
+      "Read(//c/Projects/webstore/**)",
+      "Bash(./gradlew :order-service:compileJava -q)",
+      "Bash(../gradlew :order-service:compileJava -q)",
+      "Bash(../gradlew compileJava -q)"
     ],
     "deny": [],
     "ask": []
