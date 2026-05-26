@@ -34,7 +34,8 @@ system. Responsibilities include:
 - Order item management (add / remove items on existing orders)
 - Synchronous price lookup and stock reservation against `inventory-service` (REST)
 - Publishing stock lifecycle events to inventory-service (Kafka, via a **transactional outbox**)
-- Reacting to payment lifecycle events from payment-service (Kafka)
+- Reacting to payment lifecycle events from payment-service (Kafka, deduped via a
+  **transactional inbox**)
 
 ### Layered Architecture
 
@@ -53,10 +54,14 @@ Manager layer:
 - `OrderManager` (`@Service`) — core order/order-item business logic and persistence. Writes
   outbound events to the outbox **in the same DB transaction** as the order mutation, via
   `OutboxPublisher`.
-- `KafkaConsumerService` (`@Service`) — inbound order-status (payment) events.
+- `KafkaConsumerService` (`@Service`) — inbound order-status (payment) events. Every
+  handled event is funneled through `InboxProcessor.processOnce` for structural
+  exactly-once processing.
 
 Outbox infrastructure (package `orderservice.outbox`) handles outbound publishing
-asynchronously — see the [Outbox Pattern](#outbox-pattern) section.
+asynchronously — see the [Outbox Pattern](#outbox-pattern) section. Inbox
+infrastructure (package `orderservice.inbox`) handles consumer-side dedup — see
+the [Inbox Pattern](#inbox-pattern) section.
 
 ### Key Architectural Patterns
 
@@ -94,11 +99,21 @@ asynchronously — see the [Outbox Pattern](#outbox-pattern) section.
   they must run inside the caller's DB transaction so the outbox row and the business change commit
   atomically. There is no Kafka-side transaction; the Kafka send is performed later by the poller
   with an **idempotent** (not transactional) producer.
+- `InboxProcessor.processOnce` / `.recordIfNew` use `@Transactional(propagation = MANDATORY)` —
+  the inbox row, the handler's side effects, and any outbox rows it writes must all commit in
+  the listener's single DB transaction.
 
 **6. Transactional Outbox (outbound Kafka)**
 
 - Replaces the previous Kafka-transactional producer pattern. See the
   [Outbox Pattern](#outbox-pattern) section for the full design.
+
+**7. Transactional Inbox (inbound Kafka)**
+
+- Consumer-side dedupe by stable `messageId`. Pairs with the outbox to give the
+  order ↔ payment ↔ inventory choreography saga end-to-end exactly-once semantics
+  on top of at-least-once Kafka delivery. See the [Inbox Pattern](#inbox-pattern)
+  section for the full design.
 
 ### Inter-Service Communication
 
@@ -125,8 +140,11 @@ Both calls send/receive `List<InventoryDto>` payloads. `InventoryDto` carries `p
   `OutboxPublisher.publishOrderItemEvent`). Publishing is **outbox-driven** — see the
   [Outbox Pattern](#outbox-pattern) section.
 - **Consumes:** `OrderStatusKafka` events from `${topic.order.status}` (payment-service is the producer).
-- **Delivery semantics:** at-least-once on the producer side (consumers must be idempotent). The
-  consumer side uses `read_committed` + manual offset commit inside a DB transaction.
+  Every event is funneled through `InboxProcessor.processOnce` (see the
+  [Inbox Pattern](#inbox-pattern) section), so duplicate redeliveries become a structural no-op.
+- **Delivery semantics:** at-least-once on the producer side. The consumer side uses
+  `read_committed` + manual offset commit inside a DB transaction, *and* the inbox guarantees
+  the handler runs at most once per `messageId`.
 
 ### Kafka Integration Details
 
@@ -163,10 +181,27 @@ consumed by inventory-service):
 
 **Consumer Behavior (`KafkaConsumerService.handleOrderStatusUpdate`):**
 
+- Listener signature is `(ConsumerRecord<String, OrderStatusKafka> record, @Header("X-Message-Id",
+  required=false) String messageIdHeader)` — Kafka metadata is exposed so it can be stored on
+  the inbox row.
 - Ignores events with `null` orderId (logs warn, returns)
-- Maps `actionType`: `"Completed"` → `OrderStatus.COMPLETED`, `"Refunded"` → `OrderStatus.REFUNDED`
-- Any other `actionType` is logged and ignored
-- Delegates to `OrderManager.changeOrderStatus`
+- Maps `actionType`: `"Completed"` → `OrderStatus.COMPLETED`, `"Refunded"` → `OrderStatus.REFUNDED`.
+  Any other `actionType` is logged and ignored.
+- Computes an idempotency key: prefers the `X-Message-Id` header (via `StringUtils.hasText`);
+  otherwise falls back to the stable business key `order-status:{orderId}:{actionType}`.
+  **Never** uses `topic-partition-offset` — producer retries can land the same logical event at
+  a different offset, which would defeat dedup.
+- Builds an `InboxMessage` via `InboxProcessor.fromKafkaRecord(...)` and wraps the business call
+  in `inboxProcessor.processOnce(msg, () -> orderManager.changeOrderStatus(...))`. If
+  `processOnce` returns `false`, the event is a duplicate — the handler is skipped and the
+  listener returns normally so the Kafka offset still commits.
+- The inbox-row insert, the order mutation, and any outbox rows written downstream all commit
+  in the listener's single `@Transactional` boundary.
+
+> **Note on early returns:** the null-orderId and unknown-actionType branches return *before*
+> `processOnce`, so nothing is recorded for those cases. A redelivery of an unknown event will
+> re-enter the handler and re-log; harmless today, but worth knowing if log volume becomes an
+> issue.
 
 **Multi-Instance Deployment:**
 
@@ -263,6 +298,115 @@ None of these properties are currently set in `webstore-config` — defaults fro
 `OutboxProperties` are used. To override, add them under `outbox:` in
 `C:\Projects\webstore-config\config\order-service.yml` and commit/push.
 
+### Inbox Pattern
+
+The order-service deduplicates inbound Kafka events via a **transactional inbox** (package
+`orderservice.inbox`). It is the consumer-side counterpart of the outbox: the listener inserts
+a row keyed by a stable `messageId` in the same DB transaction as its business side-effects,
+so redelivered Kafka messages (producer retry, consumer crash before offset commit, outbox
+re-send on the producer's side) become a structural no-op.
+
+Together, the outbox + inbox + `read_committed` consumer give the order ↔ payment ↔ inventory
+**choreography saga** end-to-end exactly-once semantics on top of at-least-once Kafka delivery.
+
+**Components:**
+
+| Class                    | Role                                                                                                                                                                                                                                                                                                                                     |
+|--------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `InboxMessage`           | JPA entity for the `inbox_messages` row. `messageId` (String) is the PK — the unique constraint *is* the dedup mechanism. Stores Kafka coordinates (topic / partition / offset) and the JSON payload alongside `aggregateType` / `aggregateId` / `eventType` / `status`.                                                                 |
+| `InboxStatus`            | Enum: `RECEIVED`, `PROCESSED`, `FAILED`                                                                                                                                                                                                                                                                                                  |
+| `InboxMessageRepository` | JPA repo. Key methods: `existsByMessageId` (fast-path dedup check), `markProcessed`, `markFailed`, `deleteProcessedBefore` (native batched cleanup).                                                                                                                                                                                     |
+| `InboxProcessor`         | Public API. `@Transactional(MANDATORY)` — must be called inside the listener's DB tx. Two entry points: `processOnce(message, Runnable)` (record → run handler → mark PROCESSED) and the lower-level `recordIfNew(message)` returning a boolean. Also exposes `fromKafkaRecord(...)` to build an `InboxMessage` from a `ConsumerRecord`. |
+| `InboxCleaner`           | `@Scheduled(cron = ${inbox.cleanup-cron})` (default `0 30 3 * * *` — 3:30 AM daily, staggered after the outbox cleanup at 3:00 AM). Deletes PROCESSED messages older than `inbox.retention-days` (default 7) in batches of 1000 via a native `DELETE ... WHERE message_id IN (SELECT ... LIMIT ...)` query.                              |
+| `InboxProperties`        | `@ConfigurationProperties("inbox")` — see [Inbox configuration](#inbox-configuration) below.                                                                                                                                                                                                                                             |
+
+`@EnableConfigurationProperties` on `OrderServiceApplication` registers both
+`OutboxProperties.class` and `InboxProperties.class`.
+
+**End-to-end flow (inbound order-status example):**
+
+1. `KafkaConsumerService.handleOrderStatusUpdate` is invoked with a `ConsumerRecord` and an
+   optional `X-Message-Id` header. The method is `@Transactional`.
+2. Null/unknown-actionType guards short-circuit before any DB work.
+3. The handler computes an idempotency key (header first, business-key fallback) and builds
+   an `InboxMessage` via `InboxProcessor.fromKafkaRecord(...)`.
+4. `inboxProcessor.processOnce(msg, () -> orderManager.changeOrderStatus(...))`:
+    - calls `recordIfNew(msg)` — `existsByMessageId` short-circuits known duplicates;
+      otherwise `repository.save(msg)` inserts a row with `status = RECEIVED`. A
+      concurrent insert race surfaces as `DataIntegrityViolationException`, which is
+      caught and treated as "duplicate".
+    - if new, runs the handler (which mutates the `Order` and writes an outbox row);
+    - then `markProcessed(messageId, now)` flips the row to PROCESSED.
+5. The listener's `@Transactional` boundary commits **everything** atomically: inbox row,
+   order mutation, outbox row.
+6. The Kafka offset is committed after the DB tx (RECORD ack mode + `enable.auto.commit=false`).
+7. On a redelivery, `recordIfNew` returns `false`, the handler is skipped, the offset still
+   commits — the duplicate is silently absorbed.
+
+**Inbox row schema (column → field):**
+
+- `message_id` VARCHAR(255) PK — `InboxMessage.messageId` (the idempotency key)
+- `version` INT — `@Version`
+- `aggregate_type` — `"Order"` for order-status events
+- `aggregate_id` — the order id as a string (nullable for events without one)
+- `event_type` — the inbound `actionType` (e.g. `"Completed"`, `"Refunded"`)
+- `topic_name`, `partition_no`, `kafka_offset` — Kafka coordinates at receive time
+  (informational; **not** used for dedup)
+- `payload` TEXT — Jackson-serialized JSON of the event
+- `status` — `RECEIVED` (default) / `PROCESSED` / `FAILED`
+- `received_at` (`@CreationTimestamp`), `processed_at` (set when marked PROCESSED)
+
+**Indexes** (see `V3__create_inbox_table.sql`):
+
+- `idx_inbox_status_processed_at (status, processed_at) WHERE status = 'PROCESSED'` —
+  supports the cleanup query
+- `idx_inbox_topic_aggregate (topic_name, aggregate_id)` — supports debugging /
+  reconciliation lookups
+
+**Idempotency key strategy (`KafkaConsumerService.idempotencyKey`):**
+
+1. **Prefer** the producer-supplied `X-Message-Id` Kafka header (checked via
+   `StringUtils.hasText`). Producers (e.g. payment-service) should stamp this with a
+   stable value such as their outbox row's UUID.
+2. **Fall back** to a stable business key: `order-status:{orderId}:{actionType}`.
+3. **Never** use `topic-partition-offset` — a producer retry can land the same logical
+   event at a different offset, which would defeat dedup.
+
+> ⚠️ The business-key fallback is one-shot per `(orderId, actionType)` pair. That's correct
+> today because the `OrderStatus` state machine accepts each transition only once. If
+> payment-service later emits events that can legitimately repeat for the same pair (e.g.
+> partial refunds), the fallback would collide and drop real events — at that point the
+> `X-Message-Id` header must be made mandatory.
+
+**Delivery semantics & guarantees:**
+
+- The inbox makes the **business effect** structurally exactly-once. Even if Kafka redelivers
+  the same record, `existsByMessageId` short-circuits the handler.
+- The PK uniqueness on `message_id` is the linearization point across multiple consumer
+  instances. Only one transaction can insert a given `message_id`; concurrent inserts
+  surface as `DataIntegrityViolationException` and are caught as "race lost → duplicate".
+- The `RECEIVED` → `PROCESSED` transition is purely informational (the row exists either way);
+  it's useful for observability and for the cleaner to know which rows are safe to delete.
+
+**Multi-instance coordination:**
+
+- The unique PK on `message_id` does all the work. No `claimEvent`-style update is needed
+  because there is no async polling — the handler runs inline in the Kafka listener thread.
+- Combined with consumer-group partition assignment, the typical case is a single instance
+  handling each message; the inbox still protects against the rebalance edge case where two
+  instances briefly believe they own the same partition.
+
+<a id="inbox-configuration"></a>**Configuration (`inbox.*`):**
+
+| Property               | Default        | Purpose                                                                                                                                                     |
+|------------------------|----------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `inbox.retention-days` | `7`            | How long PROCESSED messages are kept before cleanup deletes them. Should outlast the producer's outbox retention so late redeliveries are still recognized. |
+| `inbox.cleanup-cron`   | `0 30 3 * * *` | Cron for `InboxCleaner.cleanup` (3:30 AM, staggered after outbox cleanup at 3:00 AM)                                                                        |
+
+Neither property is currently set in `webstore-config` — defaults from `InboxProperties` are
+used. To override, add them under `inbox:` in
+`C:\Projects\webstore-config\config\order-service.yml` and commit/push.
+
 ### Configuration Management
 
 The service uses Spring Cloud Config for externalized configuration:
@@ -305,18 +449,27 @@ the Config Server reads from Git, not the local working copy, so an un-pushed ch
   `PROCESSING` / `SENT` / `FAILED`, default `'PENDING'`), `created_at`, `processed_at`. Two
   partial indexes: `idx_outbox_status_created` filtered on `status='PENDING'` (poller query),
   `idx_outbox_processing` filtered on `status='PROCESSING'` (recovery query).
+- `inbox_messages` — transactional inbox rows. Columns: `message_id VARCHAR(255) PK`,
+  `version`, `aggregate_type`, `aggregate_id` (nullable), `event_type`, `topic_name`,
+  `partition_no`, `kafka_offset`, `payload TEXT`, `status` (`RECEIVED` / `PROCESSED` /
+  `FAILED`, default `'RECEIVED'`), `received_at`, `processed_at`. One partial index
+  `idx_inbox_status_processed_at` filtered on `status='PROCESSED'` (cleanup query) plus a
+  secondary `idx_inbox_topic_aggregate (topic_name, aggregate_id)` for debugging lookups.
 
 **Sequences:**
 
 - `orders_seq` (start 1, increment 50)
 - `order_item_seq` (start 1, increment 50)
 - (outbox uses `GenerationType.UUID`, not a DB sequence)
+- (inbox uses the producer-supplied `messageId` String as its PK; no DB sequence)
 
 **Flyway Migrations:**
 
 - Located in `src/main/resources/db/migration/`
 - `V1__init_tables.sql` — initial `orders` / `order_item` schema
 - `V2__create_outbox_table.sql` — `outbox_events` table and partial indexes
+- `V3__create_inbox_table.sql` — `inbox_messages` table with partial cleanup index and
+  topic/aggregate lookup index
 
 ### Order Lifecycle & Status Flow
 
@@ -453,6 +606,17 @@ triggering Bean Validation before reaching `OrderManager`.
    the existing `RECORD` ack mode + `enable.auto.commit=false` will commit offsets inside the tx.
 4. Validate input (null checks, unknown `actionType` etc. — follow `KafkaConsumerService` for
    the pattern).
+5. **Funnel the event through `InboxProcessor.processOnce`** for dedup:
+    - Take `ConsumerRecord<K, V>` (not just the payload) and a
+      `@Header(name = "X-Message-Id", required = false) String messageIdHeader` argument.
+    - Build the `InboxMessage` via `inboxProcessor.fromKafkaRecord(messageId, aggregateType,
+      aggregateId, eventType, record, payload)`.
+    - Wrap the business call in `inboxProcessor.processOnce(msg, () -> ...handler...)`.
+    - Compute `messageId` as: header value (via `StringUtils.hasText`) → otherwise a stable
+      business key. **Never** use `topic-partition-offset`.
+6. Make sure the upstream producer stamps the `X-Message-Id` header. If it can't (yet),
+   ensure your business-key fallback can never collide with a legitimate second event for
+   the same key.
 
 **When modifying entities:**
 
@@ -482,16 +646,21 @@ triggering Bean Validation before reaching `OrderManager`.
 Current test coverage is minimal (only context-load test exists). When adding tests:
 
 - Unit tests should mock `OrderRepository`, `OrderItemRepository`, `RestClient`, `OutboxPublisher`,
-  and (for the processor) `OutboxEventRepository` + `KafkaTemplate`.
+  `InboxProcessor`, and (for the lower-level paths) `OutboxEventRepository` /
+  `InboxMessageRepository` + `KafkaTemplate`.
 - Integration tests should use `@SpringBootTest` with Testcontainers for PostgreSQL and Kafka.
 - Use `@Transactional` on test methods for automatic rollback.
 - Pay particular attention to: state-machine transitions in `OrderStatus`, duplicate-SKU rejection,
-  pessimistic-lock contention paths, 4xx/5xx fan-out from the inventory-service REST calls, and
+  pessimistic-lock contention paths, 4xx/5xx fan-out from the inventory-service REST calls,
   the **outbox happy path + failure modes** (claim race between two instances, send failure →
-  `markPendingForRetry`, stuck-event recovery, cleanup of SENT rows).
-- `OutboxPublisher.publish` uses `Propagation.MANDATORY`; tests calling it directly must wrap
-  the call in `TransactionTemplate` / `@Transactional` or it will throw
-  `IllegalTransactionStateException`.
+  `markPendingForRetry`, stuck-event recovery, cleanup of SENT rows), and the
+  **inbox happy path + failure modes** (first-time message → handler runs and row marked
+  PROCESSED, redelivered message → handler skipped, concurrent insert race → one wins via
+  `DataIntegrityViolationException`, header-present vs business-key fallback paths, cleanup of
+  PROCESSED rows).
+- `OutboxPublisher.publish` and `InboxProcessor.processOnce` / `.recordIfNew` use
+  `Propagation.MANDATORY`; tests calling them directly must wrap the call in
+  `TransactionTemplate` / `@Transactional` or they will throw `IllegalTransactionStateException`.
 
 ### Dependencies to Be Aware Of
 
@@ -500,9 +669,9 @@ Current test coverage is minimal (only context-load test exists). When adding te
 - **Flyway 10.20.0** — runs migrations on startup
 - **Spring Cloud (2024.0.1 / 2025.0.0)** — Eureka client, Config client, LoadBalancer
 - **Spring Kafka** — idempotent producer + consumer (no Kafka transactions; outbox replaces them)
-- **Spring `@Scheduled`** — drives `OutboxPoller`, recovery, and `OutboxCleaner`
-  (enabled by `@EnableScheduling` on `OrderServiceApplication`)
-- **Jackson `ObjectMapper`** — serializes outbox payloads to JSON
+- **Spring `@Scheduled`** — drives `OutboxPoller`, recovery, `OutboxCleaner`, and
+  `InboxCleaner` (enabled by `@EnableScheduling` on `OrderServiceApplication`)
+- **Jackson `ObjectMapper`** — serializes outbox **and inbox** payloads to JSON
 - **PostgreSQL JDBC** — runtime dependency
 - **Bean Validation (Jakarta)** — DTO and entity constraints
 
