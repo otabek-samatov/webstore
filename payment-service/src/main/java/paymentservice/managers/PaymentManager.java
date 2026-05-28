@@ -58,7 +58,14 @@ public class PaymentManager {
             throw new IllegalArgumentException("payment has already been correctly processed !");
         }
 
-        Payment payment = paymentMapper.toEntity(paymentDto);
+        // Reuse the existing payment row for this order if one exists (a previous
+        // FAILED attempt), so a retry UPDATES it in place rather than INSERTing a
+        // duplicate — order_id is unique. A new order inserts a fresh row.
+        Payment payment = paymentRepository.findPaymentByOrderId(paymentDto.getOrderId())
+                .orElseGet(() -> paymentMapper.toEntity(paymentDto));
+        payment.setUserId(paymentDto.getUserId());
+        payment.setAmount(paymentDto.getAmount());
+
         boolean success = paymentProcess.processPayment(payment);
         if (success) {
             payment.setPaymentStatus(PaymentStatus.COMPLETED);

@@ -53,6 +53,12 @@ public class OrderController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/{orderId}/retry-payment")
+    public ResponseEntity<OrderDto> retryPayment(@PathVariable Long orderId) {
+        Order order = manager.retryPayment(orderId);
+        return ResponseEntity.ok(orderMapper.toDto(order));
+    }
+
     @GetMapping("/{orderId}/items")
     public ResponseEntity<List<OrderItemDto>> getItemsByOrderID(@PathVariable Long orderId) {
         List<OrderItem> items = manager.getItemsByOrderId(orderId);
