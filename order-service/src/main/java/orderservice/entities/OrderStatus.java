@@ -7,7 +7,8 @@ public enum OrderStatus {
     REFUNDED,
     CANCELLED,
     COMPLETED(REFUNDED),
-    NEW(COMPLETED, CANCELLED);
+    PAYMENT_FAILED(COMPLETED, CANCELLED),
+    NEW(COMPLETED, CANCELLED, PAYMENT_FAILED);
 
     private final List<OrderStatus> nextPossibleStatuses;
 

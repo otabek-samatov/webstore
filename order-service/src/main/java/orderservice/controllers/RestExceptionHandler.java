@@ -3,6 +3,7 @@ package orderservice.controllers;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import orderservice.exceptions.NotEnoughStockException;
+import orderservice.exceptions.PaymentFailedException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -35,6 +36,12 @@ public class RestExceptionHandler {
     public ResponseEntity<String> handleException(NotEnoughStockException ex) {
         log.warn("NotEnoughStockException: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Not Enough Stock level exception caught: " + ex.getMessage());
+    }
+
+    @ExceptionHandler(PaymentFailedException.class)
+    public ResponseEntity<String> handleException(PaymentFailedException ex) {
+        log.warn("PaymentFailedException: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED).body("Payment failed exception caught: " + ex.getMessage());
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

@@ -97,8 +97,10 @@ All payment and refund processing methods in `PaymentManager` are marked `@Trans
 - `processPayment()`: Validates, processes payment, saves payment, attempts order status update
 - `processRefund()`: Validates, processes refund, updates payment status, saves both entities
 
-**Critical Issue**: `updateOrderStatus()` currently throws `UnsupportedOperationException`, causing all transactions to
-rollback. This needs implementation to communicate with Order Service.
+**Order-status notification**: `updateOrderStatus()` publishes an `OrderStatusKafka` event
+(`KafkaService.sendOrderStatus(paymentStatus.name(), orderId)`) that order-service consumes to
+drive its order state machine. (Earlier revisions threw `UnsupportedOperationException` here — that
+is no longer the case.)
 
 **Hibernate DDL Configuration**: The service uses `spring.jpa.hibernate.ddl-auto = validate`, which means Hibernate only
 validates the schema matches entities but does not create or modify database objects. All schema changes must be managed
@@ -155,12 +157,18 @@ To run locally, ensure Config Server is running at `http://localhost:8071` with 
 2. `PaymentController` validates DTO (`@Valid`)
 3. `PaymentManager.processPayment()`:
     - Validates business rules (non-null IDs, non-null non-negative amount)
-    - Checks for duplicate payment using `getCountByOrderAndStatus()` (prevents double-payment)
-    - Maps DTO to entity using `paymentMapper.toEntity()`
+   - Guards against re-charging an already-paid order via `getCountByOrderAndStatus(orderId,
+      COMPLETED)` — throws if a COMPLETED payment exists
+   - **Re-attempt aware:** looks up an existing payment for the order via
+     `findPaymentByOrderId()`. If found (a previous **FAILED** attempt) it **updates that row**
+     in place; otherwise it maps a fresh entity via `paymentMapper.toEntity()`. This keeps the
+     unique `order_id` constraint (one payment row per order) while allowing order-service's
+     payment-retry flow to re-charge a `PAYMENT_FAILED` order without a duplicate-key violation.
     - Calls `PaymentProcess.processPayment()` (mock or real gateway)
     - Sets status based on result (COMPLETED or FAILED)
-    - Saves to database
-    - Attempts `updateOrderStatus()` (currently throws exception)
+   - Saves to database (INSERT for a new order, UPDATE for a re-attempt)
+   - `updateOrderStatus()` publishes an `OrderStatusKafka` event (status name + orderId) that
+     order-service consumes
 4. Returns `PaymentDto` with payment ID and status
 
 **Payment Mock Proxy**: `PaymentMockProxy` simulates payment gateway with 99% success rate for testing.
@@ -238,8 +246,10 @@ Mappers are automatically injected as Spring beans via `componentModel = Mapping
 
 ## Known Issues and Technical Debt
 
-1. **Critical**: `PaymentManager.updateOrderStatus()` throws `UnsupportedOperationException` - needs inter-service
-   communication implementation to notify Order Service of payment/refund status changes
+1. `processPayment()` re-attempt support relies on `findPaymentByOrderId()` + optimistic locking
+   (`@Version`). Concurrent re-attempts for the same order are resolved by the optimistic lock (the
+   loser fails) rather than a pessimistic lock — acceptable for the current retry flow, but worth
+   noting if higher concurrency is expected.
 
 ## Development Workflow
 

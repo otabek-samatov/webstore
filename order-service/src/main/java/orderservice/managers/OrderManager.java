@@ -3,6 +3,7 @@ package orderservice.managers;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import orderservice.client.PaymentClient;
 import orderservice.dto.CreateOrderDto;
 import orderservice.dto.InventoryDto;
 import orderservice.dto.OrderItemDto;
@@ -10,12 +11,11 @@ import orderservice.entities.Order;
 import orderservice.entities.OrderItem;
 import orderservice.entities.OrderStatus;
 import orderservice.exceptions.NotEnoughStockException;
-import orderservice.mappers.AddressMapper;
 import orderservice.mappers.OrderItemMapper;
 import orderservice.outbox.OutboxPublisher;
 import orderservice.repositories.OrderItemRepository;
 import orderservice.repositories.OrderRepository;
-import orderservice.validators.BaseValidator;
+import orderservice.saga.createorder.CreateOrderSaga;
 import orderservice.validators.OrderItemValidator;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatusCode;
@@ -41,44 +41,46 @@ public class OrderManager {
     private final OrderItemMapper orderItemMapper;
     private final OrderRepository orderRepository;
     private final OrderItemValidator orderItemValidator;
-    private final BaseValidator baseValidator;
-    private final AddressMapper addressMapper;
     private final RestClient restClient;
     private final OrderItemRepository orderItemRepository;
     private final OutboxPublisher outboxPublisher;
+    private final CreateOrderSaga createOrderSaga;
+    private final PaymentClient paymentClient;
 
-    @Transactional
     public Order createOrder(CreateOrderDto orderDto) {
-        if (orderDto == null) {
-            throw new IllegalArgumentException("orderDto is null");
-        }
-
-        log.info("Creating order customerId={} itemCount={}",
-                orderDto.getCustomerId(),
-                orderDto.getOrderItems() == null ? 0 : orderDto.getOrderItems().size());
-
-        baseValidator.validate(orderDto);
-        orderItemValidator.validate(orderDto.getOrderItems());
-
-        List<OrderItemDto> orderItems = orderDto.getOrderItems();
-
-        Order newOrder = new Order();
-        newOrder.setOrderStatus(OrderStatus.NEW);
-        newOrder.setShippingCost(getShippingCost());
-        newOrder.setOrderAddress(addressMapper.toEntity(orderDto.getOrderAddress()));
-        newOrder.setCustomerId(orderDto.getCustomerId());
-        addItems(newOrder, orderDto.getOrderItems());
-
-        orderRepository.save(newOrder);
-
-        log.info("Order created orderId={} customerId={} itemCount={}",
-                newOrder.getId(), newOrder.getCustomerId(), orderItems.size());
-
-        return newOrder;
+        return createOrderSaga.execute(orderDto);
     }
 
-    private BigDecimal getShippingCost() {
-        return BigDecimal.valueOf(100);
+    /**
+     * Re-attempts payment for an order left in {@link OrderStatus#PAYMENT_FAILED}
+     * by a declined payment during creation. The reserved stock is still held, so
+     * no re-reservation is needed — this only re-charges the customer.
+     * <p>
+     * On a successful charge the order transition to {@code COMPLETED} happens
+     * <strong>asynchronously</strong>: payment-service publishes an
+     * {@code OrderStatusKafka} event that {@code KafkaConsumerService} turns into
+     * {@code PAYMENT_FAILED → COMPLETED}. The returned order therefore still reads
+     * {@code PAYMENT_FAILED} until that event is processed. A repeated decline
+     * leaves the order {@code PAYMENT_FAILED} so the customer can try again (or
+     * cancel via {@code changeOrderStatus}).
+     */
+    public Order retryPayment(Long orderId) {
+        if (orderId == null) {
+            throw new IllegalArgumentException("orderId is null");
+        }
+
+        Order order = orderRepository.findByIdWithItems(orderId)
+                .orElseThrow(() -> new EntityNotFoundException("Order Id = " + orderId + " not found"));
+
+        if (order.getOrderStatus() != OrderStatus.PAYMENT_FAILED) {
+            throw new IllegalArgumentException(
+                    "Order " + orderId + " is not awaiting payment retry (status=" + order.getOrderStatus() + ")");
+        }
+
+        paymentClient.charge(order);
+
+        log.info("Payment retry submitted orderId={} (COMPLETED transition is driven async via Kafka)", orderId);
+        return order;
     }
 
     @Transactional(readOnly = true)

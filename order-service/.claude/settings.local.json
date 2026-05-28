@@ -16,7 +16,14 @@
       "Read(//c/Projects/webstore/**)",
       "Bash(./gradlew :order-service:compileJava -q)",
       "Bash(../gradlew :order-service:compileJava -q)",
-      "Bash(../gradlew compileJava -q)"
+      "Bash(../gradlew compileJava -q)",
+      "Bash(./gradlew :order-service:compileJava -x test --no-daemon)",
+      "Bash(./gradlew :order-service:test --no-daemon)",
+      "Bash(./gradlew :order-service:compileJava --no-daemon)",
+      "Bash(./gradlew :order-service:clean :order-service:compileJava --no-daemon)",
+      "Bash(./gradlew :order-service:compileJava :payment-service:compileJava --no-daemon)",
+      "Bash(./gradlew :order-service:clean :order-service:compileJava :payment-service:clean :payment-service:compileJava --no-daemon)",
+      "Bash(grep -n \"orderservice.saga\\\\`\\) for the reaper\\\\|PaymentFailedReaper.*orderservice.saga\\\\|package \\\\`orderservice.saga\\\\`\" \"C:/Projects/webstore/order-service/CLAUDE.md\")"
     ],
     "deny": [],
     "ask": []
