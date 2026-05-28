@@ -273,9 +273,12 @@ on `OrderServiceApplication`.
 
 - `id` UUID — `OutboxEvent.id` (`GenerationType.UUID`)
 - `version` INT — `@Version`
-- `aggregate_type` — currently `"order-service"` for stock-status events (note: this is the
-  service name; the generic `publish(...)` API expects an aggregate name like `"Order"`)
-- `aggregate_id` — the order id as a string; also used as the Kafka message key
+- `aggregate_type` — `"Order"` for stock-status events written via `publishOrderItemEvent`
+  (status change / item removal); `"CreateOrderSaga"` for the saga-compensation release written
+  via the generic `publish(...)` API (keyed on the saga UUID — see
+  [Orchestration Saga](#orchestration-saga))
+- `aggregate_id` — the order id as a string (the saga UUID for a compensation release); also
+  used as the Kafka message key
 - `event_type` — `"release"` or `"commit"` for stock events
 - `topic_name` — captured at publish time (currently `${topic.stock.status}`)
 - `payload` TEXT — Jackson-serialized JSON of the input object
@@ -859,7 +862,8 @@ stock is still held, so no re-reservation is done — this only re-charges).
 - `getOrderById(Long)` — single order; 404 if absent
 - `getOrderByCustomerId(Long)` — list of customer's orders
 - `getItemsByOrderId(Long)` — all items for an order (via `OrderItemRepository.findAllByOrderId`)
-- `getOrderItem(Long)` — single item by id; 404 if absent
+- `getOrderItem(Long orderId, Long itemId)` — single item scoped to its order (via
+  `OrderItemRepository.findByIdAndOrderId`); 404 if absent
 
 ### API Endpoints
 
