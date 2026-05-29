@@ -3,9 +3,11 @@ package productservice.managers;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import productservice.dto.PublisherDto;
 import productservice.entities.Book;
 import productservice.entities.Publisher;
+import productservice.exceptions.EntityBusyException;
 import productservice.mappers.PublisherMapper;
 import productservice.repositories.BookRepository;
 import productservice.repositories.PublisherRepository;
@@ -22,10 +24,12 @@ public class PublisherManager {
     private final PublisherMapper mapper;
     private final CustomValidator validator;
 
+    @Transactional
     public Publisher create(PublisherDto dto) {
         return createOrUpdate(dto, true);
     }
 
+    @Transactional
     public Publisher update(PublisherDto dto) {
         return createOrUpdate(dto, false);
     }
@@ -59,10 +63,11 @@ public class PublisherManager {
         return repository.findById(id).orElseThrow(() -> new EntityNotFoundException("Publisher with id " + id + " not found"));
     }
 
+    @Transactional
     public void deleteById(Long id) {
         long bookCount = bookRepository.countBooksByPublisherId(id);
         if (bookCount > 0) {
-            throw new RuntimeException(bookCount +  " books use this publisher company. Cannot delete Publisher Company.");
+            throw new EntityBusyException(bookCount + " books use this publisher company. Cannot delete Publisher Company.");
         }
 
         repository.deleteById(id);

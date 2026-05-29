@@ -51,19 +51,13 @@ public class BookManager {
         mapper.partialUpdate(dto, book);
 
         Publisher p = publisherManager.getReferenceByID(dto.getPublisherId());
-        if (p != null) {
-            book.setPublisher(p);
-        }
+        book.setPublisher(p);
 
         Set<Author> authors = authorManager.getReferenceByIDs(dto.getAuthorIds());
-        if (authors != null) {
-            book.setAuthors(authors);
-        }
+        book.setAuthors(authors);
 
         Set<Category> categories = categoryManager.getReferenceByIDs(dto.getCategoryIds());
-        if (categories != null) {
-            book.setCategories(categories);
-        }
+        book.setCategories(categories);
 
         Set<String> images = dto.getBookImages();
         if (images != null) {

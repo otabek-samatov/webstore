@@ -11,13 +11,8 @@ import lombok.Setter;
 @Table(name = "Category", indexes = {
         @Index(name = "idx_category_name", columnList = "name")
 })
-public class Category extends BaseEntity {
-    @Id
-    @Getter(onMethod_ = @Override)
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "category_seq")
-    @SequenceGenerator(name = "category_seq", allocationSize = 1)
-    @Column(name = "id", nullable = false)
-    private Long id;
+@SequenceGenerator(name = "entity_seq", sequenceName = "category_seq", allocationSize = 50, initialValue = 1)
+public class Category extends CoreEntity {
 
     @NotBlank(message = "Category Name should be specified")
     @Column(name = "name", nullable = false, unique = true)

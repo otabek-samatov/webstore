@@ -3,10 +3,12 @@ package productservice.managers;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import productservice.dto.CategoryDto;
 import productservice.entities.Book;
 import productservice.entities.Category;
+import productservice.exceptions.EntityBusyException;
 import productservice.mappers.CategoryMapper;
 import productservice.repositories.BookRepository;
 import productservice.repositories.CategoryRepository;
@@ -26,10 +28,12 @@ public class CategoryManager {
     private final CustomValidator validator;
     private final BookRepository bookRepository;
 
+    @Transactional
     public Category create(CategoryDto dto) {
         return createOrUpdate(dto, true);
     }
 
+    @Transactional
     public Category update(CategoryDto dto) {
         return createOrUpdate(dto, false);
     }
@@ -79,20 +83,22 @@ public class CategoryManager {
         return bookRepository.findBooksByCategoriesId(id);
     }
 
+    @Transactional
     public void deleteById(Long id) {
         long count = bookRepository.countOfBooksByCategoriesId(id);
         if (count > 0) {
-            throw new RuntimeException(count + " books use this category. Cannot delete category.");
+            throw new EntityBusyException(count + " books use this category. Cannot delete category.");
         }
 
         count = repository.countByParentId(id);
         if (count > 0) {
-            throw new RuntimeException(count + " categories use this category. Cannot delete category.");
+            throw new EntityBusyException(count + " categories use this category. Cannot delete category.");
         }
 
         repository.deleteById(id);
     }
 
+    @Transactional
     public boolean createByFields(String categoryName, String parentCategoryName) {
 
         Long id = repository.getIdByName(categoryName);

@@ -11,13 +11,8 @@ import lombok.Setter;
 @Table(name = "Author", indexes = {
         @Index(name = "idx_lastName", columnList = "last_name")
 })
-public class Author extends BaseEntity {
-    @Id
-    @Getter(onMethod_ = @Override)
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "author_seq")
-    @SequenceGenerator(name = "author_seq", allocationSize = 1)
-    @Column(name = "id", nullable = false)
-    private Long id;
+@SequenceGenerator(name = "entity_seq", sequenceName = "author_seq", allocationSize = 50, initialValue = 1)
+public class Author extends CoreEntity {
 
     @Column(name = "first_name")
     private String firstName;

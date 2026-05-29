@@ -11,13 +11,8 @@ import lombok.Setter;
 @Table(name = "Publisher", indexes = {
         @Index(name = "idx_publisher_name", columnList = "name")
 })
-public class Publisher extends BaseEntity {
-    @Id
-    @Getter(onMethod_ = @Override)
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "publisher_seq")
-    @SequenceGenerator(name = "publisher_seq", allocationSize = 1)
-    @Column(name = "id", nullable = false)
-    private Long id;
+@SequenceGenerator(name = "entity_seq", sequenceName = "publisher_seq", allocationSize = 50, initialValue = 1)
+public class Publisher extends CoreEntity {
 
     @NotBlank(message = "Publisher name should be specified")
     @Column(name = "name", nullable = false, unique = true)

@@ -13,7 +13,7 @@ public interface BookRepository extends JpaRepository<Book, Long> {
     @Query("SELECT count(b.id) FROM Book b join b.authors a WHERE a.id = :authorsId")
     long countBooksByAuthorsId(Long authorsId);
 
-    @Query("SELECT b FROM Book b join fetch b.authors a WHERE a.id = :authorsId")
+    @Query("SELECT b FROM Book b join fetch b.authors a WHERE a.id = :authorId")
     List<Book>  findBooksByAuthorsId(Long authorId);
 
     long countBooksByPublisherId(Long publisherCompanyId);
