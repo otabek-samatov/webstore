@@ -21,13 +21,8 @@ import java.util.Set;
 @Table(name = "Book", indexes = {
         @Index(name = "idx_book_title", columnList = "title")
 })
-public class Book extends BaseEntity {
-    @Id
-    @Getter(onMethod_ = @Override)
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "book_seq")
-    @SequenceGenerator(name = "book_seq", allocationSize = 1)
-    @Column(name = "id", nullable = false)
-    private Long id;
+@SequenceGenerator(name = "entity_seq", sequenceName = "book_seq", allocationSize = 50, initialValue = 1)
+public class Book extends CoreEntity {
 
     @NotBlank(message = "Title should be specified")
     @Column(name = "title", nullable = false)

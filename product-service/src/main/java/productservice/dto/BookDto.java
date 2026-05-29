@@ -35,6 +35,7 @@ public class BookDto implements Serializable {
 
     String description;
 
+    @NotNull
     @PositiveOrZero(message = "Price should be non negative")
     BigDecimal price;
 

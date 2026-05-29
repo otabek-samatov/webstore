@@ -13,7 +13,7 @@ public interface BookRepository extends JpaRepository<Book, Long> {
     @Query("SELECT count(b.id) FROM Book b join b.authors a WHERE a.id = :authorsId")
     long countBooksByAuthorsId(Long authorsId);
 
-    @Query("SELECT b FROM Book b join fetch b.authors a WHERE a.id = :authorsId")
+    @Query("SELECT b FROM Book b join fetch b.authors a WHERE a.id = :authorId")
     List<Book>  findBooksByAuthorsId(Long authorId);
 
     long countBooksByPublisherId(Long publisherCompanyId);
@@ -23,7 +23,7 @@ public interface BookRepository extends JpaRepository<Book, Long> {
     @Query("SELECT count(b.id) FROM Book b join b.categories c WHERE c.id = :categoryId")
     long countOfBooksByCategoriesId(Long categoryId);
 
-    @Query("SELECT b FROM Book b join fetch b.categories c WHERE c.id = :categoryId")
+    @Query("SELECT b FROM Book b join fetch b.categories c WHERE b.categories = :categoryId")
     List<Book> findBooksByCategoriesId(Long categoryId);
 
     @Query("SELECT b.id FROM Book b WHERE b.isbn = :isbn")

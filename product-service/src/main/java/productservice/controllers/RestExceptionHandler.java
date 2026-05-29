@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import productservice.exceptions.EntityBusyException;
 
 @RestControllerAdvice
 public class RestExceptionHandler {
@@ -22,6 +23,11 @@ public class RestExceptionHandler {
     @ExceptionHandler(NullPointerException.class)
     public ResponseEntity<String> handleException(NullPointerException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Null pointer exception caught: " + ex.getMessage());
+    }
+
+    @ExceptionHandler(EntityBusyException.class)
+    public ResponseEntity<String> handleException(EntityBusyException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Entity is Busy exception caught : " + ex.getMessage());
     }
 
 

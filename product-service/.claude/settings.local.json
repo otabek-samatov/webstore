@@ -3,7 +3,8 @@
     "allow": [
       "Bash(mkdir:*)",
       "Bash(./gradlew test:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(find ~/.gradle/caches -name \"datafaker-*.jar\" 2>/dev/null | head -3)"
     ],
     "deny": [],
     "ask": []

@@ -3,7 +3,21 @@
     "allow": [
       "Bash(claude update:*)",
       "Bash(git -C C:/Projects/webstore status)",
-      "Bash(git -C C:/Projects/webstore diff order-service/)"
+      "Bash(git -C C:/Projects/webstore diff order-service/)",
+      "Bash(/usr/bin/find C:/Projects/webstore/order-service/src/main/java -type d)",
+      "Bash(/usr/bin/find C:/Projects/webstore/product-service/src/main/java -type d)",
+      "Bash(/usr/bin/find C:/Projects/webstore/order-service/src/main/java/com/webstore/order_service/services C:/Projects/webstore/order-service/src/main/java/com/webstore/order_service/scheduler C:/Projects/webstore/order-service/src/main/java/com/webstore/order_service/entities C:/Projects/webstore/order-service/src/main/java/com/webstore/order_service/aspect C:/Projects/webstore/order-service/src/main/java/com/webstore/order_service/util -type f)",
+      "Bash(/usr/bin/find C:/Projects/webstore/product-service/src/main/java/com/webstore/product_service/entities -type f)",
+      "Bash(/usr/bin/find C:/Projects/webstore/order-service/src/main/java/com/webstore/order_service -name \"OutboxStatus.java\" -o -name \"InboxEvent.java\" -o -name \"OutboxEvent.java\")",
+      "Bash(/usr/bin/grep -rl \"enum OutboxStatus\" C:/Projects/webstore/order-service/src/main/java)",
+      "Bash(/usr/bin/find C:/Projects/webstore/order-service/src/main/java/com/webstore/order_service/configs -type f)",
+      "Bash(/usr/bin/find C:/Projects/webstore/order-service/src/main/java -name \"*Application.java\")",
+      "Bash(/usr/bin/find C:/Projects/webstore/order-service/src/main/resources/db/migration -type f)",
+      "Bash(/usr/bin/find C:/Projects/webstore/product-service/src/main/resources/db/migration -type f)",
+      "Bash(/usr/bin/find C:/Projects/webstore/product-service/src/main/java -name \"*Application.java\")",
+      "Bash(/usr/bin/find C:/Projects/webstore/order-service/src/main/java/com/webstore/order_service/dto/kafka -type f)",
+      "PowerShell(git -C C:\\\\Projects\\\\webstore status)",
+      "PowerShell(git -C C:\\\\Projects\\\\webstore ls-files product-service/src/main/java/uz/webstore/product/entities/)"
     ]
   }
 }

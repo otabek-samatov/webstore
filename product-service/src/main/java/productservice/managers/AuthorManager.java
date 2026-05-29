@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import productservice.dto.AuthorDto;
 import productservice.entities.Author;
 import productservice.entities.Book;
+import productservice.exceptions.EntityBusyException;
 import productservice.mappers.AuthorMapper;
 import productservice.repositories.AuthorRepository;
 import productservice.repositories.BookRepository;
@@ -72,7 +73,7 @@ public class AuthorManager {
     public void deleteById(Long id) {
         long bookCount = bookRepository.countBooksByAuthorsId(id);
         if (bookCount > 0) {
-            throw new RuntimeException(bookCount +  " books use this author. Cannot delete book Author.");
+            throw new EntityBusyException(bookCount + " books use this author. Cannot delete book Author.");
         }
 
         repository.deleteById(id);
