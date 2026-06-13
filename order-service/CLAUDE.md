@@ -158,9 +158,11 @@ not an exception.
 **Asynchronous (Kafka):**
 
 - **Produces:** stock-status events on `${topic.stock.status}` (key: `orderId` as a string).
-  Payload is a JSON-serialized `List<OrderItemDto>` (whatever was passed to
-  `OutboxPublisher.publishOrderItemEvent`). Publishing is **outbox-driven** — see the
-  [Outbox Pattern](#outbox-pattern) section.
+  Payload is a JSON-serialized **`StockStatusKafka`** object — `OutboxPublisher.publishOrderItemEvent`
+  wraps the order items into a `StockStatusKafka` (`actionType`, `orderId`, and a `stockLevels`
+  collection of `StockLevelDto`, each carrying the item **quantity in its `reservedStock` field**)
+  before serializing. This is the exact shape `inventory-service` deserializes. Publishing is
+  **outbox-driven** — see the [Outbox Pattern](#outbox-pattern) section.
 - **Consumes:** `OrderStatusKafka` events from `${topic.order.status}` (payment-service is the producer).
   Every event is funneled through `InboxProcessor.processOnce` (see the
   [Inbox Pattern](#inbox-pattern) section), so duplicate redeliveries become a structural no-op.
@@ -185,8 +187,11 @@ not an exception.
 
 `OrderManager` does **not** call the `KafkaTemplate` directly. Instead it calls
 `OutboxPublisher.publishOrderItemEvent(orderId, actionType, items)` inside its existing
-`@Transactional` boundary, which inserts a row into `outbox_events`. `OutboxPoller` later picks
-up the row and `OutboxEventProcessor` performs the actual `kafkaTemplate.send(topic, key, payload)`.
+`@Transactional` boundary. That method builds a `StockStatusKafka` (sets `actionType = eventType`,
+`orderId`, and `addItems(items)` — which maps each item's `quantity` into the
+`StockLevelDto.reservedStock` field that inventory-service reads as the operation amount),
+serializes it to JSON, and inserts a row into `outbox_events`. `OutboxPoller` later picks up the
+row and `OutboxEventProcessor` performs the actual `kafkaTemplate.send(topic, key, payload)`.
 
 Action types in use (the `eventType` column of the outbox row, also the `actionType` semantically
 consumed by inventory-service):
@@ -281,7 +286,8 @@ on `OrderServiceApplication`.
   used as the Kafka message key
 - `event_type` — `"release"` or `"commit"` for stock events
 - `topic_name` — captured at publish time (currently `${topic.stock.status}`)
-- `payload` TEXT — Jackson-serialized JSON of the input object
+- `payload` TEXT — Jackson-serialized JSON of the input object (a `StockStatusKafka` for
+  stock-status events written via `publishOrderItemEvent`)
 - `status` — `PENDING` / `PROCESSING` / `SENT` / `FAILED`
 - `created_at` (`@CreationTimestamp`), `processed_at` (set when marked SENT)
 
@@ -665,7 +671,7 @@ The service uses Spring Cloud Config for externalized configuration:
   (`jdbc:postgresql://localhost:5432/webstore?currentSchema=order_schema`)
 - `topic.stock.status`: **`stock-status-event`** (from `application.yml`)
 - `topic.order.status`: **`order-status-event`** (from `application.yml`)
-- `num.partitions`: **12**, `replication.factor`: **3**
+- `num.partitions`: **3**, `replication.factor`: **1** (from `application.yml`; sized for a single-broker local Kafka)
 - `bootstrap.servers`: `localhost:9092`
 - Eureka registry: `http://localhost:8070/eureka/`
 

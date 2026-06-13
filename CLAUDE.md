@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 Webstore is a microservices-based e-commerce backend application for selling books. This is a **multi-module Gradle
-monorepo** with 9 independent microservices.
+monorepo** with 8 independent microservices.
 
 **Technology Stack:**
 
@@ -36,7 +36,7 @@ This is a Gradle-based multi-module project using Gradle 8.10.2.
 ./gradlew test
 
 # Run tests for specific service
-./gradlew :cart-service:test
+./gradlew :inventory-service:test
 
 # Clean build
 ./gradlew clean build
@@ -56,19 +56,18 @@ This is a Gradle-based multi-module project using Gradle 8.10.2.
 
 ### Service Inventory
 
-The system consists of 9 microservices defined in `settings.gradle`:
+The system consists of 8 microservices defined in `settings.gradle`:
 
-| Service               | Port | Purpose                                                                                                             | Database                        |
-|-----------------------|------|---------------------------------------------------------------------------------------------------------------------|---------------------------------|
-| **discovery-service** | 8070 | Service registry using Netflix Eureka + Spring Boot Admin (`/admin`). Spring `application.name`: `discovery-server` | N/A                             |
-| **config-service**    | 8071 | Centralized configuration via Spring Cloud Config                                                                   | N/A                             |
-| **gateway-service**   | 8072 | API Gateway using Spring Cloud Gateway MVC                                                                          | N/A                             |
-| **product-service**   | 8073 | Book catalog with authors, publishers, categories                                                                   | PostgreSQL (`product_schema`)   |
-| **inventory-service** | 8074 | Stock level management and reservation tracking                                                                     | PostgreSQL (`inventory_schema`) |
-| **user-service**      | 8075 | User registration, authentication, profiles, roles                                                                  | PostgreSQL (`user_schema`)      |
-| **cart-service**      | 8076 | Shopping cart logic per user                                                                                        | PostgreSQL (`cart_schema`)      |
-| **order-service**     | 8077 | Order placement and tracking                                                                                        | PostgreSQL (`order_schema`)     |
-| **payment-service**   | 8078 | Payment processing and refunds                                                                                      | PostgreSQL (`payment_schema`)   |
+| Service               | Port | Purpose                                                                              | Database                        |
+|-----------------------|------|--------------------------------------------------------------------------------------|---------------------------------|
+| **discovery-service** | 8070 | Service registry using Netflix Eureka. Spring `application.name`: `discovery-server` | N/A                             |
+| **config-service**    | 8071 | Centralized configuration via Spring Cloud Config                                    | N/A                             |
+| **gateway-service**   | 8072 | API Gateway using Spring Cloud Gateway MVC                                           | N/A                             |
+| **product-service**   | 8073 | Book catalog with authors, publishers, categories                                    | PostgreSQL (`product_schema`)   |
+| **inventory-service** | 8074 | Stock level management and reservation tracking                                      | PostgreSQL (`inventory_schema`) |
+| **user-service**      | 8075 | User registration, authentication, profiles, roles                                   | PostgreSQL (`user_schema`)      |
+| **order-service**     | 8077 | Order placement and tracking                                                         | PostgreSQL (`order_schema`)     |
+| **payment-service**   | 8078 | Payment processing and refunds                                                       | PostgreSQL (`payment_schema`)   |
 
 > Ports and schema names above are the **defaults** from `webstore-config/config/<service>.yml`. Multi-instance
 > deployments override `server.port` per instance (required for unique Kafka transactional IDs — see Kafka section).
@@ -87,7 +86,7 @@ Services must be started in this order for proper operation:
    - Kafka Broker (9092)
 4. **Business Services** (any order):
     - product-service (8073), inventory-service (8074), user-service (8075)
-    - cart-service (8076), order-service (8077), payment-service (8078)
+   - order-service (8077), payment-service (8078)
 5. **gateway-service** (8072) - API Gateway (routes to other services)
 
 ## System Architecture
@@ -97,33 +96,49 @@ Services must be started in this order for proper operation:
 **1. Synchronous Communication (REST):**
 
 - Services use `RestClient` (Spring Framework) with Eureka service discovery
-- Services call each other using service names (e.g., `http://cart-service/v1/...`)
+- Services call each other using service names (e.g., `http://inventory-service/v1/...`)
 - Load balancing via `@LoadBalanced` RestClient.Builder
 
 **Key Inter-Service REST Calls:**
 
-- Order Service → Cart Service: Fetch cart items during order creation
-    - `GET http://cart-service/v1/carts/cart/items/{cartID}`
+- Order Service → Inventory Service (price lookup + stock reservation during order creation /
+  item add):
+    - `POST http://inventory-service/v1/inventory/prices`
+    - `POST http://inventory-service/v1/inventory/reserve-stock`
+- Order Service → Payment Service (charge on order creation / payment retry):
+    - `POST http://payment-service/v1/payments`
+
+> Order creation does **not** fetch a cart — order items are supplied directly in the
+> `CreateOrderDto` request body by the caller.
 
 **2. Asynchronous Communication (Kafka):**
 
 - Event-driven messaging for decoupled operations
-- Exactly-once semantics with transactional producers/consumers
-- Each service has unique transactional ID based on `{service-name}-tx-{port}`
+- **Two coexisting delivery designs:**
+    - **payment-service** uses Kafka **transactions** for exactly-once — a unique transactional ID
+      `{service-name}-tx-{port}` per instance (see [Kafka Configuration Details](#kafka-configuration-details)).
+    - **order-service** and **inventory-service** use the **transactional outbox / inbox** pattern
+      instead: an *idempotent, non-transactional* producer plus an inbox table keyed by a stable
+      `messageId` for consumer-side dedup. These two have **no** Kafka transactional ID.
 
 **Kafka Topics & Event Flows:**
 
-| Topic                | Producer                    | Consumer          | Event Type       | Purpose                   |
-|----------------------|-----------------------------|-------------------|------------------|---------------------------|
-| `stock-status-topic` | order-service, cart-service | inventory-service | StockStatusKafka | Stock reservation/release |
-| `order-status-topic` | payment-service             | order-service     | OrderStatusKafka | Payment status updates    |
+| Topic                | Producer        | Consumer          | Event Type       | Purpose                |
+|----------------------|-----------------|-------------------|------------------|------------------------|
+| `stock-status-event` | order-service   | inventory-service | StockStatusKafka | Stock commit / release |
+| `order-status-event` | payment-service | order-service     | OrderStatusKafka | Payment status updates |
+
+> Property keys in code are `topic.stock.status` / `topic.order.status`; the **values** on the wire
+> are `stock-status-event` / `order-status-event` (set in `webstore-config/config/application.yml`).
 
 **Stock Management Flow:**
 
-1. Order placed → Order Service publishes "reserve" event
-2. Inventory Service reserves stock
-3. Order cancelled/refunded → "release" event
-4. Order delivered → "commit" event (permanent reservation)
+1. Order placed → Order Service reserves stock **synchronously over REST**
+   (`POST inventory-service/v1/inventory/reserve-stock`) — there is **no** Kafka "reserve" event.
+2. Order cancelled / refunded / abandoned after a failed payment → Order Service publishes a
+   **`release`** stock event (via its outbox) → Inventory Service frees the reservation (`revertStock`).
+3. Order completed (payment confirmed) → Order Service publishes a **`commit`** stock event →
+   Inventory Service finalizes the sale (`commitStock`, decrements physical stock).
 
 **Payment Flow:**
 
@@ -150,7 +165,6 @@ webstore-config/
     ├── product-service.yml
     ├── inventory-service.yml
     ├── user-service.yml
-    ├── cart-service.yml
     ├── order-service.yml
     └── payment-service.yml
 ```
@@ -168,7 +182,9 @@ commit; the Config Server serves the latest commit from the configured Git remot
   user `user` / password `password`, driver `org.postgresql.Driver`
 - **JPA/Hibernate:** `ddl-auto: validate` (Flyway is authoritative for schema), `show-sql: true`,
   PostgreSQL dialect
-- **Kafka:** `bootstrap.servers: localhost:9092`, `num.partitions: 12`, `replication.factor: 3`
+- **Kafka:** `bootstrap.servers: localhost:9092`, `num.partitions: 3`, `replication.factor: 1`
+  (sized for a single-broker local Kafka). These are **custom top-level keys** read via `@Value`
+  in each service's `KafkaConfig` — they are **not** the standard `spring.kafka.*` properties.
 - **Kafka topics:** `topic.stock.status: stock-status-event`, `topic.order.status: order-status-event`
 
 > Note: the Kafka topic names in the running config are `stock-status-event` / `order-status-event`,
@@ -187,7 +203,6 @@ commit; the Config Server serves the latest commit from the configured Git remot
 
 | External path   | Routed to (Eureka name)  |
 |-----------------|--------------------------|
-| `/cart/**`      | `lb://cart-service`      |
 | `/inventory/**` | `lb://inventory-service` |
 | `/order/**`     | `lb://order-service`     |
 | `/payment/**`   | `lb://payment-service`   |
@@ -236,18 +251,19 @@ Each route strips its prefix via `RewritePath=/<prefix>/(?<path>.*), /$\{path}` 
 **Inventory Service:**
 
 - `inventory` with stock levels, reserved stock, version for optimistic locking
+- `inventory_change` audit trail of every stock operation
+- `inbox_messages` — consumer-side Kafka dedup (idempotency by `message_id`)
 
 **User Service:**
 
 - `users`, `user_profile`, `address`, `security_role`
 
-**Cart Service:**
-
-- `cart`, `cart_item` linked to users
-
 **Order Service:**
 
 - `orders`, `order_item` with status, shipping/tax calculations
+- `outbox_events` — transactional outbox for outbound Kafka events
+- `inbox_messages` — consumer-side dedup for inbound payment events
+- `saga_instance` — orchestration-saga lifecycle/audit state for order creation
 
 **Payment Service:**
 
@@ -329,7 +345,13 @@ PostgreSQL Database
 
 ### Exactly-Once Semantics
 
-All services using Kafka implement exactly-once semantics:
+> **Two patterns are in use.** **payment-service** (and any service publishing via a
+> Kafka-transactional producer) uses the transactional configuration below. **order-service** and
+> **inventory-service** have moved to the **transactional outbox / inbox** pattern — an
+> *idempotent, non-transactional* producer plus an inbox table for consumer-side dedup — and so have
+> **no** `transactional.id`. See those services' own `CLAUDE.md` for the full design.
+
+The Kafka-transactional configuration (payment-service):
 
 **Producer Configuration:**
 
@@ -349,11 +371,15 @@ All services using Kafka implement exactly-once semantics:
 
 ### Multi-Instance Deployment
 
-**CRITICAL:** When running multiple instances of a service:
+**Services with a Kafka-transactional producer (e.g. payment-service):** when running multiple
+instances, each instance MUST use a different port (e.g., 8081, 8082, 8083). This keeps the
+transactional ID (`{name}-tx-{port}`) unique per instance; without unique ports, **producer fencing**
+occurs (instances fence each other out).
 
-- Each instance MUST use a different port (e.g., 8081, 8082, 8083)
-- This ensures unique Kafka transactional IDs per instance
-- Without unique ports, producer fencing will occur (instances fence each other out)
+**Outbox/inbox services (order-service, inventory-service):** there is no transactional ID, so the
+unique-port constraint does **not** apply. Instances coordinate at the **row level** instead — the
+outbox poller claims rows with an atomic conditional `UPDATE`, and the inbox dedups on the `messageId`
+primary key — so they are safe to run concurrently regardless of port.
 
 ## Development Workflow
 
@@ -473,11 +499,11 @@ Required infrastructure for running webstore:
 
 **Recent Development Focus (as of Dec 26, 2025):**
 
+- Outbox/inbox + orchestration-saga implementation (order-service, inventory-service)
 - Kafka implementation across services
 - REST API completion
 - Payment Service implementation
 - Order Service implementation
-- Cart Service implementation
 - Service discovery setup
 
 **Not Yet Implemented:**

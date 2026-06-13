@@ -46,14 +46,14 @@ refund operations for customer orders.
 
 ### Microservice Context
 
-Payment Service is one of 9 microservices in the Webstore application:
+Payment Service is one of 8 microservices in the Webstore application:
 
 - **Config Service** (port 8071): Centralized configuration
 - **Discovery Service**: Netflix Eureka service registry
 - **Gateway Service**: API gateway (Spring Cloud Gateway)
 - **Order Service**: Creates orders that trigger payments
 - **Payment Service**: This service - processes payments and refunds
-- Others: Product, Inventory, User, Cart, Auth services
+- Others: Product, Inventory, User services
 
 Payment Service integrates with:
 
