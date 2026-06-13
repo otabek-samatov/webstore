@@ -10,4 +10,5 @@ public class StockLevelDto {
     private Long reservedStock = 0L;
 
     private String productSKU = "";
+
 }

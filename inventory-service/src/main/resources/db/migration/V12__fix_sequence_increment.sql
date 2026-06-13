@@ -1,0 +1,3 @@
+ALTER SEQUENCE inventory_seq INCREMENT BY 50;
+
+ALTER SEQUENCE inventory_change_seq INCREMENT BY 50;

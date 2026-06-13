@@ -69,6 +69,7 @@ public class KafkaConsumerService {
 
         if (r == null) {
             log.error("Ignoring event with unknown actionType={}", event.getActionType());
+            return;
         }
 
         boolean processed = inboxProcessor.processOnce(inboxMessage, r);

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import orderservice.dto.OrderItemDto;
+import orderservice.dto.kafka.StockStatusKafka;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -56,7 +57,13 @@ public class OutboxPublisher {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void publishOrderItemEvent(Long orderId,
-                                      String eventType, List<OrderItemDto> payload) {
+                                      String eventType, List<OrderItemDto> items) {
+
+
+        StockStatusKafka payload = new StockStatusKafka();
+        payload.setActionType(eventType);
+        payload.setOrderId(String.valueOf(orderId));
+        payload.addItems(items);
 
         String json = serialize(payload);
 
