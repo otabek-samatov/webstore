@@ -1,4 +1,4 @@
-package productservice.inbox;
+package inventoryservice.inbox;
 
 import lombok.Getter;
 import lombok.Setter;

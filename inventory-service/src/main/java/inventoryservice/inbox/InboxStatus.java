@@ -1,4 +1,4 @@
-package productservice.inbox;
+package inventoryservice.inbox;
 
 public enum InboxStatus {
     RECEIVED,

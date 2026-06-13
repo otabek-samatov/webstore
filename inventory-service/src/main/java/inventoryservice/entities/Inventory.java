@@ -6,10 +6,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.proxy.HibernateProxy;
 
 import java.math.BigDecimal;
-import java.util.Objects;
 
 @Getter
 @Setter
@@ -17,17 +15,8 @@ import java.util.Objects;
 @Table(name = "inventory", indexes = {
         @Index(name = "idx_inventory_product_sku_unq", columnList = "product_sku", unique = true)
 })
-public class Inventory {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "inventory_seq")
-    @SequenceGenerator(name = "inventory_seq", allocationSize = 1)
-    @Column(name = "id", nullable = false)
-    private Long id;
-
-    @Version
-    @Column(name = "version")
-    private Integer version;
+@SequenceGenerator(name = "entity_seq", sequenceName = "inventory_seq", allocationSize = 50, initialValue = 1)
+public class Inventory extends CoreEntity {
 
     @NotNull(message = "Stock Level should be specified")
     @PositiveOrZero(message = "Stock level cannot be negative")
@@ -56,19 +45,4 @@ public class Inventory {
     @Column(name = "sell_price", nullable = false, precision = 9, scale = 2)
     private BigDecimal sellPrice;
 
-    @Override
-    public final boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null) return false;
-        Class<?> oEffectiveClass = o instanceof HibernateProxy ? ((HibernateProxy) o).getHibernateLazyInitializer().getPersistentClass() : o.getClass();
-        Class<?> thisEffectiveClass = this instanceof HibernateProxy ? ((HibernateProxy) this).getHibernateLazyInitializer().getPersistentClass() : this.getClass();
-        if (thisEffectiveClass != oEffectiveClass) return false;
-        Inventory inventory = (Inventory) o;
-        return getId() != null && Objects.equals(getId(), inventory.getId());
-    }
-
-    @Override
-    public final int hashCode() {
-        return this instanceof HibernateProxy ? ((HibernateProxy) this).getHibernateLazyInitializer().getPersistentClass().hashCode() : getClass().hashCode();
-    }
 }
