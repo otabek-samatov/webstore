@@ -13,11 +13,12 @@ public class StockStatusKafka {
 
     private Collection<StockLevelDto> stockLevels = new ArrayList<>();
     private String actionType;
+    private String orderId;
 
     public void addItem(OrderItemDto orderItemDto) {
 
         StockLevelDto stockLevel = new StockLevelDto();
-        stockLevel.setStockLevel(orderItemDto.getQuantity());
+        stockLevel.setReservedStock(orderItemDto.getQuantity());
         stockLevel.setProductSKU(orderItemDto.getProductSKU());
 
         this.stockLevels.add(stockLevel);

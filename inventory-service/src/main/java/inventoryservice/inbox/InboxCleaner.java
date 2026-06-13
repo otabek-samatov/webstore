@@ -1,4 +1,4 @@
-package productservice.outbox;
+package inventoryservice.inbox;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,18 +13,19 @@ import java.util.Optional;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class OutboxCleaner {
+public class InboxCleaner {
 
     private static final int BATCH_SIZE = 1000;
-    private final OutboxEventRepository repository;
-    private final OutboxProperties properties;
+
+    private final InboxMessageRepository repository;
+    private final InboxProperties properties;
     private final TransactionTemplate transactionTemplate;
 
     /**
-     * Runs once a day at 3 AM. Deletes SENT events older than
-     * the configured retention period in batches.
+     * Deletes PROCESSED inbox messages older than the configured retention
+     * period in batches. Schedule staggered after the outbox cleanup.
      */
-    @Scheduled(cron = "${outbox.cleanup-cron:0 0 3 * * *}")
+    @Scheduled(cron = "${inbox.cleanup-cron:0 30 3 * * *}")
     public void cleanup() {
         Instant threshold = Instant.now().minus(
                 properties.getRetentionDays(), ChronoUnit.DAYS);
@@ -34,7 +35,7 @@ public class OutboxCleaner {
 
         do {
             deleted = transactionTemplate.execute(status ->
-                    repository.deleteSentBefore(threshold, BATCH_SIZE)
+                    repository.deleteProcessedBefore(threshold, BATCH_SIZE)
             );
 
             deleted = Optional.ofNullable(deleted).orElse(0);
@@ -44,7 +45,7 @@ public class OutboxCleaner {
         } while (deleted == BATCH_SIZE);
 
         if (totalDeleted > 0) {
-            log.info("Outbox cleanup: deleted {} old events", totalDeleted);
+            log.info("Inbox cleanup: deleted {} old messages", totalDeleted);
         }
     }
 }

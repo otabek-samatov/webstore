@@ -42,4 +42,5 @@ public class InventoryDto implements Serializable {
         this.productSKU = productSKU;
         this.sellPrice = sellPrice;
     }
+
 }

@@ -1,12 +1,11 @@
-package orderservice.managers;
+package inventoryservice.managers;
 
 
+import inventoryservice.dto.kafka.StockStatusKafka;
+import inventoryservice.inbox.InboxMessage;
+import inventoryservice.inbox.InboxProcessor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import orderservice.dto.kafka.OrderStatusKafka;
-import orderservice.entities.OrderStatus;
-import orderservice.inbox.InboxMessage;
-import orderservice.inbox.InboxProcessor;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.messaging.handler.annotation.Header;
@@ -26,31 +25,24 @@ public class KafkaConsumerService {
      */
     private static final String MESSAGE_ID_HEADER = "X-Message-Id";
 
-    private final OrderManager orderManager;
+    private final InventoryManager inventoryManager;
     private final InboxProcessor inboxProcessor;
 
 
     @Transactional
-    @KafkaListener(topics = "${topic.order.status}", containerFactory = "kafkaListenerContainerFactory")
-    public void handleOrderStatusUpdate(
-            ConsumerRecord<String, OrderStatusKafka> record,
+    @KafkaListener(topics = "${topic.stock.status}", containerFactory = "kafkaListenerContainerFactory")
+    public void handleStockStatusUpdate(
+            ConsumerRecord<String, StockStatusKafka> record,
             @Header(name = MESSAGE_ID_HEADER, required = false) String messageIdHeader) {
 
-        OrderStatusKafka event = record.value();
+        StockStatusKafka event = record.value();
 
-        log.info("Received order-status event orderId={} actionType={} topic={} partition={} offset={}",
+        log.info("Received stock-status event orderId={} actionType={} topic={} partition={} offset={}",
                 event.getOrderId(), event.getActionType(),
                 record.topic(), record.partition(), record.offset());
 
         if (event.getOrderId() == null) {
             log.warn("Ignoring event with null orderId actionType={}", event.getActionType());
-            return;
-        }
-
-        OrderStatus status = mapStatus(event.getActionType());
-        if (status == null) {
-            log.warn("Ignoring unknown actionType={} for orderId={}",
-                    event.getActionType(), event.getOrderId());
             return;
         }
 
@@ -64,24 +56,28 @@ public class KafkaConsumerService {
                 record,
                 event);
 
-        boolean processed = inboxProcessor.processOnce(inboxMessage, () ->
-                orderManager.changeOrderStatus(event.getOrderId(), status));
+        Runnable r = null;
+        if ("release".equalsIgnoreCase(event.getActionType())) {
+            r = () -> {
+                event.getStockLevels().forEach(stockLevel -> inventoryManager.revertStock(stockLevel.toInventoryDto()));
+            };
+        } else if ("commit".equalsIgnoreCase(event.getActionType())) {
+            r = () -> {
+                event.getStockLevels().forEach(stockLevel -> inventoryManager.commitStock(stockLevel.toInventoryDto()));
+            };
+        }
+
+        if (r == null) {
+            log.error("Ignoring event with unknown actionType={}", event.getActionType());
+            return;
+        }
+
+        boolean processed = inboxProcessor.processOnce(inboxMessage, r);
 
         if (!processed) {
             log.info("Duplicate order-status event skipped: messageId={} orderId={} actionType={}",
                     messageId, event.getOrderId(), event.getActionType());
         }
-    }
-
-    private OrderStatus mapStatus(String actionType) {
-
-        for (OrderStatus status : OrderStatus.values()) {
-            if (status.toString().equals(actionType)) {
-                return status;
-            }
-        }
-
-        return null;
     }
 
     /**
@@ -91,11 +87,11 @@ public class KafkaConsumerService {
      * land the same logical event at a different offset, which would defeat
      * deduplication.
      */
-    private String idempotencyKey(String headerValue, OrderStatusKafka event) {
+    private String idempotencyKey(String headerValue, StockStatusKafka event) {
         if (StringUtils.hasText(headerValue)) {
             return headerValue;
         }
 
-        return "order-status:" + event.getOrderId() + ":" + event.getActionType();
+        return "stock-status:" + event.getOrderId() + ":" + event.getActionType();
     }
 }
