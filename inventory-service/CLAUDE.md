@@ -14,8 +14,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Running the Application
 
 - Start the service: `./gradlew bootRun`
-- The service runs on port 8080 (default Spring Boot port)
-- Health check available at: `http://localhost:8080/actuator/health`
+- The service runs on port 8074 (set by Config Server via `inventory-service.yml`; the source
+  `application.yml` carries only bootstrap config, so without Config Server it would fall back to 8080)
+- Health check available at: `http://localhost:8074/actuator/health`
 
 ### Database Operations
 
