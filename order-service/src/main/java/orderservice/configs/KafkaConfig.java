@@ -1,6 +1,6 @@
 package orderservice.configs;
 
-import orderservice.dto.kafka.OrderStatusKafka;
+import orderservice.dto.kafka.PaymentStatusMessage;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -69,15 +69,15 @@ public class KafkaConfig {
     }
 
     @Bean
-    public ConsumerFactory<String, OrderStatusKafka> consumerFactory() {
+    public ConsumerFactory<String, PaymentStatusMessage> consumerFactory() {
         return new DefaultKafkaConsumerFactory<>(consumerConfigs(),
                 new StringDeserializer(),
-                new JsonDeserializer<>(OrderStatusKafka.class));
+                new JsonDeserializer<>(PaymentStatusMessage.class));
     }
 
     @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, OrderStatusKafka> kafkaListenerContainerFactory() {
-        ConcurrentKafkaListenerContainerFactory<String, OrderStatusKafka> factory =
+    public ConcurrentKafkaListenerContainerFactory<String, PaymentStatusMessage> kafkaListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, PaymentStatusMessage> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory());
         factory.setConcurrency(partitions);

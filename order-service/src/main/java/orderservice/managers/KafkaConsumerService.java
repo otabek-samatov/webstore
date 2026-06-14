@@ -3,7 +3,7 @@ package orderservice.managers;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import orderservice.dto.kafka.OrderStatusKafka;
+import orderservice.dto.kafka.PaymentStatusMessage;
 import orderservice.entities.OrderStatus;
 import orderservice.inbox.InboxMessage;
 import orderservice.inbox.InboxProcessor;
@@ -31,12 +31,12 @@ public class KafkaConsumerService {
 
 
     @Transactional
-    @KafkaListener(topics = "${topic.order.status}", containerFactory = "kafkaListenerContainerFactory")
-    public void handleOrderStatusUpdate(
-            ConsumerRecord<String, OrderStatusKafka> record,
+    @KafkaListener(topics = "${topic.payment.status}", containerFactory = "kafkaListenerContainerFactory")
+    public void handlePaymentEvent(
+            ConsumerRecord<String, PaymentStatusMessage> record,
             @Header(name = MESSAGE_ID_HEADER, required = false) String messageIdHeader) {
 
-        OrderStatusKafka event = record.value();
+        PaymentStatusMessage event = record.value();
 
         log.info("Received order-status event orderId={} actionType={} topic={} partition={} offset={}",
                 event.getOrderId(), event.getActionType(),
@@ -91,7 +91,7 @@ public class KafkaConsumerService {
      * land the same logical event at a different offset, which would defeat
      * deduplication.
      */
-    private String idempotencyKey(String headerValue, OrderStatusKafka event) {
+    private String idempotencyKey(String headerValue, PaymentStatusMessage event) {
         if (StringUtils.hasText(headerValue)) {
             return headerValue;
         }

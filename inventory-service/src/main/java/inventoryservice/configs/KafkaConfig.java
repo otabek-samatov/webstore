@@ -1,6 +1,6 @@
 package inventoryservice.configs;
 
-import inventoryservice.dto.kafka.StockStatusKafka;
+import inventoryservice.dto.kafka.StockStatusMessage;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -69,15 +69,15 @@ public class KafkaConfig {
     }
 
     @Bean
-    public ConsumerFactory<String, StockStatusKafka> consumerFactory() {
+    public ConsumerFactory<String, StockStatusMessage> consumerFactory() {
         return new DefaultKafkaConsumerFactory<>(consumerConfigs(),
                 new StringDeserializer(),
-                new JsonDeserializer<>(StockStatusKafka.class));
+                new JsonDeserializer<>(StockStatusMessage.class));
     }
 
     @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, StockStatusKafka> kafkaListenerContainerFactory() {
-        ConcurrentKafkaListenerContainerFactory<String, StockStatusKafka> factory =
+    public ConcurrentKafkaListenerContainerFactory<String, StockStatusMessage> kafkaListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, StockStatusMessage> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory());
         factory.setConcurrency(partitions);

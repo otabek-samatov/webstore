@@ -3,7 +3,6 @@ package paymentservice.dto;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.Data;
-import paymentservice.entities.RefundStatus;
 
 import java.io.Serializable;
 import java.math.BigDecimal;

@@ -1,7 +1,7 @@
 package inventoryservice.managers;
 
 
-import inventoryservice.dto.kafka.StockStatusKafka;
+import inventoryservice.dto.kafka.StockStatusMessage;
 import inventoryservice.inbox.InboxMessage;
 import inventoryservice.inbox.InboxProcessor;
 import lombok.RequiredArgsConstructor;
@@ -32,10 +32,10 @@ public class KafkaConsumerService {
     @Transactional
     @KafkaListener(topics = "${topic.stock.status}", containerFactory = "kafkaListenerContainerFactory")
     public void handleStockStatusUpdate(
-            ConsumerRecord<String, StockStatusKafka> record,
+            ConsumerRecord<String, StockStatusMessage> record,
             @Header(name = MESSAGE_ID_HEADER, required = false) String messageIdHeader) {
 
-        StockStatusKafka event = record.value();
+        StockStatusMessage event = record.value();
 
         log.info("Received stock-status event orderId={} actionType={} topic={} partition={} offset={}",
                 event.getOrderId(), event.getActionType(),
@@ -50,7 +50,7 @@ public class KafkaConsumerService {
 
         InboxMessage inboxMessage = inboxProcessor.fromKafkaRecord(
                 messageId,
-                "Order",
+                "Inventory",
                 String.valueOf(event.getOrderId()),
                 event.getActionType(),
                 record,
@@ -75,7 +75,7 @@ public class KafkaConsumerService {
         boolean processed = inboxProcessor.processOnce(inboxMessage, r);
 
         if (!processed) {
-            log.info("Duplicate order-status event skipped: messageId={} orderId={} actionType={}",
+            log.info("Duplicate inventory-status event skipped: messageId={} orderId={} actionType={}",
                     messageId, event.getOrderId(), event.getActionType());
         }
     }
@@ -87,7 +87,7 @@ public class KafkaConsumerService {
      * land the same logical event at a different offset, which would defeat
      * deduplication.
      */
-    private String idempotencyKey(String headerValue, StockStatusKafka event) {
+    private String idempotencyKey(String headerValue, StockStatusMessage event) {
         if (StringUtils.hasText(headerValue)) {
             return headerValue;
         }

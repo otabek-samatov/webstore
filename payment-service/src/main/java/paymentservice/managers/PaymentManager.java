@@ -9,7 +9,6 @@ import paymentservice.dto.RefundDto;
 import paymentservice.entities.Payment;
 import paymentservice.entities.PaymentStatus;
 import paymentservice.entities.Refund;
-import paymentservice.entities.RefundStatus;
 import paymentservice.mappers.PaymentMapper;
 import paymentservice.mappers.RefundMapper;
 import paymentservice.repositories.PaymentRepository;

@@ -58,7 +58,7 @@ public class OrderManager {
      * <p>
      * On a successful charge the order transition to {@code COMPLETED} happens
      * <strong>asynchronously</strong>: payment-service publishes an
-     * {@code OrderStatusKafka} event that {@code KafkaConsumerService} turns into
+     * {@code PaymentStatusMessage} event that {@code KafkaConsumerService} turns into
      * {@code PAYMENT_FAILED → COMPLETED}. The returned order therefore still reads
      * {@code PAYMENT_FAILED} until that event is processed. A repeated decline
      * leaves the order {@code PAYMENT_FAILED} so the customer can try again (or

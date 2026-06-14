@@ -4,7 +4,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 import paymentservice.entities.Refund;
-import paymentservice.entities.RefundStatus;
 
 import java.util.List;
 
