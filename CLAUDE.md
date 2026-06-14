@@ -509,14 +509,8 @@ Required infrastructure for running webstore:
 
 ## Project Status
 
-**Recent Development Focus (as of Dec 26, 2025):**
-
-- Outbox/inbox + orchestration-saga implementation (order-service, inventory-service)
-- Kafka implementation across services
-- REST API completion
-- Payment Service implementation
-- Order Service implementation
-- Service discovery setup
+> For current development activity, consult git history (branches, recent commits, open PRs) rather
+> than a hand-maintained list here — it stays accurate without manual upkeep.
 
 **Not Yet Implemented:**
 

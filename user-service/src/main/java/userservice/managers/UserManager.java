@@ -30,8 +30,7 @@ public class UserManager {
     public User create(UserDto dto) {
         validator.validate(dto);
 
-        User user = new User();
-        mapper.partialUpdate(dto, user);
+        User user = mapper.toEntity(dto);
 
         if (dto.getSecurityRoleType() != null) {
             Long id = securityRoleRepository.getIDByRoleType(dto.getSecurityRoleType());
@@ -59,7 +58,11 @@ public class UserManager {
 
     @Transactional
     public void deleteById(Long id) {
+        if (!userRepository.existsById(id)) {
+            throw new EntityNotFoundException("User with id " + id + " not found");
+        }
         userProfileRepository.findUserProfileByUserId(id)
                 .ifPresent(userProfileRepository::delete);
+        userRepository.deleteById(id);
     }
 }

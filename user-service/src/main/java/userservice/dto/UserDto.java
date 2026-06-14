@@ -17,6 +17,9 @@ public class UserDto implements Serializable {
     @NotBlank(message = "userName cannot be blank")
     String userName;
 
+    @NotBlank(message = "password cannot be blank")
+    String password;
+
     Boolean isActive;
 
     @NotNull(message = "Security Role cannot be blank")
