@@ -154,7 +154,9 @@ public class PaymentManager {
     private void updateOrderStatus(Payment p) {
         PaymentStatusMessage m = new PaymentStatusMessage();
         m.setOrderId(p.getOrderId());
-        m.setStatus(p.getPaymentStatus().name());
+        // order-service matches the lowercase actionType ("completed" / "refunded");
+        // a "failed" event is published too but is intentionally ignored by the consumer.
+        m.setActionType(p.getPaymentStatus().name().toLowerCase());
 
         outboxPublisher.publishPaymentStatusEvent(m);
     }

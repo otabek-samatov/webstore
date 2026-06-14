@@ -9,6 +9,6 @@ import lombok.NoArgsConstructor;
 public class PaymentStatusMessage {
 
     private long orderId;
-    private String status;
+    private String actionType;
 
 }

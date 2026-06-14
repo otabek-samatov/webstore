@@ -73,7 +73,7 @@ public class KafkaConsumerService {
         boolean processed = inboxProcessor.processOnce(inboxMessage, r);
 
         if (!processed) {
-            log.info("Duplicate inventory-status event skipped: messageId={} orderId={} actionType={}",
+            log.info("Duplicate stock-status event skipped: messageId={} orderId={} actionType={}",
                     messageId, event.getOrderId(), event.getActionType());
         }
     }

@@ -30,23 +30,34 @@ This is a Spring Boot microservice for inventory management within a webstore ar
 
 ### Core Components
 
-**Inventory Management System**: The service implements a two-phase commit pattern for stock operations:
+**Inventory Management System**: stock moves through a reserve → commit / release lifecycle, plus a
+`revert` for restoring physical stock. The `InventoryManager` operations (quantity source noted, since
+`InventoryDto` carries both `stockLevel` and `reservedStock`):
 
-- `reserveStock()`: Reserves stock for pending orders
-- `commitStock()`: Finalizes the reservation (decreases actual stock)
-- `revertStock()`: Releases reserved stock back to available pool
+- `reserveStock()` (private, via `reserveStocks(List)`): `reservedStock += qty` (qty from
+  `dto.reservedStock`). Rejects with `NotEnoughStockException` if available (`stockLevel − reservedStock`)
+  is insufficient. Records `ReasonType.RESERVE_STOCK`.
+- `commitStock()`: finalizes a sale — `reservedStock −= qty` **and** `stockLevel −= qty` (qty from
+  `dto.reservedStock`). `ReasonType.COMMIT_STOCK`.
+- `releaseStock()`: frees a reservation — `reservedStock −= qty` (qty from `dto.reservedStock`).
+  `ReasonType.RELEASE_STOCK`.
+- `revertStock()`: restores physical stock — `stockLevel += qty` (qty from `dto.stockLevel`).
+  `ReasonType.REVERT_STOCK`.
+- `increaseStockLevel()` / `decreaseStockLevel()`: warehouse adjustments (qty from `dto.stockLevel`),
+  `ReasonType.INCREASED_BY_WAREHOUSE` / `CANCELLED_BY_WAREHOUSE`.
 
 **How stock operations are triggered**:
 
-- `reserveStock` / `increaseStockLevel` / `decreaseStockLevel` run **synchronously** via the REST
-  controller (order-service calls `POST /reserve-stock` during order creation; the warehouse adjusts
-  levels via increase/decrease).
-- `commitStock` and `revertStock` run **asynchronously** via Kafka. `KafkaConsumerService` consumes
-  `StockStatusKafka` events from `${topic.stock.status}` (produced by order-service's transactional
-  outbox) and dispatches on `actionType`: `"commit"` → `commitStock`, `"release"` → `revertStock`.
-  Every event is funneled through `InboxProcessor.processOnce` for structural exactly-once handling.
-  There is **no** Kafka `"reserve"` event — reservation is synchronous REST only. See the
-  [Kafka Integration & Inbox Pattern](#kafka-inbox) section.
+- **Synchronously** via the REST controller: `reserveStocks` (`POST /reserve-stock`), `releaseStock`
+  (`POST /revert-stock` — note the endpoint path says *revert* but calls `releaseStock`), `commitStock`
+  (`POST /commit-stock`), `increaseStockLevel` (`POST /increase-stock`), `decreaseStockLevel`
+  (`POST /decrease-stock`), plus the read/admin paths (`/prices`, `/available-count/{sku}`, `/{sku}`).
+- **Asynchronously** via Kafka: `KafkaConsumerService` consumes `StockStatusMessage` events from
+  `${topic.stock.status}` (produced by order-service's transactional outbox) and dispatches on
+  `actionType` (**case-insensitive**): `"commit"` → `commitStock`, `"release"` → `releaseStock`,
+  `"revert"` → `revertStock`. Every event is funneled through `InboxProcessor.processOnce` for structural
+  exactly-once handling. There is **no** Kafka `"reserve"` event — reservation is synchronous REST only.
+  See the [Kafka Integration & Inbox Pattern](#kafka-inbox) section.
 
 **Key Entities**:
 
@@ -83,16 +94,21 @@ This is a Spring Boot microservice for inventory management within a webstore ar
 
 ### API Endpoints (REST Controller)
 
-Base path: `/v1/inventories/inventory`
+Base path: `/v1/inventory/` (`@RequestMapping("/v1/inventory/")` on `InventoryController`)
 
 - `GET /{sku}`: Get inventory details by SKU
-- `GET /available-count/{sku}`: Get available stock count (calculates stockLevel - reservedStock)
-- `POST /reserve-stock`: Reserve stock for orders
-- `POST /commit-stock`: Commit reserved stock (final sale)
-- `POST /revert-stock`: Release reserved stock (cancelled order)
-- `POST /increase-stock`: Warehouse stock replenishment
-- `POST /decrease-stock`: Warehouse stock reduction
-- `DELETE /{sku}`: Remove inventory item
+- `POST /prices`: Look up `List<InventoryDto>` prices for a `List<String>` of SKUs (called by
+  order-service during order creation; throws `EntityNotFoundException` if any SKU is missing)
+- `GET /available-count/{sku}`: Get available stock count (`stockLevel − reservedStock`)
+- `POST /reserve-stock`: Reserve stock for orders (`List<InventoryDto>` → `reserveStocks`)
+- `POST /commit-stock`: Commit reserved stock — final sale (`commitStock`)
+- `POST /revert-stock`: Free a reservation — maps to `releaseStock` (despite the `revert` path name)
+- `POST /increase-stock`: Warehouse stock replenishment (`increaseStockLevel`)
+- `POST /decrease-stock`: Warehouse stock reduction (`decreaseStockLevel`)
+- `DELETE /{sku}`: Remove inventory item (bulk-deletes its audit rows first)
+
+> There is **no** REST endpoint for `revertStock` — it is reachable only via the Kafka `"revert"`
+> actionType.
 
 ### Technology Stack
 
@@ -103,7 +119,7 @@ Base path: `/v1/inventories/inventory`
 - MapStruct for entity-DTO mapping
 - Lombok for boilerplate code reduction
 - Eureka client for service discovery
-- Spring Kafka — inbound consumer of `StockStatusKafka` (`JsonDeserializer`); idempotent,
+- Spring Kafka — inbound consumer of `StockStatusMessage` (`JsonDeserializer`); idempotent,
   **non-transactional** (the inbox provides exactly-once, not Kafka transactions)
 - Spring `@Scheduled` — drives `InboxCleaner` (enabled by `@EnableScheduling` on the application class)
 - Jackson `ObjectMapper` — serializes inbox payloads to JSON
@@ -114,7 +130,7 @@ Base path: `/v1/inventories/inventory`
 - Registers with Eureka service registry
 - Uses Spring Cloud dependencies for distributed system patterns
 - Synchronously serves order-service's REST calls (`/prices`, `/reserve-stock`)
-- Consumes `StockStatusKafka` stock events from order-service over Kafka (`${topic.stock.status}`) —
+- Consumes `StockStatusMessage` stock events from order-service over Kafka (`${topic.stock.status}`) —
   see the [Kafka Integration & Inbox Pattern](#kafka-inbox) section
 
 ## Concurrency and Data Consistency Patterns
@@ -130,7 +146,7 @@ Base path: `/v1/inventories/inventory`
 - **Total Stock**: `stockLevel` field represents physical inventory
 - **Reserved Stock**: `reservedStock` field tracks pending orders
 - **Available Stock**: Calculated as `stockLevel - reservedStock` in repository queries
-- **Two-phase commit**: Reserve → Commit/Revert pattern prevents overselling
+- **Reserve → Commit / Release lifecycle** prevents overselling (plus `revert` to restore physical stock)
 
 <a id="kafka-inbox"></a>## Kafka Integration & Inbox Pattern
 
@@ -145,8 +161,8 @@ flow end-to-end exactly-once semantics on top of at-least-once Kafka delivery.
 
 ### Kafka configuration (`configs/KafkaConfig`)
 
-- **Consumer:** `ConsumerFactory<String, StockStatusKafka>` = `StringDeserializer` (key) +
-  `JsonDeserializer<>(StockStatusKafka.class)` (value). Group `{spring.application.name}-group`,
+- **Consumer:** `ConsumerFactory<String, StockStatusMessage>` = `StringDeserializer` (key) +
+  `JsonDeserializer<>(StockStatusMessage.class)` (value). Group `{spring.application.name}-group`,
   `isolation.level=read_committed`, `enable.auto.commit=false`, `auto.offset.reset=earliest`.
 - **Container factory** `kafkaListenerContainerFactory`: `RECORD` ack mode (offsets committed after
   the `@Transactional` listener returns), concurrency = `${num.partitions}`.
@@ -156,31 +172,37 @@ flow end-to-end exactly-once semantics on top of at-least-once Kafka delivery.
 
 > The producer (order-service) sends with `StringSerializer` (the pre-serialized JSON from its outbox
 > row), so **no `__TypeId__` type header** is on the wire — the `JsonDeserializer` deserializes
-> straight into `StockStatusKafka` from its constructor-configured target type.
+> straight into `StockStatusMessage` from its constructor-configured target type.
 
 ### Consumed event contract
 
-Value is a `StockStatusKafka` JSON object (package `inventoryservice.dto.kafka`):
+Value is a `StockStatusMessage` JSON object (package `inventoryservice.dto.kafka`):
 
-- `stockLevels` — `Collection<StockLevelDto>`; each `StockLevelDto` carries `productSKU` and the
-  **operation quantity in its `reservedStock` field** (order-service maps the order item's `quantity`
-  there). `StockLevelDto.toInventoryDto()` copies it into `InventoryDto.reservedStock`, and
-  `commitStock` / `revertStock` read the quantity via `dto.getReservedStock()`.
-- `actionType` — `"commit"` (final sale → `commitStock`) or `"release"` (free reservation →
-  `revertStock`). Any other value is logged as an error and the event **returns before being recorded**.
+- `stockLevels` — `Collection<StockLevelDto>`; each `StockLevelDto` carries `productSKU`, `stockLevel`,
+  and `reservedStock`. `StockLevelDto.toInventoryDto()` copies all three into the `InventoryDto`.
+  `commitStock` / `releaseStock` read the quantity from `dto.reservedStock`; `revertStock` reads it from
+  `dto.stockLevel`.
+- `actionType` (matched **case-insensitively**) — `"commit"` → `commitStock` (final sale),
+  `"release"` → `releaseStock` (free reservation), `"revert"` → `revertStock` (restore physical stock).
+  Any other value is logged as an error and the event **returns before being recorded**.
 - `orderId` — String; the Kafka message **key** is also the orderId. Events with a `null` orderId are
   ignored (logged warn, return).
 
+> order-service's producer puts the item quantity in `StockLevelDto.reservedStock`, which is exactly the
+> field `commitStock` / `releaseStock` read — the two sides agree. (`revertStock` reads `stockLevel`, but
+> order-service does not emit `"revert"` events today.)
+
 ### Consumer behavior (`managers/KafkaConsumerService.handleStockStatusUpdate`)
 
-- Listener signature `(ConsumerRecord<String, StockStatusKafka> record, @Header(name = "X-Message-Id",
+- Listener signature `(ConsumerRecord<String, StockStatusMessage> record, @Header(name = "X-Message-Id",
   required = false) String messageIdHeader)`, annotated `@Transactional`.
 - Guards: null `orderId` → ignore; unknown `actionType` → log error and `return` (nothing recorded).
 - Computes an idempotency key (`idempotencyKey`): prefers the `X-Message-Id` header (`StringUtils.hasText`),
   else the stable business key `stock-status:{orderId}:{actionType}`. **Never** `topic-partition-offset`.
-- Builds an `InboxMessage` via `inboxProcessor.fromKafkaRecord(messageId, "Order", orderId, actionType,
-  record, event)` and wraps the per-SKU `commitStock`/`revertStock` calls in
-  `inboxProcessor.processOnce(msg, handler)`. A `false` return means a duplicate was skipped (logged).
+- Builds an `InboxMessage` via `inboxProcessor.fromKafkaRecord(messageId, "Inventory", orderId,
+  actionType, record, event)` and wraps the per-SKU `commitStock` / `releaseStock` / `revertStock`
+  calls (selected by `actionType`) in `inboxProcessor.processOnce(msg, handler)`. A `false` return
+  means a duplicate was skipped (logged).
 
 ### Inbox components (package `inventoryservice.inbox`)
 

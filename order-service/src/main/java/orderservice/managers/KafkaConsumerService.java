@@ -38,7 +38,7 @@ public class KafkaConsumerService {
 
         PaymentStatusMessage event = record.value();
 
-        log.info("Received order-status event orderId={} actionType={} topic={} partition={} offset={}",
+        log.info("Received payment-status event orderId={} actionType={} topic={} partition={} offset={}",
                 event.getOrderId(), event.getActionType(),
                 record.topic(), record.partition(), record.offset());
 
@@ -76,7 +76,7 @@ public class KafkaConsumerService {
                 orderManager.changeOrderStatus(event.getOrderId(), status));
 
         if (!processed) {
-            log.info("Duplicate order-status event skipped: messageId={} orderId={} actionType={}",
+            log.info("Duplicate payment-status event skipped: messageId={} orderId={} actionType={}",
                     messageId, event.getOrderId(), event.getActionType());
         }
     }

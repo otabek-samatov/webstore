@@ -15,7 +15,9 @@
       "Bash(then cat \"pom.xml\")",
       "Bash(cat:*)",
       "Read(//c/Projects/webstore-config/config/**)",
-      "Bash(git -C C:/Projects/webstore status --short)"
+      "Bash(git -C C:/Projects/webstore status --short)",
+      "Bash(ls inventory-service/src/main/resources/db/migration/)",
+      "Bash(ls order-service/src/main/resources/db/migration/)"
     ],
     "deny": [],
     "ask": []

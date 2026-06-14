@@ -60,7 +60,7 @@ public class OutboxPublisher {
         OutboxEvent event = new OutboxEvent(
                 "Payment",
                 String.valueOf(payload.getOrderId()),
-                payload.getStatus(),
+                payload.getActionType(),
                 paymentStatusTopic,
                 json
         );
@@ -68,7 +68,7 @@ public class OutboxPublisher {
         repository.save(event);
 
         log.debug("Outbox event recorded: type={}, aggregateId={}",
-                payload.getStatus(), payload.getOrderId());
+                payload.getActionType(), payload.getOrderId());
     }
 
     private String serialize(Object payload) {
