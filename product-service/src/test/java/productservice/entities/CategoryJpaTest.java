@@ -4,7 +4,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.validation.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import productservice.repositories.CategoryRepository;
 
 import java.util.Arrays;
@@ -271,7 +271,7 @@ class CategoryJpaTest {
         entityManager.flush();
 
         assertNotNull(saved.getVersion());
-        Long initialVersion = saved.getVersion();
+        Integer initialVersion = saved.getVersion();
 
         saved.setName("Updated Lock Test");
         Category updated = categoryRepository.save(saved);

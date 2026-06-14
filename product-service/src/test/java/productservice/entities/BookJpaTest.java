@@ -5,7 +5,7 @@ import jakarta.validation.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import productservice.repositories.AuthorRepository;
 import productservice.repositories.BookRepository;
 import productservice.repositories.CategoryRepository;
@@ -443,7 +443,7 @@ class BookJpaTest {
         entityManager.flush();
 
         assertNotNull(saved.getVersion());
-        Long initialVersion = saved.getVersion();
+        Integer initialVersion = saved.getVersion();
 
         saved.setTitle("Updated Title");
         Book updated = bookRepository.save(saved);

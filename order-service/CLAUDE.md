@@ -1044,11 +1044,17 @@ Current test coverage is minimal (only context-load test exists). When adding te
 
 ### Dependencies to Be Aware Of
 
+- **Spring Boot 4.1.0** (Spring Framework 7), Java 21
 - **MapStruct 1.5.5.Final** — compile-time code generation for mappers
 - **Lombok** — annotation processor required for IDE compilation
-- **Flyway 10.20.0** — runs migrations on startup
-- **Spring Cloud (2024.0.1 / 2025.0.0)** — Eureka client, Config client, LoadBalancer
-- **Spring Kafka** — idempotent producer + consumer (no Kafka transactions; outbox replaces them)
+- **Web** via `spring-boot-starter-webmvc` (renamed from `spring-boot-starter-web` in Spring Boot 4)
+- **Flyway** — runs migrations on startup; wired via `spring-boot-starter-flyway` +
+  `flyway-database-postgresql` (BOM-managed versions, ~Flyway 11; `flyway-core` alone no longer
+  auto-configures migrations under Spring Boot 4)
+- **Spring Cloud 2025.1.2** — Eureka client, Config client, LoadBalancer
+- **Spring Kafka 4** — idempotent producer + consumer (no Kafka transactions; outbox replaces them).
+  The consumer uses `JacksonJsonDeserializer` / the producer config references `JacksonJsonSerializer`
+  (Jackson 3; replaces the deprecated-for-removal `JsonDeserializer` / `JsonSerializer`)
 - **Spring `@Scheduled`** — drives `OutboxPoller`, recovery, `OutboxCleaner`,
   `InboxCleaner`, and `PaymentFailedReaper` (enabled by `@EnableScheduling` on
   `OrderServiceApplication`)
@@ -1056,7 +1062,10 @@ Current test coverage is minimal (only context-load test exists). When adding te
   `ReserveStockStep.compensate`) to open their own DB transactions without relying
   on an enclosing `@Transactional` boundary; `SagaStateService` uses
   `Propagation.REQUIRES_NEW` to commit lifecycle rows independently
-- **Jackson `ObjectMapper`** — serializes outbox **and inbox** payloads to JSON
+- **Jackson 3 `ObjectMapper`** (`tools.jackson.databind.ObjectMapper`) — serializes outbox **and inbox**
+  payloads to JSON; `writeValueAsString` throws the unchecked `tools.jackson.core.JacksonException`
+  (the `OutboxPublisher` / `InboxProcessor` `serialize` catches were updated from the old checked
+  `JsonProcessingException`)
 - **PostgreSQL JDBC** — runtime dependency
 - **Bean Validation (Jakarta)** — DTO and entity constraints
 

@@ -6,7 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 gateway-service is the **API Gateway** — the single external entry point that routes incoming
 requests to the backend services discovered through Eureka. It is built on **Spring Cloud Gateway
-MVC** (the servlet-stack gateway, not the reactive WebFlux one).
+Server Web MVC** (the servlet-stack gateway, not the reactive WebFlux one).
+
+> **Spring Cloud 2025.x rename:** the old `spring-cloud-starter-gateway-mvc` artifact was deprecated in
+> 2025.0 and is gone in 2025.1 — this service now depends on **`spring-cloud-starter-gateway-server-webmvc`**.
+> The route DSL/config is unchanged; only the starter coordinate moved. (The HTTP-client config that was
+> nested under the old `mvc` namespace is now top-level `gateway` config, but this service doesn't set it.)
 
 - **Entry point:** `ApiGatewayApplication` — a plain `@SpringBootApplication` (Eureka client
   auto-configures from the classpath; no explicit `@EnableDiscoveryClient` needed).
@@ -62,10 +67,11 @@ Server reads from Git). Do not add routes to this service's source `application.
 
 ## Dependencies
 
-- `spring-cloud-starter-gateway-mvc` (servlet-stack API gateway)
+- `spring-cloud-starter-gateway-server-webmvc` (servlet-stack API gateway; renamed from
+  `spring-cloud-starter-gateway-mvc` in Spring Cloud 2025.x)
 - `spring-cloud-starter-netflix-eureka-client` (registers + discovers `lb://` targets)
 - `spring-cloud-starter-config` (fetches its own config from config-service)
-- Spring Cloud BOM `2024.0.1`, Spring Boot `3.4.4`, Java 21
+- Spring Cloud BOM `2025.1.2`, Spring Boot `4.1.0` (Spring Framework 7), Java 21
 
 ## Startup Position
 

@@ -4,7 +4,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.validation.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import productservice.repositories.AuthorRepository;
 
 import java.util.Arrays;
@@ -174,7 +174,7 @@ class AuthorJpaTest {
         entityManager.flush();
 
         assertNotNull(saved.getVersion());
-        Long initialVersion = saved.getVersion();
+        Integer initialVersion = saved.getVersion();
 
         saved.setFirstName("Updated");
         Author updated = authorRepository.save(saved);

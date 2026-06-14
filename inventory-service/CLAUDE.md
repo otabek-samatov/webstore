@@ -112,17 +112,21 @@ Base path: `/v1/inventory/` (`@RequestMapping("/v1/inventory/")` on `InventoryCo
 
 ### Technology Stack
 
-- Java 21 with Spring Boot 3.4.4
-- Spring Cloud Config for external configuration
+- Java 21 with Spring Boot 4.1.0 (Spring Framework 7)
+- Spring Cloud 2025.1.2 — Config for external configuration
 - Spring Data JPA with PostgreSQL
-- Flyway for database migrations
+- Web via `spring-boot-starter-webmvc` (renamed from `spring-boot-starter-web` in Spring Boot 4)
+- Flyway for database migrations — via `spring-boot-starter-flyway` + `flyway-database-postgresql`
+  (BOM-managed; `flyway-core` alone no longer auto-configures under Spring Boot 4)
 - MapStruct for entity-DTO mapping
 - Lombok for boilerplate code reduction
 - Eureka client for service discovery
-- Spring Kafka — inbound consumer of `StockStatusMessage` (`JsonDeserializer`); idempotent,
-  **non-transactional** (the inbox provides exactly-once, not Kafka transactions)
+- Spring Kafka 4 — inbound consumer of `StockStatusMessage` (`JacksonJsonDeserializer`, Jackson 3);
+  idempotent, **non-transactional** (the inbox provides exactly-once, not Kafka transactions)
 - Spring `@Scheduled` — drives `InboxCleaner` (enabled by `@EnableScheduling` on the application class)
-- Jackson `ObjectMapper` — serializes inbox payloads to JSON
+- Jackson **3** `ObjectMapper` (`tools.jackson.databind.ObjectMapper`) — serializes inbox payloads to
+  JSON; `writeValueAsString` now throws the unchecked `tools.jackson.core.JacksonException`
+  (`InboxProcessor.serialize` catches it instead of the old checked `JsonProcessingException`)
 
 ### Microservice Integration
 
@@ -162,7 +166,8 @@ flow end-to-end exactly-once semantics on top of at-least-once Kafka delivery.
 ### Kafka configuration (`configs/KafkaConfig`)
 
 - **Consumer:** `ConsumerFactory<String, StockStatusMessage>` = `StringDeserializer` (key) +
-  `JsonDeserializer<>(StockStatusMessage.class)` (value). Group `{spring.application.name}-group`,
+  `JacksonJsonDeserializer<>(StockStatusMessage.class)` (value; Spring Kafka 4 / Jackson 3 — replaces the
+  deprecated-for-removal `JsonDeserializer`). Group `{spring.application.name}-group`,
   `isolation.level=read_committed`, `enable.auto.commit=false`, `auto.offset.reset=earliest`.
 - **Container factory** `kafkaListenerContainerFactory`: `RECORD` ack mode (offsets committed after
   the `@Transactional` listener returns), concurrency = `${num.partitions}`.
@@ -171,7 +176,7 @@ flow end-to-end exactly-once semantics on top of at-least-once Kafka delivery.
   is also configured for symmetry; there is no `transactional.id` and no `KafkaTransactionManager`.
 
 > The producer (order-service) sends with `StringSerializer` (the pre-serialized JSON from its outbox
-> row), so **no `__TypeId__` type header** is on the wire — the `JsonDeserializer` deserializes
+> row), so **no `__TypeId__` type header** is on the wire — the `JacksonJsonDeserializer` deserializes
 > straight into `StockStatusMessage` from its constructor-configured target type.
 
 ### Consumed event contract

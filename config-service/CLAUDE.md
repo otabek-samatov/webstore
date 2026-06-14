@@ -70,7 +70,7 @@ spring.cloud.config.server.git:
 - `spring-cloud-config-server` (the server itself)
 - `spring-boot-starter-actuator`
 - `spring-boot-starter-data-jpa` + `postgresql` (currently unused — see Gotchas)
-- Spring Cloud BOM `2024.0.1`, Spring Boot `3.4.4`, Java 21
+- Spring Cloud BOM `2025.1.2`, Spring Boot `4.1.0` (Spring Framework 7), Java 21
 
 ## Startup Position
 

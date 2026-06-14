@@ -20,7 +20,9 @@
       "PowerShell(git -C C:\\\\Projects\\\\webstore ls-files product-service/src/main/java/uz/webstore/product/entities/)",
       "WebSearch",
       "WebFetch(domain:spring.io)",
-      "WebFetch(domain:www.danvega.dev)"
+      "WebFetch(domain:www.danvega.dev)",
+      "PowerShell(.\\\\gradlew.bat compileJava compileTestJava --no-daemon --console=plain)",
+      "WebFetch(domain:github.com)"
     ]
   }
 }

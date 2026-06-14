@@ -10,19 +10,31 @@ monorepo** with 8 independent microservices.
 **Technology Stack:**
 
 - Java 21
-- Spring Boot 3.4.4 - 3.5.6
-- Spring Cloud 2024.0.1 - 2025.0.0
+- Spring Boot 4.1.0 (built on Spring Framework 7)
+- Spring Cloud 2025.1.2 (Oakwood)
 - PostgreSQL 17
 - Apache Kafka 4
 - Netflix Eureka (Service Discovery)
 - Spring Cloud Config (Centralized Configuration)
-- Spring Cloud Gateway MVC (API Gateway)
+- Spring Cloud Gateway Server Web MVC (API Gateway)
+
+> **Spring Boot 4 upgrade notes (applies repo-wide):** every module now pins Spring Boot `4.1.0` and
+> Spring Cloud `2025.1.2`. Key migration deltas baked into the build:
+> - Jackson 2 → **Jackson 3** — `ObjectMapper` moved to `tools.jackson.databind`; serialization throws
+    > the unchecked `tools.jackson.core.JacksonException` (no more checked `JsonProcessingException`).
+> - **Flyway** is no longer auto-configured by `flyway-core` alone — services depend on the new
+    > `spring-boot-starter-flyway` plus `flyway-database-postgresql` (versions BOM-managed, ~Flyway 11).
+> - `spring-boot-starter-web` → **`spring-boot-starter-webmvc`**.
+> - Gateway starter `spring-cloud-starter-gateway-mvc` → **`spring-cloud-starter-gateway-server-webmvc`**.
+> - Spring Kafka's `JsonSerializer`/`JsonDeserializer` (deprecated for removal, Jackson-2-backed) →
+    > **`JacksonJsonSerializer`/`JacksonJsonDeserializer`** (Jackson 3).
 
 **Note:** This is backend-only - no UI implementation.
 
 ## Build Commands
 
-This is a Gradle-based multi-module project using Gradle 8.10.2.
+This is a Gradle-based multi-module project using Gradle 8.14.4 (Spring Boot 4 requires Gradle 8.14+ on
+the 8.x line, or Gradle 9.x).
 
 ```bash
 # Build all services
@@ -339,7 +351,7 @@ PostgreSQL Database
 
 ## API Gateway & Service Discovery
 
-**API Gateway (Spring Cloud Gateway MVC):**
+**API Gateway (Spring Cloud Gateway Server Web MVC):**
 
 - Single entry point for all client requests
 - Routes to microservices using Eureka service names
@@ -377,8 +389,9 @@ full design.
 - `isolation.level=read_committed`, `enable.auto.commit=false` (manual offset management)
 - RECORD-level acknowledgment mode; `@Transactional` listener (the inbox row, business change, and any
   outbox rows commit together, then the offset commits)
-- Value deserializer is `JsonDeserializer<>(...)` with a constructor-configured target type (the wire
-  payload has no `__TypeId__` header since producers send with `StringSerializer`)
+- Value deserializer is `JacksonJsonDeserializer<>(...)` (Spring Kafka 4 / Jackson 3) with a
+  constructor-configured target type (the wire payload has no `__TypeId__` header since producers send
+  with `StringSerializer`)
 
 > payment-service is **producer-only** (no `@KafkaListener`); inventory-service configures an idempotent
 > string producer for symmetry but does not currently publish.
@@ -490,13 +503,14 @@ overrides are still needed only to avoid a local port clash.)
 
 All services share common dependencies defined in root `build.gradle`:
 
-- **Spring Boot:** 3.4.4 - 3.5.6
-- **Spring Cloud:** 2024.0.1 - 2025.0.0
+- **Spring Boot:** 4.1.0
+- **Spring Cloud:** 2025.1.2
 - **MapStruct:** 1.5.5.Final
 - **Lombok:** Annotation processor
-- **Flyway:** 10.20.0
+- **Flyway:** via `spring-boot-starter-flyway` + `flyway-database-postgresql` (versions BOM-managed)
+- **Jackson:** 3 (`tools.jackson.*`)
 - **PostgreSQL:** JDBC driver
-- **Kafka:** Spring Kafka
+- **Kafka:** Spring Kafka 4
 - **JUnit:** 5.10.2
 
 ## External Dependencies

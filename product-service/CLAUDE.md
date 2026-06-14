@@ -21,7 +21,7 @@ using Eureka for service discovery and Spring Cloud Config for centralized confi
 
 - Application auto-generates sample data on startup via `MainGenerator`
 - Database migrations handled automatically by Flyway on startup
-- Uses Java 21, Spring Boot 3.4.4, Spring Cloud 2024.0.1
+- Uses Java 21, Spring Boot 4.1.0 (Spring Framework 7), Spring Cloud 2025.1.2
 
 ## Core Architecture
 
@@ -84,3 +84,10 @@ Category (hierarchical)
 - **Spring Cloud Config**: External config server at `http://localhost:8071`
 - **Service Discovery**: Eureka client registration as `product-service`
 - **Application config**: `application.yml` with config server import
+
+### Spring Boot 4 notes
+
+- Uses the **`spring-boot-starter-webmvc`** starter (renamed from `spring-boot-starter-web` in Spring Boot 4).
+- Flyway is wired via **`spring-boot-starter-flyway`** + `flyway-database-postgresql` (BOM-managed
+  versions, ~Flyway 11) — `flyway-core` alone no longer auto-configures migrations in Spring Boot 4.
+- This service does not use Kafka/Jackson directly, so the Jackson 2 → 3 migration doesn't touch it.

@@ -11,16 +11,19 @@ refund operations for customer orders, and notifies order-service of payment out
 **Tech Stack:**
 
 - Java 21
-- Spring Boot 3.5.6
+- Spring Boot 4.1.0 (Spring Framework 7)
 - Spring Data JPA (Hibernate)
 - PostgreSQL 17
-- Spring Cloud (Config, Eureka)
-- Spring Kafka — **producer only** (idempotent, non-transactional; see [Kafka & Outbox](#kafka--outbox))
+- Spring Cloud 2025.1.2 (Config, Eureka)
+- Spring Kafka 4 — **producer only** (idempotent, non-transactional; see [Kafka & Outbox](#kafka--outbox))
 - Spring `@Scheduled` — drives the outbox poller / recovery / cleanup (`@EnableScheduling` on the app class)
 - MapStruct for DTO mapping
-- Flyway for database migrations
-- Lombok for boilerplate reduction
-- Jackson `ObjectMapper` — serializes outbox payloads to JSON
+- Web via `spring-boot-starter-webmvc` (renamed from `spring-boot-starter-web` in Spring Boot 4)
+- Flyway for database migrations — via `spring-boot-starter-flyway` + `flyway-database-postgresql`
+  (BOM-managed; `flyway-core` alone no longer auto-configures under Spring Boot 4)
+- Jackson **3** `ObjectMapper` (`tools.jackson.databind.ObjectMapper`) — serializes outbox payloads to
+  JSON; `writeValueAsString` now throws the **unchecked** `tools.jackson.core.JacksonException` (the
+  `OutboxPublisher.serialize` catch was updated from the old checked `JsonProcessingException`)
 
 **Port:** `8078` (from Config Server; `payment_schema`). The source-tree `application.yml` carries only bootstrap
 config (app name + `config.import: optional:configserver:`).
