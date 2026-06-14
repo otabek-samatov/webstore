@@ -7,8 +7,6 @@ public class StockLevelDto {
 
     private Long stockLevel = 0L;
 
-    private Long reservedStock = 0L;
-
     private String productSKU = "";
 
 }

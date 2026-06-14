@@ -14,7 +14,7 @@ import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.springframework.kafka.transaction.KafkaTransactionManager;
-import paymentservice.dto.kafka.OrderStatusKafka;
+import paymentservice.dto.kafka.PaymentStatusMessage;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -77,20 +77,20 @@ public class KafkaConfig {
     }
 
     @Bean
-    public ProducerFactory<String, OrderStatusKafka> producerFactory() {
-        DefaultKafkaProducerFactory<String, OrderStatusKafka> factory =
+    public ProducerFactory<String, PaymentStatusMessage> producerFactory() {
+        DefaultKafkaProducerFactory<String, PaymentStatusMessage> factory =
                 new DefaultKafkaProducerFactory<>(producerConfigs());
         return factory;
     }
 
     @Bean
-    public KafkaTemplate<String, OrderStatusKafka> kafkaTemplate() {
+    public KafkaTemplate<String, PaymentStatusMessage> kafkaTemplate() {
         return new KafkaTemplate<>(producerFactory());
     }
 
     @Bean
-    public KafkaTransactionManager<String, OrderStatusKafka> kafkaTransactionManager(
-            ProducerFactory<String, OrderStatusKafka> producerFactory) {
+    public KafkaTransactionManager<String, PaymentStatusMessage> kafkaTransactionManager(
+            ProducerFactory<String, PaymentStatusMessage> producerFactory) {
         return new KafkaTransactionManager<>(producerFactory);
     }
 
@@ -106,15 +106,15 @@ public class KafkaConfig {
     }
 
     @Bean
-    public ConsumerFactory<String, OrderStatusKafka> consumerFactory() {
+    public ConsumerFactory<String, PaymentStatusMessage> consumerFactory() {
         return new DefaultKafkaConsumerFactory<>(consumerConfigs(),
                 new StringDeserializer(),
-                new JsonDeserializer<>(OrderStatusKafka.class));
+                new JsonDeserializer<>(PaymentStatusMessage.class));
     }
 
     @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, OrderStatusKafka> kafkaListenerContainerFactory() {
-        ConcurrentKafkaListenerContainerFactory<String, OrderStatusKafka> factory =
+    public ConcurrentKafkaListenerContainerFactory<String, PaymentStatusMessage> kafkaListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, PaymentStatusMessage> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory());
         factory.setConcurrency(partitions);

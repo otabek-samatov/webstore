@@ -18,7 +18,7 @@ public class StockStatusKafka {
     public void addItem(OrderItemDto orderItemDto) {
 
         StockLevelDto stockLevel = new StockLevelDto();
-        stockLevel.setReservedStock(orderItemDto.getQuantity());
+        stockLevel.setStockLevel(orderItemDto.getQuantity());
         stockLevel.setProductSKU(orderItemDto.getProductSKU());
 
         this.stockLevels.add(stockLevel);

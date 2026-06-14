@@ -6,9 +6,9 @@ import lombok.NoArgsConstructor;
 
 @Data
 @NoArgsConstructor
-public class OrderStatusKafka {
+public class PaymentStatusMessage {
 
     private long orderId;
-    private String actionType;
+    private String status;
 
 }

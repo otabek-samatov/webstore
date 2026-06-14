@@ -47,7 +47,15 @@ public class KafkaConsumerService {
             return;
         }
 
-        OrderStatus status = mapStatus(event.getActionType());
+        OrderStatus status;
+        if ("completed".equals(event.getActionType())) {
+            status = OrderStatus.COMPLETED;
+        } else if ("refunded".equals(event.getActionType())) {
+            status = OrderStatus.REFUNDED;
+        } else {
+            status = null;
+        }
+
         if (status == null) {
             log.warn("Ignoring unknown actionType={} for orderId={}",
                     event.getActionType(), event.getOrderId());
@@ -71,17 +79,6 @@ public class KafkaConsumerService {
             log.info("Duplicate order-status event skipped: messageId={} orderId={} actionType={}",
                     messageId, event.getOrderId(), event.getActionType());
         }
-    }
-
-    private OrderStatus mapStatus(String actionType) {
-
-        for (OrderStatus status : OrderStatus.values()) {
-            if (status.toString().equals(actionType)) {
-                return status;
-            }
-        }
-
-        return null;
     }
 
     /**

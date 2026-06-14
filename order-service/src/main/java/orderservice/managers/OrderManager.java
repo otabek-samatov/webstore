@@ -125,10 +125,12 @@ public class OrderManager {
                 orderId, oldOrderStatus, newOrderStatus);
 
         String actionType = null;
-        if (order.getOrderStatus() == OrderStatus.CANCELLED || order.getOrderStatus() == OrderStatus.REFUNDED) {
+        if (order.getOrderStatus() == OrderStatus.CANCELLED) {
             actionType = "release";
         } else if (order.getOrderStatus() == OrderStatus.COMPLETED) {
             actionType = "commit";
+        } else if (order.getOrderStatus() == OrderStatus.REFUNDED) {
+            actionType = "revert";
         }
 
         if (StringUtils.hasText(actionType)) {

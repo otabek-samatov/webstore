@@ -6,11 +6,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import paymentservice.dto.PaymentDto;
 import paymentservice.dto.RefundDto;
+import paymentservice.dto.kafka.PaymentStatusMessage;
 import paymentservice.entities.Payment;
 import paymentservice.entities.PaymentStatus;
 import paymentservice.entities.Refund;
 import paymentservice.mappers.PaymentMapper;
 import paymentservice.mappers.RefundMapper;
+import paymentservice.outbox.OutboxPublisher;
 import paymentservice.repositories.PaymentRepository;
 import paymentservice.repositories.RefundRepository;
 
@@ -32,7 +34,7 @@ public class PaymentManager {
 
     private final RefundRepository refundRepository;
 
-    private final KafkaService kafkaService;
+    private final OutboxPublisher outboxPublisher;
 
     @Transactional
     public Payment processPayment(PaymentDto paymentDto) {
@@ -109,39 +111,23 @@ public class PaymentManager {
             throw new IllegalArgumentException("Payment ID is null");
         }
 
-        if (Optional.ofNullable(refundDto.getRefundAmount()).orElse(BigDecimal.ZERO).compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("refund amount should be positive");
-        }
-
         Payment payment = getPaymentById(refundDto.getPaymentId());
 
         if (payment.getPaymentStatus() != PaymentStatus.COMPLETED) {
             throw new IllegalArgumentException("Can only refund completed payments");
         }
 
-        if (refundDto.getRefundAmount().compareTo(payment.getAmount()) != 0) {
-            throw new IllegalArgumentException("Refund amount should be equal to payment amount");
-        }
-
-        Integer refundedPaymentsCount = refundRepository.getCountByOrderAndStatus(payment.getOrderId(), RefundStatus.COMPLETED);
-        if (refundedPaymentsCount > 0) {
-            throw new IllegalArgumentException("payment has already been refunded !");
-        }
-
         Refund refund = refundMapper.toEntity(refundDto);
+        refund.setPayment(payment);
 
         boolean success = paymentProcess.processRefund(payment);
         if (success) {
-            refund.setRefundStatus(RefundStatus.COMPLETED);
             payment.setPaymentStatus(PaymentStatus.REFUNDED);
+            paymentRepository.save(payment);
             updateOrderStatus(payment);
-        } else {
-            refund.setRefundStatus(RefundStatus.FAILED);
         }
 
-        payment.addRefund(refund);
-
-        paymentRepository.save(payment);
+        refundRepository.save(refund);
 
         return refund;
     }
@@ -161,12 +147,16 @@ public class PaymentManager {
             throw new IllegalArgumentException("payment ID is null");
         }
 
-        return refundRepository.findRefundByPaymentId(paymentId);
+        return refundRepository.findAllByPayment_Id(paymentId);
     }
 
 
     private void updateOrderStatus(Payment p) {
-        kafkaService.sendOrderStatus(p.getPaymentStatus().name(), p.getOrderId());
+        PaymentStatusMessage m = new PaymentStatusMessage();
+        m.setOrderId(p.getOrderId());
+        m.setStatus(p.getPaymentStatus().name());
+
+        outboxPublisher.publishPaymentStatusEvent(m);
     }
 
 }

@@ -58,13 +58,11 @@ public class KafkaConsumerService {
 
         Runnable r = null;
         if ("release".equalsIgnoreCase(event.getActionType())) {
-            r = () -> {
-                event.getStockLevels().forEach(stockLevel -> inventoryManager.revertStock(stockLevel.toInventoryDto()));
-            };
+            r = () -> event.getStockLevels().forEach(stockLevel -> inventoryManager.releaseStock(stockLevel.toInventoryDto()));
         } else if ("commit".equalsIgnoreCase(event.getActionType())) {
-            r = () -> {
-                event.getStockLevels().forEach(stockLevel -> inventoryManager.commitStock(stockLevel.toInventoryDto()));
-            };
+            r = () -> event.getStockLevels().forEach(stockLevel -> inventoryManager.commitStock(stockLevel.toInventoryDto()));
+        } else if ("revert".equalsIgnoreCase(event.getActionType())) {
+            r = () -> event.getStockLevels().forEach(stockLevel -> inventoryManager.revertStock(stockLevel.toInventoryDto()));
         }
 
         if (r == null) {
