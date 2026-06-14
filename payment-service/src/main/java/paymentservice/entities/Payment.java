@@ -6,13 +6,9 @@ import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.proxy.HibernateProxy;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.LinkedHashSet;
-import java.util.Objects;
-import java.util.Set;
 
 @Getter
 @Setter
@@ -21,12 +17,8 @@ import java.util.Set;
         @Index(name = "idx_payment_order_id", columnList = "order_id"),
         @Index(name = "idx_payment_user_id", columnList = "user_id")
 })
-public class Payment {
-    @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "payment_seq")
-    @SequenceGenerator(name = "payment_seq", allocationSize = 1)
-    @Column(name = "id", nullable = false)
-    private Long id;
+@SequenceGenerator(name = "entity_seq", sequenceName = "payment_seq", allocationSize = 50, initialValue = 1)
+public class Payment extends CoreEntity {
 
     @NotNull(message = "Order ID should be specified")
     @Column(name = "order_id", nullable = false, unique = true)
@@ -49,43 +41,4 @@ public class Payment {
     @Column(name = "amount", nullable = false, precision = 9, scale = 2)
     private BigDecimal amount;
 
-    @Version
-    @Column(name = "version")
-    private Integer version;
-
-    @Setter(lombok.AccessLevel.NONE)
-    @Getter(lombok.AccessLevel.NONE)
-    @OneToMany(mappedBy = "payment", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Set<Refund> refunds = new LinkedHashSet<>();
-
-
-    public void addRefund(Refund refund) {
-        refunds.add(refund);
-        refund.setPayment(this);
-    }
-
-    public void removeRefund(Refund refund) {
-        refunds.remove(refund);
-        refund.setPayment(null);
-    }
-
-    public Set<Refund> getRefunds() {
-        return Set.copyOf(refunds);
-    }
-
-    @Override
-    public final boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null) return false;
-        Class<?> oEffectiveClass = o instanceof HibernateProxy ? ((HibernateProxy) o).getHibernateLazyInitializer().getPersistentClass() : o.getClass();
-        Class<?> thisEffectiveClass = this instanceof HibernateProxy ? ((HibernateProxy) this).getHibernateLazyInitializer().getPersistentClass() : this.getClass();
-        if (thisEffectiveClass != oEffectiveClass) return false;
-        Payment payment = (Payment) o;
-        return getId() != null && Objects.equals(getId(), payment.getId());
-    }
-
-    @Override
-    public final int hashCode() {
-        return this instanceof HibernateProxy ? ((HibernateProxy) this).getHibernateLazyInitializer().getPersistentClass().hashCode() : getClass().hashCode();
-    }
 }

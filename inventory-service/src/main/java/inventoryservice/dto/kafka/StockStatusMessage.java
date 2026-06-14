@@ -8,7 +8,7 @@ import java.util.Collection;
 
 @Data
 @NoArgsConstructor
-public class StockStatusKafka {
+public class StockStatusMessage {
     private Collection<StockLevelDto> stockLevels = new ArrayList<>();
     private String actionType;
     private String orderId;

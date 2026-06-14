@@ -58,7 +58,7 @@ public class OrderManager {
      * <p>
      * On a successful charge the order transition to {@code COMPLETED} happens
      * <strong>asynchronously</strong>: payment-service publishes an
-     * {@code OrderStatusKafka} event that {@code KafkaConsumerService} turns into
+     * {@code PaymentStatusMessage} event that {@code KafkaConsumerService} turns into
      * {@code PAYMENT_FAILED → COMPLETED}. The returned order therefore still reads
      * {@code PAYMENT_FAILED} until that event is processed. A repeated decline
      * leaves the order {@code PAYMENT_FAILED} so the customer can try again (or
@@ -125,10 +125,12 @@ public class OrderManager {
                 orderId, oldOrderStatus, newOrderStatus);
 
         String actionType = null;
-        if (order.getOrderStatus() == OrderStatus.CANCELLED || order.getOrderStatus() == OrderStatus.REFUNDED) {
+        if (order.getOrderStatus() == OrderStatus.CANCELLED) {
             actionType = "release";
         } else if (order.getOrderStatus() == OrderStatus.COMPLETED) {
             actionType = "commit";
+        } else if (order.getOrderStatus() == OrderStatus.REFUNDED) {
+            actionType = "revert";
         }
 
         if (StringUtils.hasText(actionType)) {

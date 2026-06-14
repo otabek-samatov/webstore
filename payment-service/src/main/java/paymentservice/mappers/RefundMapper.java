@@ -11,6 +11,7 @@ public interface RefundMapper {
     @Mapping(target = "payment", ignore = true)
     Refund toEntity(RefundDto refundDto);
 
+    @Mapping(target = "paymentId", source = "payment.id")
     RefundDto toDto(Refund refund);
 
     @Mapping(target = "payment", ignore = true)

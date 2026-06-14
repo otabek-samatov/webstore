@@ -1,4 +1,4 @@
-package orderservice.dto.kafka;
+package paymentservice.dto.kafka;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -6,9 +6,9 @@ import lombok.NoArgsConstructor;
 
 @Data
 @NoArgsConstructor
-public class OrderStatusKafka {
+public class PaymentStatusMessage {
 
-    private Long orderId;
+    private long orderId;
     private String actionType;
 
 }

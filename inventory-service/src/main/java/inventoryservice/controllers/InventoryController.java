@@ -49,7 +49,7 @@ public class InventoryController {
 
     @PostMapping("/revert-stock")
     public ResponseEntity<Void> releaseStock(@RequestBody InventoryDto dto) {
-        manager.revertStock(dto);
+        manager.releaseStock(dto);
         return ResponseEntity.noContent().build();
     }
 

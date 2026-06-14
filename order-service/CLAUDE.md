@@ -160,12 +160,15 @@ not an exception.
 - **Produces:** stock-status events on `${topic.stock.status}` (key: `orderId` as a string).
   Payload is a JSON-serialized **`StockStatusKafka`** object — `OutboxPublisher.publishOrderItemEvent`
   wraps the order items into a `StockStatusKafka` (`actionType`, `orderId`, and a `stockLevels`
-  collection of `StockLevelDto`, each carrying the item **quantity in its `reservedStock` field**)
-  before serializing. This is the exact shape `inventory-service` deserializes. Publishing is
-  **outbox-driven** — see the [Outbox Pattern](#outbox-pattern) section.
-- **Consumes:** `OrderStatusKafka` events from `${topic.order.status}` (payment-service is the producer).
-  Every event is funneled through `InboxProcessor.processOnce` (see the
-  [Inbox Pattern](#inbox-pattern) section), so duplicate redeliveries become a structural no-op.
+  collection of `StockLevelDto`). `StockStatusKafka.addItem` maps each item's **`quantity` into the
+  `StockLevelDto.reservedStock` field** (this service's `StockLevelDto` carries only `reservedStock` +
+  `productSKU`), which is the field inventory-service's `commitStock` / `releaseStock` read as the
+  operation amount. Publishing is **outbox-driven** — see the [Outbox Pattern](#outbox-pattern) section.
+- **Consumes:** `PaymentStatusMessage` events from `${topic.payment.status}` (payment-service is the
+  producer). The payload is `{ orderId, actionType }` with `actionType` lowercased
+  (`completed` / `refunded` act on the order; `failed` is ignored). Every event is funneled through
+  `InboxProcessor.processOnce` (see the [Inbox Pattern](#inbox-pattern) section), so duplicate
+  redeliveries become a structural no-op.
 - **Delivery semantics:** at-least-once on the producer side. The consumer side uses
   `read_committed` + manual offset commit inside a DB transaction, *and* the inbox guarantees
   the handler runs at most once per `messageId`.
@@ -206,14 +209,14 @@ consumed by inventory-service):
 - RECORD-level acknowledgment mode (offsets committed inside the `@Transactional` listener)
 - Concurrency set to `${num.partitions}`
 
-**Consumer Behavior (`KafkaConsumerService.handleOrderStatusUpdate`):**
+**Consumer Behavior (`KafkaConsumerService.handlePaymentEvent`):**
 
-- Listener signature is `(ConsumerRecord<String, OrderStatusKafka> record, @Header("X-Message-Id",
+- Listener signature is `(ConsumerRecord<String, PaymentStatusMessage> record, @Header("X-Message-Id",
   required=false) String messageIdHeader)` — Kafka metadata is exposed so it can be stored on
   the inbox row.
 - Ignores events with `null` orderId (logs warn, returns)
-- Maps `actionType`: `"Completed"` → `OrderStatus.COMPLETED`, `"Refunded"` → `OrderStatus.REFUNDED`.
-  Any other `actionType` is logged and ignored.
+- Maps `actionType`: `"completed"` → `OrderStatus.COMPLETED`, `"refunded"` → `OrderStatus.REFUNDED`
+  (exact, case-sensitive). Any other `actionType` is logged and ignored.
 - Computes an idempotency key: prefers the `X-Message-Id` header (via `StringUtils.hasText`);
   otherwise falls back to the stable business key `order-status:{orderId}:{actionType}`.
   **Never** uses `topic-partition-offset` — producer retries can land the same logical event at
@@ -356,7 +359,7 @@ Together, the outbox + inbox + `read_committed` consumer give the order ↔ paym
 
 **End-to-end flow (inbound order-status example):**
 
-1. `KafkaConsumerService.handleOrderStatusUpdate` is invoked with a `ConsumerRecord` and an
+1. `KafkaConsumerService.handlePaymentEvent` is invoked with a `ConsumerRecord` and an
    optional `X-Message-Id` header. The method is `@Transactional`.
 2. Null/unknown-actionType guards short-circuit before any DB work.
 3. The handler computes an idempotency key (header first, business-key fallback) and builds
@@ -380,7 +383,7 @@ Together, the outbox + inbox + `read_committed` consumer give the order ↔ paym
 - `version` INT — `@Version`
 - `aggregate_type` — `"Order"` for order-status events
 - `aggregate_id` — the order id as a string (nullable for events without one)
-- `event_type` — the inbound `actionType` (e.g. `"Completed"`, `"Refunded"`)
+- `event_type` — the inbound `actionType` (e.g. `"completed"`, `"refunded"`)
 - `topic_name`, `partition_no`, `kafka_offset` — Kafka coordinates at receive time
   (informational; **not** used for dedup)
 - `payload` TEXT — Jackson-serialized JSON of the event
@@ -530,8 +533,8 @@ saga are designed so that adding a second saga is purely additive — implement
    a `SagaExecutionException` whose cause is the original exception.
 
 > **Payment vs. order completion.** The saga only *initiates* payment; it
-> deliberately leaves the order in `NEW` on success. payment-service publishes an
-> `OrderStatusKafka` event (`actionType = COMPLETED`), and order-service's
+> deliberately leaves the order in `NEW` on success. payment-service publishes a
+> payment-status event (`actionType = completed`), and order-service's
 > `KafkaConsumerService` performs the `NEW → COMPLETED` (or `PAYMENT_FAILED →
 > COMPLETED` after a retry) transition asynchronously (which in turn emits a
 > `commit` stock event). A declined payment also publishes a `FAILED` event, but
@@ -669,8 +672,9 @@ The service uses Spring Cloud Config for externalized configuration:
 - `server.port`: **8077** (from `order-service.yml`)
 - `service.schemaName`: **`order_schema`** — injected into the shared datasource URL
   (`jdbc:postgresql://localhost:5432/webstore?currentSchema=order_schema`)
-- `topic.stock.status`: **`stock-status-event`** (from `application.yml`)
-- `topic.order.status`: **`order-status-event`** (from `application.yml`)
+- `topic.stock.status`: **`stock-status-event`** (from `application.yml`) — **produced** to (outbox)
+- `topic.payment.status`: **`payment-status-event`** (from `application.yml`) — **consumed** from
+  (payment-service is the producer)
 - `num.partitions`: **3**, `replication.factor`: **1** (from `application.yml`; sized for a single-broker local Kafka)
 - `bootstrap.servers`: `localhost:9092`
 - Eureka registry: `http://localhost:8070/eureka/`
@@ -802,7 +806,7 @@ section for the full design. Summary of what the saga does:
    (`POST payment-service/v1/payments`). **Declined** payment (200 + `FAILED`) → order
    set to `PAYMENT_FAILED`, stock kept, no compensation. **Transport error** (4xx →
    `PaymentFailedException`, 5xx → `IllegalStateException`) → saga failure → compensation.
-   On success the order is left `NEW`; payment-service's async `OrderStatusKafka` event
+   On success the order is left `NEW`; payment-service's async payment-status event
    drives `NEW → COMPLETED`. Final step; no compensation override.
 7. On success (incl. a declined payment), the orchestrator marks the saga `COMPLETED`
    and `CreateOrderSaga` returns the saved `Order` (`NEW` on success, `PAYMENT_FAILED`
@@ -826,7 +830,7 @@ stock is still held, so no re-reservation is done — this only re-charges).
 3. `paymentClient.charge(order)` re-POSTs to payment-service, which **updates the existing
    payment row** for the order (see payment-service note) rather than inserting a duplicate.
 4. The `PAYMENT_FAILED → COMPLETED` transition is **async**: on a successful charge
-   payment-service emits an `OrderStatusKafka` event the consumer turns into `COMPLETED`.
+   payment-service emits a payment-status event the consumer turns into `COMPLETED`.
    The returned `Order` therefore still reads `PAYMENT_FAILED` until that event lands; a
    repeated decline leaves it `PAYMENT_FAILED` for another attempt.
 
@@ -1068,5 +1072,6 @@ This service requires the following to be running:
    item addition (must be registered with Eureka)
 6. **payment-service** — called **synchronously** via `PaymentClient` during order creation
    (`ProcessPaymentStep`) and on payment retry (`OrderManager.retryPayment`)
-   (`POST /v1/payments`, must be registered with Eureka); also **produces** `OrderStatusKafka` events
-   that asynchronously drive status transitions to `COMPLETED` / `REFUNDED`
+   (`POST /v1/payments`, must be registered with Eureka); also **produces** payment-status events
+   (`PaymentStatusMessage` on `${topic.payment.status}`) that asynchronously drive status transitions
+   to `COMPLETED` / `REFUNDED`

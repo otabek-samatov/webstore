@@ -1,20 +1,14 @@
 package paymentservice.configs;
 
 import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
-import org.springframework.kafka.core.*;
-import org.springframework.kafka.listener.ContainerProperties;
-import org.springframework.kafka.support.serializer.JsonDeserializer;
-import org.springframework.kafka.support.serializer.JsonSerializer;
-import org.springframework.kafka.transaction.KafkaTransactionManager;
-import paymentservice.dto.kafka.OrderStatusKafka;
+import org.springframework.kafka.core.DefaultKafkaProducerFactory;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.core.ProducerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -25,8 +19,8 @@ public class KafkaConfig {
     @Value("${bootstrap.servers}")
     private String bootstrapServers;
 
-    @Value("${topic.order.status}")
-    private String orderStatusTopic;
+    @Value("${topic.payment.status}")
+    private String paymentStatusTopic;
 
     @Value("${num.partitions}")
     private int partitions;
@@ -34,96 +28,38 @@ public class KafkaConfig {
     @Value("${replication.factor}")
     private short replicationFactor;
 
-    @Value("${spring.application.name}")
-    private String applicationName;
-
-    @Value("${server.port}")
-    private int serverPort;
-
-
     @Bean
-    public NewTopic stockStatusTopic() {
-        return new NewTopic(orderStatusTopic, partitions, replicationFactor);
+    public NewTopic paymentStatusTopic() {
+        return new NewTopic(paymentStatusTopic, partitions, replicationFactor);
     }
 
-    @Bean
-    public Map<String, Object> producerConfigs() {
+    private Map<String, Object> producerConfigs() {
         Map<String, Object> props = new HashMap<>();
 
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        // Outbox stores already-serialized JSON, so the value is sent as a plain String.
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
-        // ============================================
-        // EXACTLY-ONCE SEMANTICS CONFIGURATION
-        // ============================================
-
-        // Transactional ID - REQUIRED for exactly-once semantics
-        props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationName + "-tx-" + serverPort);
-
-        // Enable idempotent producer
+        // Idempotent but NON-transactional producer: this service uses the
+        // transactional-outbox pattern. The outbox poller (OutboxEventProcessor)
+        // sends outside any Kafka transaction and drives at-least-once delivery;
+        // idempotence dedupes retries within a single producer session.
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
-
-        // All replicas must acknowledge
         props.put(ProducerConfig.ACKS_CONFIG, "all");
-
-        // Retry configuration
         props.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
-
-        // Max in-flight requests
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 5);
 
         return props;
     }
 
     @Bean
-    public ProducerFactory<String, OrderStatusKafka> producerFactory() {
-        DefaultKafkaProducerFactory<String, OrderStatusKafka> factory =
-                new DefaultKafkaProducerFactory<>(producerConfigs());
-        return factory;
+    public ProducerFactory<String, String> producerFactory() {
+        return new DefaultKafkaProducerFactory<>(producerConfigs());
     }
 
     @Bean
-    public KafkaTemplate<String, OrderStatusKafka> kafkaTemplate() {
-        return new KafkaTemplate<>(producerFactory());
-    }
-
-    @Bean
-    public KafkaTransactionManager<String, OrderStatusKafka> kafkaTransactionManager(
-            ProducerFactory<String, OrderStatusKafka> producerFactory) {
-        return new KafkaTransactionManager<>(producerFactory);
-    }
-
-    private Map<String, Object> consumerConfigs() {
-        Map<String, Object> configs = new HashMap<>();
-        configs.put(ConsumerConfig.GROUP_ID_CONFIG, applicationName + "-group");
-        configs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        configs.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
-        configs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
-
-        return configs;
-    }
-
-    @Bean
-    public ConsumerFactory<String, OrderStatusKafka> consumerFactory() {
-        return new DefaultKafkaConsumerFactory<>(consumerConfigs(),
-                new StringDeserializer(),
-                new JsonDeserializer<>(OrderStatusKafka.class));
-    }
-
-    @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, OrderStatusKafka> kafkaListenerContainerFactory() {
-        ConcurrentKafkaListenerContainerFactory<String, OrderStatusKafka> factory =
-                new ConcurrentKafkaListenerContainerFactory<>();
-        factory.setConsumerFactory(consumerFactory());
-        factory.setConcurrency(partitions);
-
-        // Modern approach: Use RECORD acknowledgment mode
-        // When using @Transactional, Spring Kafka will automatically handle
-        // offset commits within the transaction boundary
-        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.RECORD);
-
-        return factory;
+    public KafkaTemplate<String, String> kafkaTemplate(ProducerFactory<String, String> producerFactory) {
+        return new KafkaTemplate<>(producerFactory);
     }
 }

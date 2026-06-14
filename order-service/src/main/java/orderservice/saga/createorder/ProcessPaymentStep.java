@@ -27,7 +27,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * the orchestrator compensates the earlier steps (cancel order + release stock).
  * <p>
  * On a successful payment the order is left {@code NEW}; payment-service's async
- * {@code OrderStatusKafka} event drives the {@code NEW → COMPLETED} transition.
+ * {@code PaymentStatusMessage} event drives the {@code NEW → COMPLETED} transition.
  */
 @Slf4j
 @RequiredArgsConstructor

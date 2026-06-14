@@ -81,7 +81,7 @@ public class InventoryManager {
     }
 
     @Transactional
-    public void revertStock(InventoryDto dto) {
+    public void releaseStock(InventoryDto dto) {
 
         validator.validate(dto);
 
@@ -94,6 +94,24 @@ public class InventoryManager {
         }
 
         inv.setReservedStock(inv.getReservedStock() - quantity);
+
+        saveChanges(inv, quantity, ReasonType.RELEASE_STOCK);
+    }
+
+    @Transactional
+    public void revertStock(InventoryDto dto) {
+
+        validator.validate(dto);
+
+        String productSKU = dto.getProductSKU();
+        long quantity = dto.getStockLevel();
+
+        Inventory inv = findInventoryByProductSKU(productSKU);
+        if (inv.getReservedStock() < quantity) {
+            throw new NotEnoughStockException(productSKU);
+        }
+
+        inv.setStockLevel(inv.getStockLevel() + quantity);
 
         saveChanges(inv, quantity, ReasonType.REVERT_STOCK);
     }

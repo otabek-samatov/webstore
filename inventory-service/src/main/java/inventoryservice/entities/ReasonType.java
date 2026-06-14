@@ -2,6 +2,7 @@ package inventoryservice.entities;
 
 public enum ReasonType {
     RESERVE_STOCK,
+    RELEASE_STOCK,
     COMMIT_STOCK,
     REVERT_STOCK,
     INCREASED_BY_WAREHOUSE,

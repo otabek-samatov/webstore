@@ -3,7 +3,7 @@ package orderservice.managers;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import orderservice.dto.kafka.OrderStatusKafka;
+import orderservice.dto.kafka.PaymentStatusMessage;
 import orderservice.entities.OrderStatus;
 import orderservice.inbox.InboxMessage;
 import orderservice.inbox.InboxProcessor;
@@ -31,14 +31,14 @@ public class KafkaConsumerService {
 
 
     @Transactional
-    @KafkaListener(topics = "${topic.order.status}", containerFactory = "kafkaListenerContainerFactory")
-    public void handleOrderStatusUpdate(
-            ConsumerRecord<String, OrderStatusKafka> record,
+    @KafkaListener(topics = "${topic.payment.status}", containerFactory = "kafkaListenerContainerFactory")
+    public void handlePaymentEvent(
+            ConsumerRecord<String, PaymentStatusMessage> record,
             @Header(name = MESSAGE_ID_HEADER, required = false) String messageIdHeader) {
 
-        OrderStatusKafka event = record.value();
+        PaymentStatusMessage event = record.value();
 
-        log.info("Received order-status event orderId={} actionType={} topic={} partition={} offset={}",
+        log.info("Received payment-status event orderId={} actionType={} topic={} partition={} offset={}",
                 event.getOrderId(), event.getActionType(),
                 record.topic(), record.partition(), record.offset());
 
@@ -47,7 +47,15 @@ public class KafkaConsumerService {
             return;
         }
 
-        OrderStatus status = mapStatus(event.getActionType());
+        OrderStatus status;
+        if ("completed".equals(event.getActionType())) {
+            status = OrderStatus.COMPLETED;
+        } else if ("refunded".equals(event.getActionType())) {
+            status = OrderStatus.REFUNDED;
+        } else {
+            status = null;
+        }
+
         if (status == null) {
             log.warn("Ignoring unknown actionType={} for orderId={}",
                     event.getActionType(), event.getOrderId());
@@ -68,20 +76,9 @@ public class KafkaConsumerService {
                 orderManager.changeOrderStatus(event.getOrderId(), status));
 
         if (!processed) {
-            log.info("Duplicate order-status event skipped: messageId={} orderId={} actionType={}",
+            log.info("Duplicate payment-status event skipped: messageId={} orderId={} actionType={}",
                     messageId, event.getOrderId(), event.getActionType());
         }
-    }
-
-    private OrderStatus mapStatus(String actionType) {
-
-        for (OrderStatus status : OrderStatus.values()) {
-            if (status.toString().equals(actionType)) {
-                return status;
-            }
-        }
-
-        return null;
     }
 
     /**
@@ -91,7 +88,7 @@ public class KafkaConsumerService {
      * land the same logical event at a different offset, which would defeat
      * deduplication.
      */
-    private String idempotencyKey(String headerValue, OrderStatusKafka event) {
+    private String idempotencyKey(String headerValue, PaymentStatusMessage event) {
         if (StringUtils.hasText(headerValue)) {
             return headerValue;
         }

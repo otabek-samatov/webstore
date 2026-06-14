@@ -70,7 +70,9 @@ The system consists of 8 microservices defined in `settings.gradle`:
 | **payment-service**   | 8078 | Payment processing and refunds                                                       | PostgreSQL (`payment_schema`)   |
 
 > Ports and schema names above are the **defaults** from `webstore-config/config/<service>.yml`. Multi-instance
-> deployments override `server.port` per instance (required for unique Kafka transactional IDs — see Kafka section).
+> deployments override `server.port` per instance to avoid a local port clash, but there is **no**
+> Kafka-transactional-ID uniqueness requirement — instances coordinate at the row level via the
+> outbox/inbox tables (see Kafka section).
 
 **Service-Specific Documentation:** Each service has its own `CLAUDE.md` file in its directory with detailed
 implementation guidance.
@@ -114,36 +116,42 @@ Services must be started in this order for proper operation:
 **2. Asynchronous Communication (Kafka):**
 
 - Event-driven messaging for decoupled operations
-- **Two coexisting delivery designs:**
-    - **payment-service** uses Kafka **transactions** for exactly-once — a unique transactional ID
-      `{service-name}-tx-{port}` per instance (see [Kafka Configuration Details](#kafka-configuration-details)).
-    - **order-service** and **inventory-service** use the **transactional outbox / inbox** pattern
-      instead: an *idempotent, non-transactional* producer plus an inbox table keyed by a stable
-      `messageId` for consumer-side dedup. These two have **no** Kafka transactional ID.
+- **One delivery design across all business services: the transactional outbox / inbox pattern.**
+  Producers use an *idempotent, non-transactional* Kafka producer and write outbound events to an
+  `outbox_events` table in the same DB transaction as the business change; a poller publishes them
+  asynchronously. Consumers dedup redeliveries via an `inbox_messages` table keyed by a stable
+  `messageId`. **No** service uses a Kafka `transactional.id` (see
+  [Kafka Configuration Details](#kafka-configuration-details)).
+    - **payment-service** — producer only (outbox); publishes payment-status events. No consumer/inbox.
+    - **order-service** — both outbox (stock events) and inbox (payment events).
+    - **inventory-service** — consumer/inbox (stock events); a string producer is configured but unused.
 
 **Kafka Topics & Event Flows:**
 
-| Topic                | Producer        | Consumer          | Event Type       | Purpose                |
-|----------------------|-----------------|-------------------|------------------|------------------------|
-| `stock-status-event` | order-service   | inventory-service | StockStatusKafka | Stock commit / release |
-| `order-status-event` | payment-service | order-service     | OrderStatusKafka | Payment status updates |
+| Topic                  | Producer        | Consumer          | Event Type                                                      | Purpose                         |
+|------------------------|-----------------|-------------------|-----------------------------------------------------------------|---------------------------------|
+| `stock-status-event`   | order-service   | inventory-service | `StockStatusKafka` (producer) → `StockStatusMessage` (consumer) | Stock commit / release / revert |
+| `payment-status-event` | payment-service | order-service     | `PaymentStatusMessage`                                          | Payment status updates          |
 
-> Property keys in code are `topic.stock.status` / `topic.order.status`; the **values** on the wire
-> are `stock-status-event` / `order-status-event` (set in `webstore-config/config/application.yml`).
+> Property keys in code are `topic.stock.status` / `topic.payment.status`; the **values** on the wire
+> are `stock-status-event` / `payment-status-event` (set in `webstore-config/config/application.yml`).
+> A `topic.order.status` (`order-status-event`) key still exists in config but is **no longer used** by
+> payment-service or order-service — the payment→order channel moved to `topic.payment.status`.
 
 **Stock Management Flow:**
 
 1. Order placed → Order Service reserves stock **synchronously over REST**
    (`POST inventory-service/v1/inventory/reserve-stock`) — there is **no** Kafka "reserve" event.
 2. Order cancelled / refunded / abandoned after a failed payment → Order Service publishes a
-   **`release`** stock event (via its outbox) → Inventory Service frees the reservation (`revertStock`).
+   **`release`** stock event (via its outbox) → Inventory Service frees the reservation (`releaseStock`).
 3. Order completed (payment confirmed) → Order Service publishes a **`commit`** stock event →
    Inventory Service finalizes the sale (`commitStock`, decrements physical stock).
 
 **Payment Flow:**
 
-1. Payment processed → Payment Service publishes OrderStatusKafka
-2. Order Service updates order status (PROCESSING/PENDING/REFUNDED)
+1. Payment processed → Payment Service publishes a `PaymentStatusMessage` on `payment-status-event`
+   (via its transactional outbox).
+2. Order Service consumes it and transitions the order status (`COMPLETED` / `REFUNDED`).
 
 ### Configuration Management
 
@@ -185,7 +193,8 @@ commit; the Config Server serves the latest commit from the configured Git remot
 - **Kafka:** `bootstrap.servers: localhost:9092`, `num.partitions: 3`, `replication.factor: 1`
   (sized for a single-broker local Kafka). These are **custom top-level keys** read via `@Value`
   in each service's `KafkaConfig` — they are **not** the standard `spring.kafka.*` properties.
-- **Kafka topics:** `topic.stock.status: stock-status-event`, `topic.order.status: order-status-event`
+- **Kafka topics:** `topic.stock.status: stock-status-event`, `topic.payment.status: payment-status-event`.
+  A legacy `topic.order.status: order-status-event` key still exists but is no longer used.
 
 > Note: the Kafka topic names in the running config are `stock-status-event` / `order-status-event`,
 > not `stock-status-topic` / `order-status-topic`. Older references to the `*-topic` names elsewhere in
@@ -267,7 +276,8 @@ Each route strips its prefix via `RewritePath=/<prefix>/(?<path>.*), /$\{path}` 
 
 **Payment Service:**
 
-- `payment`, `refund` linked to orders
+- `payment`, `refund` — `refund` is now `@OneToOne` to `payment` (one refund per payment; no amount/status columns)
+- `outbox_events` — transactional outbox for outbound payment-status Kafka events
 
 ### Common Architectural Patterns
 
@@ -324,7 +334,7 @@ PostgreSQL Database
 **6. Transaction Management:**
 
 - `@Transactional` on service/manager methods
-- Kafka transactions for exactly-once delivery
+- Transactional outbox / inbox for reliable Kafka delivery (no Kafka transactions)
 - Transactional boundaries at manager layer
 
 ## API Gateway & Service Discovery
@@ -343,43 +353,43 @@ PostgreSQL Database
 
 ## Kafka Configuration Details
 
-### Exactly-Once Semantics
+### Delivery Semantics (transactional outbox / inbox)
 
-> **Two patterns are in use.** **payment-service** (and any service publishing via a
-> Kafka-transactional producer) uses the transactional configuration below. **order-service** and
-> **inventory-service** have moved to the **transactional outbox / inbox** pattern — an
-> *idempotent, non-transactional* producer plus an inbox table for consumer-side dedup — and so have
-> **no** `transactional.id`. See those services' own `CLAUDE.md` for the full design.
+All business services use the **transactional outbox / inbox** pattern — there is **no** Kafka
+`transactional.id` and **no** `KafkaTransactionManager` anywhere. Delivery is **at-least-once** on the
+wire; exactly-once *effects* come from the outbox (write the event in the same DB tx as the business
+change) and the inbox (consumer-side dedup by `messageId`). See each service's `CLAUDE.md` for the
+full design.
 
-The Kafka-transactional configuration (payment-service):
+**Producer Configuration (idempotent, non-transactional):**
 
-**Producer Configuration:**
-
-- Transactional ID: `{application-name}-tx-{server-port}` (unique per instance)
 - `enable.idempotence=true`
 - `acks=all` (all replicas must acknowledge)
 - `retries=Integer.MAX_VALUE`
 - `max.in.flight.requests.per.connection=5`
+- Value serializer is `StringSerializer` — the outbox stores already-serialized JSON, sent as a `String`
+- A poller (`OutboxPoller` / `OutboxEventProcessor`) claims `PENDING` rows with an atomic conditional
+  `UPDATE` and performs the actual `KafkaTemplate.send`
 
-**Consumer Configuration:**
+**Consumer Configuration (order-service, inventory-service):**
 
 - Consumer group: `{application-name}-group`
-- `isolation.level=read_committed` (only reads committed transactions)
-- `enable.auto.commit=false` (manual offset management)
-- RECORD-level acknowledgment mode
-- `@Transactional` on listener methods
+- `isolation.level=read_committed`, `enable.auto.commit=false` (manual offset management)
+- RECORD-level acknowledgment mode; `@Transactional` listener (the inbox row, business change, and any
+  outbox rows commit together, then the offset commits)
+- Value deserializer is `JsonDeserializer<>(...)` with a constructor-configured target type (the wire
+  payload has no `__TypeId__` header since producers send with `StringSerializer`)
+
+> payment-service is **producer-only** (no `@KafkaListener`); inventory-service configures an idempotent
+> string producer for symmetry but does not currently publish.
 
 ### Multi-Instance Deployment
 
-**Services with a Kafka-transactional producer (e.g. payment-service):** when running multiple
-instances, each instance MUST use a different port (e.g., 8081, 8082, 8083). This keeps the
-transactional ID (`{name}-tx-{port}`) unique per instance; without unique ports, **producer fencing**
-occurs (instances fence each other out).
-
-**Outbox/inbox services (order-service, inventory-service):** there is no transactional ID, so the
-unique-port constraint does **not** apply. Instances coordinate at the **row level** instead — the
+No service uses a Kafka `transactional.id`, so the old "unique port per instance for the transactional
+ID" constraint **does not apply** to any service. Instances coordinate at the **row level** instead — the
 outbox poller claims rows with an atomic conditional `UPDATE`, and the inbox dedups on the `messageId`
-primary key — so they are safe to run concurrently regardless of port.
+primary key — so all services are safe to run concurrently regardless of port. (Per-instance `server.port`
+overrides are still needed only to avoid a local port clash.)
 
 ## Development Workflow
 
@@ -452,9 +462,11 @@ primary key — so they are safe to run concurrently regardless of port.
 **2. Kafka Issues:**
 
 - Ensure Kafka broker is running
-- Check transactional ID uniqueness (different ports per instance)
+- If outbound events aren't published, check the `outbox_events` table — rows stuck in `PROCESSING`
+  point at a send failure (the poller resets stuck rows to `PENDING`); confirm the producer is
+  **non-transactional** (a stray `transactional.id` makes `send()` outside a tx throw)
 - Verify topic creation with correct partitions/replication
-- Check consumer group configuration
+- Check consumer group configuration and that producer/consumer field names + `actionType` casing match
 
 **3. REST Call Failures:**
 
