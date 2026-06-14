@@ -17,7 +17,10 @@
       "Bash(/usr/bin/find C:/Projects/webstore/product-service/src/main/java -name \"*Application.java\")",
       "Bash(/usr/bin/find C:/Projects/webstore/order-service/src/main/java/com/webstore/order_service/dto/kafka -type f)",
       "PowerShell(git -C C:\\\\Projects\\\\webstore status)",
-      "PowerShell(git -C C:\\\\Projects\\\\webstore ls-files product-service/src/main/java/uz/webstore/product/entities/)"
+      "PowerShell(git -C C:\\\\Projects\\\\webstore ls-files product-service/src/main/java/uz/webstore/product/entities/)",
+      "WebSearch",
+      "WebFetch(domain:spring.io)",
+      "WebFetch(domain:www.danvega.dev)"
     ]
   }
 }
