@@ -18,7 +18,7 @@ public class SecurityRoleValidator extends BaseValidator{
 
     public void validate(SecurityRoleDto dto) {
         if (dto == null || dto.getRoleType() == null) {
-            throw new NullPointerException("roleType is null");
+            throw new IllegalArgumentException("roleType is null");
         }
 
         Long roleID = securityRoleRepository.getIDByRoleType(dto.getRoleType());

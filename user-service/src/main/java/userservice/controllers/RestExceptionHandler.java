@@ -3,6 +3,8 @@ package userservice.controllers;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -14,14 +16,18 @@ public class RestExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Illegal Argument exception caught: " + ex.getMessage());
     }
 
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<String> handleException(MethodArgumentNotValidException ex) {
+        StringBuilder sb = new StringBuilder("Validation failed:\n");
+        for (FieldError fieldError : ex.getBindingResult().getFieldErrors()) {
+            sb.append(fieldError.getField()).append(": ").append(fieldError.getDefaultMessage()).append("\n");
+        }
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(sb.toString());
+    }
+
     @ExceptionHandler(EntityNotFoundException.class)
     public ResponseEntity<String> handleException(EntityNotFoundException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Entity not found exception caught: " + ex.getMessage());
-    }
-
-    @ExceptionHandler(NullPointerException.class)
-    public ResponseEntity<String> handleException(NullPointerException ex) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Null pointer exception caught: " + ex.getMessage());
     }
 
     @ExceptionHandler(IllegalStateException.class)

@@ -4,10 +4,8 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.proxy.HibernateProxy;
 
 import java.time.LocalDateTime;
-import java.util.Objects;
 
 @Getter
 @Setter
@@ -15,16 +13,8 @@ import java.util.Objects;
 @Table(name = "users", indexes = {
         @Index(name = "idx_user_user_name", columnList = "user_name")
 })
-public class User {
-    @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "user_seq")
-    @SequenceGenerator(name = "user_seq", allocationSize = 1)
-    @Column(name = "id", nullable = false)
-    private Long id;
-
-    @Version
-    @Column(name = "version")
-    private Integer version;
+@SequenceGenerator(name = "entity_seq", sequenceName = "user_seq", allocationSize = 50, initialValue = 1)
+public class User extends CoreEntity {
 
     @Column(name = "user_name", nullable = false, unique = true, updatable = false)
     private String userName;
@@ -50,19 +40,4 @@ public class User {
         this.userName = userName;
     }
 
-    @Override
-    public final boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null) return false;
-        Class<?> oEffectiveClass = o instanceof HibernateProxy ? ((HibernateProxy) o).getHibernateLazyInitializer().getPersistentClass() : o.getClass();
-        Class<?> thisEffectiveClass = this instanceof HibernateProxy ? ((HibernateProxy) this).getHibernateLazyInitializer().getPersistentClass() : this.getClass();
-        if (thisEffectiveClass != oEffectiveClass) return false;
-        User user = (User) o;
-        return getId() != null && Objects.equals(getId(), user.getId());
-    }
-
-    @Override
-    public final int hashCode() {
-        return this instanceof HibernateProxy ? ((HibernateProxy) this).getHibernateLazyInitializer().getPersistentClass().hashCode() : getClass().hashCode();
-    }
 }
