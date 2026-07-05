@@ -112,7 +112,7 @@ Base path: `/v1/inventory/` (`@RequestMapping("/v1/inventory/")` on `InventoryCo
 
 ### Technology Stack
 
-- Java 21 with Spring Boot 4.1.0 (Spring Framework 7)
+- Java 25 with Spring Boot 4.1.0 (Spring Framework 7)
 - Spring Cloud 2025.1.2 — Config for external configuration
 - Spring Data JPA with PostgreSQL
 - Web via `spring-boot-starter-webmvc` (renamed from `spring-boot-starter-web` in Spring Boot 4)

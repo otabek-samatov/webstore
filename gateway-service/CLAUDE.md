@@ -71,7 +71,7 @@ Server reads from Git). Do not add routes to this service's source `application.
   `spring-cloud-starter-gateway-mvc` in Spring Cloud 2025.x)
 - `spring-cloud-starter-netflix-eureka-client` (registers + discovers `lb://` targets)
 - `spring-cloud-starter-config` (fetches its own config from config-service)
-- Spring Cloud BOM `2025.1.2`, Spring Boot `4.1.0` (Spring Framework 7), Java 21
+- Spring Cloud BOM `2025.1.2`, Spring Boot `4.1.0` (Spring Framework 7), Java 25
 
 ## Startup Position
 

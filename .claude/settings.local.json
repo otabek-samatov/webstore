@@ -22,7 +22,12 @@
       "WebFetch(domain:spring.io)",
       "WebFetch(domain:www.danvega.dev)",
       "PowerShell(.\\\\gradlew.bat compileJava compileTestJava --no-daemon --console=plain)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(docker manifest *)",
+      "Bash(docker compose *)",
+      "Bash(cat /c/Data/Projects/webstore/build.gradle 2>/dev/null | head -80; echo \"=== settings.gradle ===\"; cat /c/Data/Projects/webstore/settings.gradle; echo \"=== gradle wrapper ===\"; grep distributionUrl /c/Data/Projects/webstore/gradle/wrapper/gradle-wrapper.properties; echo \"=== config repo files ===\"; ls /c/Data/Projects/webstore-config)",
+      "Bash(sed -i 's/Java 21/Java 25/g; s/PostgreSQL 17/PostgreSQL 18/g; s|C:\\\\\\\\Projects\\\\\\\\webstore-config|C:\\\\\\\\Data\\\\\\\\Projects\\\\\\\\webstore-config|g' inventory-service/CLAUDE.md order-service/CLAUDE.md product-service/CLAUDE.md payment-service/CLAUDE.md discovery-service/CLAUDE.md gateway-service/CLAUDE.md config-service/CLAUDE.md user-service/CLAUDE.md)",
+      "Bash(grep -rn \"Java 21\\\\|PostgreSQL 17\\\\|C:\\\\\\\\\\\\\\\\Projects\\\\\\\\\\\\\\\\webstore-config\" --include=CLAUDE.md .)"
     ]
   }
 }

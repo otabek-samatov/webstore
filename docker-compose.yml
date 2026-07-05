@@ -1,0 +1,112 @@
+# =============================================================================
+# Webstore local development stack
+#   - PostgreSQL 18 (new volume layout)
+#   - Apache Kafka 4.3.1 in KRaft combined mode (single node)
+#
+# Notes:
+#   * Compose V2 no longer needs a top-level "version:" key.
+#   * All services share the default network created by Compose; they resolve
+#     each other by service name (postgres, kafka).
+#   * Kafka uses ONE client listener, advertised as localhost:9092 (host access
+#     only). Add an internal listener later when Spring Boot services join.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# YAML anchors: shared fragments reused across services.
+# -----------------------------------------------------------------------------
+x-restart-policy: &restart-policy
+  restart: unless-stopped
+
+x-logging: &default-logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL 18
+  #   Volume target is /var/lib/postgresql (18+ layout), NOT .../data.
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:18.4
+    container_name: webstore-postgres
+    <<: [*restart-policy, *default-logging]
+    environment:
+      # The postgres image reads each credential from the file the *_FILE
+      # variable points at (mounted by Compose under /run/secrets/).
+      POSTGRES_USER_FILE: /run/secrets/postgres_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_DB: webstore
+    secrets:
+      - postgres_user
+      - postgres_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$(cat /run/secrets/postgres_user)\" -d webstore"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Apache Kafka 4.3.1 - KRaft combined mode (broker + controller in one node)
+  # ---------------------------------------------------------------------------
+  kafka:
+    image: apache/kafka:4.3.1
+    container_name: webstore-kafka
+    <<: [*restart-policy, *default-logging]
+    ports:
+      - "9092:9092"
+    environment:
+      # --- Node / roles ---
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:29093
+
+      # --- Listeners (single client listener + controller) ---
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+
+      # --- Single-node replication settings (must be 1 with one broker) ---
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
+      # --- Log directory (mapped to the named volume below) ---
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+
+# -----------------------------------------------------------------------------
+# Secrets: file-backed, mounted into containers at /run/secrets/<name>.
+# Files live in ./secrets/ (gitignored) — one value per file.
+#
+# When the Spring Boot services are containerized, grant them these secrets
+# with targets matching the config-tree property names, e.g.:
+#   secrets:
+#     - source: postgres_user
+#       target: db_username
+#     - source: postgres_password
+#       target: db_password
+# (services import "optional:configtree:/run/secrets/" and the config repo
+# references ${db_username} / ${db_password})
+# -----------------------------------------------------------------------------
+secrets:
+  postgres_user:
+    file: ./secrets/postgres_user.txt
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+
+# -----------------------------------------------------------------------------
+# Named volumes: survive container re-creation.
+# -----------------------------------------------------------------------------
+volumes:
+  postgres-data:
+  kafka-data:

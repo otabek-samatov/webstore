@@ -73,7 +73,7 @@ Eureka **server** rather than a client:
 
 - `spring-cloud-starter-netflix-eureka-server`
 - `spring-cloud-starter-config` (fetches its own config from config-service)
-- Spring Cloud BOM `2025.1.2`, Spring Boot `4.1.0` (Spring Framework 7), Java 21
+- Spring Cloud BOM `2025.1.2`, Spring Boot `4.1.0` (Spring Framework 7), Java 25
 
 ## Startup Position
 

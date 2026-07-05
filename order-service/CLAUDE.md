@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build Commands
 
-This is a Gradle-based Spring Boot project using Java 21.
+This is a Gradle-based Spring Boot project using Java 25.
 
 ```bash
 # Build the project
@@ -1044,7 +1044,7 @@ Current test coverage is minimal (only context-load test exists). When adding te
 
 ### Dependencies to Be Aware Of
 
-- **Spring Boot 4.1.0** (Spring Framework 7), Java 21
+- **Spring Boot 4.1.0** (Spring Framework 7), Java 25
 - **MapStruct 1.5.5.Final** — compile-time code generation for mappers
 - **Lombok** — annotation processor required for IDE compilation
 - **Web** via `spring-boot-starter-webmvc` (renamed from `spring-boot-starter-web` in Spring Boot 4)
@@ -1075,7 +1075,7 @@ This service requires the following to be running:
 
 1. **Config Server** (localhost:8071) — for configuration
 2. **Eureka Server** (localhost:8761) — for service discovery
-3. **PostgreSQL 17** — for data persistence
+3. **PostgreSQL 18** — for data persistence
 4. **Kafka broker** — for event streaming
 5. **inventory-service** — for synchronous price lookup and stock reservation during order creation /
    item addition (must be registered with Eureka)

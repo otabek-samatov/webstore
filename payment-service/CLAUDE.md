@@ -10,10 +10,10 @@ refund operations for customer orders, and notifies order-service of payment out
 
 **Tech Stack:**
 
-- Java 21
+- Java 25
 - Spring Boot 4.1.0 (Spring Framework 7)
 - Spring Data JPA (Hibernate)
-- PostgreSQL 17
+- PostgreSQL 18
 - Spring Cloud 2025.1.2 (Config, Eureka)
 - Spring Kafka 4 — **producer only** (idempotent, non-transactional; see [Kafka & Outbox](#kafka--outbox))
 - Spring `@Scheduled` — drives the outbox poller / recovery / cleanup (`@EnableScheduling` on the app class)

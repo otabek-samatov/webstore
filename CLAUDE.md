@@ -9,11 +9,11 @@ monorepo** with 8 independent microservices.
 
 **Technology Stack:**
 
-- Java 21
+- Java 25 (Gradle toolchain in root `build.gradle`)
 - Spring Boot 4.1.0 (built on Spring Framework 7)
 - Spring Cloud 2025.1.2 (Oakwood)
-- PostgreSQL 17
-- Apache Kafka 4
+- PostgreSQL 18 (Docker container `postgres:18.4`, see [Local Infrastructure](#local-infrastructure))
+- Apache Kafka 4.3 (Docker container `apache/kafka:4.3.1`, KRaft single node)
 - Netflix Eureka (Service Discovery)
 - Spring Cloud Config (Centralized Configuration)
 - Spring Cloud Gateway Server Web MVC (API Gateway)
@@ -33,8 +33,8 @@ monorepo** with 8 independent microservices.
 
 ## Build Commands
 
-This is a Gradle-based multi-module project using Gradle 8.14.4 (Spring Boot 4 requires Gradle 8.14+ on
-the 8.x line, or Gradle 9.x).
+This is a Gradle-based multi-module project using Gradle 9.6.0 (wrapper; Spring Boot 4 requires
+Gradle 8.14+ on the 8.x line, or Gradle 9.x).
 
 ```bash
 # Build all services
@@ -93,15 +93,36 @@ implementation guidance.
 
 Services must be started in this order for proper operation:
 
-1. **config-service** (8071) - Required by all other services for configuration
-2. **discovery-service** (8070) - Required for service discovery (Eureka)
-3. **Infrastructure Services:**
+1. **Infrastructure** (`docker compose up -d` — see [Local Infrastructure](#local-infrastructure)):
     - PostgreSQL (5432)
-   - Kafka Broker (9092)
+    - Kafka Broker (9092)
+2. **config-service** (8071) - Required by all other services for configuration
+3. **discovery-service** (8070) - Required for service discovery (Eureka)
 4. **Business Services** (any order):
     - product-service (8073), inventory-service (8074), user-service (8075)
    - order-service (8077), payment-service (8078)
 5. **gateway-service** (8072) - API Gateway (routes to other services)
+
+<a id="local-infrastructure"></a>### Local Infrastructure (Docker Compose)
+
+`docker-compose.yml` in the repo root runs the infrastructure dependencies:
+
+- **postgres** — `postgres:18.4`, container `webstore-postgres`, port `5432`, named volume mounted at
+  `/var/lib/postgresql` (PG 18+ volume layout). Credentials come from **Docker secrets**, not env vars:
+  `POSTGRES_USER_FILE` / `POSTGRES_PASSWORD_FILE` point at `/run/secrets/postgres_user` /
+  `/run/secrets/postgres_password`.
+- **kafka** — `apache/kafka:4.3.1`, container `webstore-kafka`, KRaft combined mode (single node),
+  one client listener advertised as `localhost:9092` (host access only; add an internal listener when
+  the Spring services are containerized).
+
+**Secrets:** the `secrets:` section maps file-backed secrets from `./secrets/` (**gitignored** — never
+commit): `secrets/postgres_user.txt` and `secrets/postgres_password.txt`, one value per file. These are
+the single source of truth for the DB credentials; the services and the healthcheck read them at runtime
+(see Configuration Management below for how services resolve them).
+
+> Postgres only reads the secrets on **first initialization** of an empty data volume. To change the
+> password later: `ALTER USER` inside the container, update the secret file, recreate the container,
+> and update the credential source the services use (env vars on host / mounted secrets in Docker).
 
 ## System Architecture
 
@@ -170,9 +191,11 @@ Services must be started in this order for proper operation:
 **Spring Cloud Config Server (port 8071):**
 
 - Git-backed configuration: https://github.com/otabek-samatov/webstore-config
-- Local clone (authoritative source for all runtime properties): **`C:\Projects\webstore-config`**
+- Local clone (authoritative source for all runtime properties): **`C:\Data\Projects\webstore-config`**
 - All services fetch configuration from Config Server on startup
 - Database connections, Kafka topics, and service-specific properties externalized
+- **No credentials in the config repo** — the datasource username/password are placeholders resolved
+  per environment (see below)
 
 **`webstore-config` repository layout:**
 
@@ -191,15 +214,22 @@ webstore-config/
 
 Spring Cloud Config matches each service's `spring.application.name` to the corresponding `<name>.yml` file
 and merges it on top of `application.yml`. To change runtime config (Kafka topic names, partition count,
-DB credentials, ports, gateway routes, etc.), edit a file under `C:\Projects\webstore-config\config\` and
+ports, gateway routes, etc.), edit a file under `C:\Data\Projects\webstore-config\config\` and
 commit; the Config Server serves the latest commit from the configured Git remote.
 
 **What lives in `application.yml` (shared by all services):**
 
 - **Eureka client:** `defaultZone: http://localhost:8070/eureka/`, `preferIpAddress: true`
 - **Actuator:** `management.endpoints.web.exposure.include: "*"`
-- **Datasource:** `jdbc:postgresql://localhost:5432/webstore?currentSchema=${service.schemaName}`,
-  user `user` / password `password`, driver `org.postgresql.Driver`
+- **Datasource:** `jdbc:postgresql://${db.host:localhost}:${db.port:5432}/${db.name:webstore}?currentSchema=${service.schemaName}`,
+  driver `org.postgresql.Driver`. Host/port/database have local-dev defaults, overridable via
+  `DB_HOST` / `DB_PORT` / `DB_NAME` env vars (relaxed binding).
+- **Datasource credentials:** `username: ${db_username}` / `password: ${db_password}` — **no literal
+  credentials in the repo.** Resolution per environment:
+    - **Host runs (today):** from `DB_USERNAME` / `DB_PASSWORD` environment variables (Spring relaxed
+      binding maps `db_username` → `DB_USERNAME`). Values must match `webstore/secrets/*.txt`.
+    - **Containerized runs (future):** from Docker secret files via each service's
+      `optional:configtree:/run/secrets/` config import (files named `db_username` / `db_password`).
 - **JPA/Hibernate:** `ddl-auto: validate` (Flyway is authoritative for schema), `show-sql: true`,
   PostgreSQL dialect
 - **Kafka:** `bootstrap.servers: localhost:9092`, `num.partitions: 3`, `replication.factor: 1`
@@ -240,17 +270,20 @@ Each route strips its prefix via `RewritePath=/<prefix>/(?<path>.*), /$\{path}` 
     application:
       name: {service-name}
     config:
-      import: "optional:configserver:"
+      import: "optional:configserver:,optional:configtree:/run/secrets/"
     cloud:
       config:
         uri: http://localhost:8071
   ```
+- The `optional:configtree:/run/secrets/` import (business services only) turns Docker secret files
+  into properties when running in a container (`/run/secrets/db_username` → property `db_username`);
+  on host runs the directory doesn't exist and the import is a silent no-op.
 - Everything else (DB, Kafka, port, schema, etc.) is resolved from the Config Server at startup —
   do **not** duplicate those values into the service's source-tree `application.yml`.
 
 **Editing config: workflow**
 
-1. Edit the relevant file in `C:\Projects\webstore-config\config\`.
+1. Edit the relevant file in `C:\Data\Projects\webstore-config\config\`.
 2. Commit and push to the Git remote — Config Server reads from Git, not the local working copy.
 3. Restart the affected service(s) or hit `/actuator/refresh` on a service with `@RefreshScope` beans.
 
@@ -470,7 +503,10 @@ overrides are still needed only to avoid a local port clash.)
 - Ensure Config Server is running first (port 8071)
 - Ensure Eureka Server is running (port 8761)
 - Check Config Server can reach Git repository
-- Verify PostgreSQL is running and accessible
+- Verify PostgreSQL is running and accessible (`docker compose up -d postgres`)
+- `Could not resolve placeholder 'db_username'` → the service was started without DB credentials.
+  On host runs set the `DB_USERNAME` / `DB_PASSWORD` environment variables (values must match
+  `secrets/*.txt`); in a container mount the Docker secrets as `db_username` / `db_password`.
 
 **2. Kafka Issues:**
 
@@ -515,10 +551,12 @@ All services share common dependencies defined in root `build.gradle`:
 
 ## External Dependencies
 
-Required infrastructure for running webstore:
+Required infrastructure for running webstore (both provided by the repo-root `docker-compose.yml` —
+see [Local Infrastructure](#local-infrastructure)):
 
-1. **PostgreSQL 17** (localhost:5432/webstore)
-2. **Apache Kafka 4** with broker and topics configured
+1. **PostgreSQL 18** (localhost:5432/webstore, container `postgres:18.4`)
+2. **Apache Kafka 4.3** (localhost:9092, container `apache/kafka:4.3.1`, KRaft single node; topics
+   are auto-created by the services' `NewTopic` beans)
 3. **Git Repository** for Config Server: https://github.com/otabek-samatov/webstore-config
 
 ## Project Status
@@ -529,6 +567,8 @@ Required infrastructure for running webstore:
 **Not Yet Implemented:**
 
 - Auth Service (Spring Security with JWT/OAuth2)
-- Docker/Kubernetes deployment configurations
+- Containerization of the Spring Boot services themselves / Kubernetes deployment (infrastructure —
+  PostgreSQL + Kafka — already runs via `docker-compose.yml`; the config-tree secret wiring for
+  service containers is prepared)
 - Comprehensive integration tests
 - API documentation (Swagger/OpenAPI)

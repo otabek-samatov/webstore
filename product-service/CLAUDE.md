@@ -21,7 +21,7 @@ using Eureka for service discovery and Spring Cloud Config for centralized confi
 
 - Application auto-generates sample data on startup via `MainGenerator`
 - Database migrations handled automatically by Flyway on startup
-- Uses Java 21, Spring Boot 4.1.0 (Spring Framework 7), Spring Cloud 2025.1.2
+- Uses Java 25, Spring Boot 4.1.0 (Spring Framework 7), Spring Cloud 2025.1.2
 
 ## Core Architecture
 
