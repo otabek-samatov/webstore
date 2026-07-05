@@ -1,14 +1,23 @@
 # =============================================================================
-# Webstore local development stack
-#   - PostgreSQL 18 (new volume layout)
-#   - Apache Kafka 4.3.1 in KRaft combined mode (single node)
+# Webstore full stack
+#   Infrastructure:  PostgreSQL 18, Apache Kafka 4.3.1 (KRaft single node)
+#   Applications:    all 8 Spring Boot services, built from the shared
+#                    ./Dockerfile with a per-service SERVICE build arg
+#
+# Usage:
+#   docker compose up -d --build            # build images + start everything
+#   docker compose up -d postgres kafka     # infra only (services run on host)
 #
 # Notes:
 #   * Compose V2 no longer needs a top-level "version:" key.
 #   * All services share the default network created by Compose; they resolve
-#     each other by service name (postgres, kafka).
-#   * Kafka uses ONE client listener, advertised as localhost:9092 (host access
-#     only). Add an internal listener later when Spring Boot services join.
+#     each other by service name (postgres, kafka, config-service, ...).
+#   * Kafka has TWO client listeners: localhost:9092 for host-run apps and
+#     kafka:19092 (INTERNAL) for containerized services.
+#   * DB credentials flow from ./secrets/ (gitignored) as Docker secrets;
+#     Spring reads them via its configtree:/run/secrets/ import. Non-secret
+#     endpoints (config server, Eureka, Kafka, DB host) are plain env vars
+#     resolved by placeholders served from the config repo.
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -23,6 +32,36 @@ x-logging: &default-logging
     options:
       max-size: "10m"
       max-file: "3"
+
+# Env every config-client service needs to find the infrastructure.
+x-spring-env: &spring-env
+  SPRING_CLOUD_CONFIG_URI: http://config-service:8071
+  EUREKA_URI: http://discovery-service:8070/eureka/
+
+# Extra env for the business services (DB + Kafka coordinates).
+x-business-env: &business-env
+  <<: *spring-env
+  DB_HOST: postgres
+  KAFKA_BROKERS: kafka:19092
+
+# DB credentials as mounted secret files -> Spring configtree properties
+# (/run/secrets/db_username -> property db_username).
+x-db-secrets: &db-secrets
+  - source: postgres_user
+    target: db_username
+  - source: postgres_password
+    target: db_password
+
+# Everything a business service waits for before starting.
+x-business-depends: &business-depends
+  postgres:
+    condition: service_healthy
+  kafka:
+    condition: service_healthy
+  config-service:
+    condition: service_healthy
+  discovery-service:
+    condition: service_healthy
 
 services:
 
@@ -55,6 +94,8 @@ services:
 
   # ---------------------------------------------------------------------------
   # Apache Kafka 4.3.1 - KRaft combined mode (broker + controller in one node)
+  #   PLAINTEXT  -> advertised as localhost:9092  (host-run clients)
+  #   INTERNAL   -> advertised as kafka:19092     (containerized services)
   # ---------------------------------------------------------------------------
   kafka:
     image: apache/kafka:4.3.1
@@ -68,11 +109,12 @@ services:
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:29093
 
-      # --- Listeners (single client listener + controller) ---
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:29093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      # --- Listeners (host + internal + controller) ---
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,INTERNAL://0.0.0.0:19092,CONTROLLER://0.0.0.0:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,INTERNAL://kafka:19092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
 
       # --- Single-node replication settings (must be 1 with one broker) ---
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
@@ -83,20 +125,200 @@ services:
       KAFKA_LOG_DIRS: /var/lib/kafka/data
     volumes:
       - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # config-service - Spring Cloud Config Server (starts first; serves the
+  # config repo from GitHub, so it needs outbound internet access)
+  # ---------------------------------------------------------------------------
+  config-service:
+    build:
+      context: .
+      args:
+        SERVICE: config-service
+    image: webstore/config-service
+    container_name: webstore-config-service
+    <<: [*restart-policy, *default-logging]
+    ports:
+      - "8071:8071"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8071/actuator/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  # ---------------------------------------------------------------------------
+  # discovery-service - Eureka server (registers nothing, serves the registry)
+  # ---------------------------------------------------------------------------
+  discovery-service:
+    build:
+      context: .
+      args:
+        SERVICE: discovery-service
+    image: webstore/discovery-service
+    container_name: webstore-discovery-service
+    <<: [*restart-policy, *default-logging]
+    environment:
+      <<: *spring-env
+    ports:
+      - "8070:8070"
+    depends_on:
+      config-service:
+        condition: service_healthy
+    healthcheck:
+      # no actuator dependency in this module -> probe the Eureka API instead
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8070/eureka/apps >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  # ---------------------------------------------------------------------------
+  # Business services
+  # ---------------------------------------------------------------------------
+  product-service:
+    build:
+      context: .
+      args:
+        SERVICE: product-service
+    image: webstore/product-service
+    container_name: webstore-product-service
+    <<: [*restart-policy, *default-logging]
+    environment:
+      <<: *business-env
+    secrets: *db-secrets
+    ports:
+      - "8073:8073"
+    depends_on:
+      <<: *business-depends
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8073/actuator/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+
+  inventory-service:
+    build:
+      context: .
+      args:
+        SERVICE: inventory-service
+    image: webstore/inventory-service
+    container_name: webstore-inventory-service
+    <<: [*restart-policy, *default-logging]
+    environment:
+      <<: *business-env
+    secrets: *db-secrets
+    ports:
+      - "8074:8074"
+    depends_on:
+      <<: *business-depends
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8074/actuator/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  user-service:
+    build:
+      context: .
+      args:
+        SERVICE: user-service
+    image: webstore/user-service
+    container_name: webstore-user-service
+    <<: [*restart-policy, *default-logging]
+    environment:
+      <<: *business-env
+    secrets: *db-secrets
+    ports:
+      - "8075:8075"
+    depends_on:
+      <<: *business-depends
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8075/actuator/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  order-service:
+    build:
+      context: .
+      args:
+        SERVICE: order-service
+    image: webstore/order-service
+    container_name: webstore-order-service
+    <<: [*restart-policy, *default-logging]
+    environment:
+      <<: *business-env
+    secrets: *db-secrets
+    ports:
+      - "8077:8077"
+    depends_on:
+      <<: *business-depends
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8077/actuator/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  payment-service:
+    build:
+      context: .
+      args:
+        SERVICE: payment-service
+    image: webstore/payment-service
+    container_name: webstore-payment-service
+    <<: [*restart-policy, *default-logging]
+    environment:
+      <<: *business-env
+    secrets: *db-secrets
+    ports:
+      - "8078:8078"
+    depends_on:
+      <<: *business-depends
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8078/actuator/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # gateway-service - API gateway, starts last, single entry point on 8072
+  # ---------------------------------------------------------------------------
+  gateway-service:
+    build:
+      context: .
+      args:
+        SERVICE: gateway-service
+    image: webstore/gateway-service
+    container_name: webstore-gateway-service
+    <<: [*restart-policy, *default-logging]
+    environment:
+      <<: *spring-env
+    ports:
+      - "8072:8072"
+    depends_on:
+      config-service:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
 
 # -----------------------------------------------------------------------------
 # Secrets: file-backed, mounted into containers at /run/secrets/<name>.
 # Files live in ./secrets/ (gitignored) — one value per file.
-#
-# When the Spring Boot services are containerized, grant them these secrets
-# with targets matching the config-tree property names, e.g.:
-#   secrets:
-#     - source: postgres_user
-#       target: db_username
-#     - source: postgres_password
-#       target: db_password
-# (services import "optional:configtree:/run/secrets/" and the config repo
-# references ${db_username} / ${db_password})
+# Business services receive them renamed (target:) to db_username /
+# db_password so the file names match the config-tree property names the
+# config repo references (${db_username} / ${db_password}).
 # -----------------------------------------------------------------------------
 secrets:
   postgres_user:

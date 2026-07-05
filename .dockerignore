@@ -1,0 +1,24 @@
+# NEVER ship credentials into an image layer
+secrets/
+
+# VCS / IDE / agent metadata
+.git/
+.idea/
+.vscode/
+.claude/
+
+# Build outputs and caches (the image builds from source)
+.gradle/
+**/build/
+**/bin/
+**/out/
+
+# Docker files themselves (not needed inside the build context)
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# Docs
+*.md
+**/*.md
+HELP.md

@@ -103,17 +103,41 @@ Services must be started in this order for proper operation:
    - order-service (8077), payment-service (8078)
 5. **gateway-service** (8072) - API Gateway (routes to other services)
 
-<a id="local-infrastructure"></a>### Local Infrastructure (Docker Compose)
+<a id="local-infrastructure"></a>### Local Infrastructure & Containers (Docker Compose)
 
-`docker-compose.yml` in the repo root runs the infrastructure dependencies:
+`docker-compose.yml` in the repo root runs the **entire stack** — infrastructure plus all 8 Spring Boot
+services:
+
+```bash
+docker compose up -d --build          # build all service images + start everything
+docker compose up -d postgres kafka   # infrastructure only (services run on host)
+```
+
+**Infrastructure:**
 
 - **postgres** — `postgres:18.4`, container `webstore-postgres`, port `5432`, named volume mounted at
   `/var/lib/postgresql` (PG 18+ volume layout). Credentials come from **Docker secrets**, not env vars:
   `POSTGRES_USER_FILE` / `POSTGRES_PASSWORD_FILE` point at `/run/secrets/postgres_user` /
   `/run/secrets/postgres_password`.
 - **kafka** — `apache/kafka:4.3.1`, container `webstore-kafka`, KRaft combined mode (single node),
-  one client listener advertised as `localhost:9092` (host access only; add an internal listener when
-  the Spring services are containerized).
+  **two client listeners**: `PLAINTEXT` advertised as `localhost:9092` (host-run apps) and `INTERNAL`
+  advertised as `kafka:19092` (containerized services).
+
+**Service images:** all 8 services build from the **shared root `Dockerfile`** (multi-stage: Gradle
+wrapper build on `eclipse-temurin:25-jdk`, runtime on `eclipse-temurin:25-jre` + curl for healthchecks),
+selected via the `SERVICE` build arg that compose passes per service. `.dockerignore` excludes
+`secrets/` so credentials can never enter an image layer. Startup ordering is enforced with
+healthchecks + `depends_on: service_healthy` (postgres/kafka → config-service → discovery-service →
+business services → gateway-service).
+
+**Container environment wiring** (plain env vars for non-secret endpoints, resolved by placeholders
+served from the config repo):
+
+- `SPRING_CLOUD_CONFIG_URI=http://config-service:8071` — overrides the source-tree `localhost:8071`
+- `EUREKA_URI=http://discovery-service:8070/eureka/` — feeds `${EUREKA_URI:...}` in the config repo
+- `KAFKA_BROKERS=kafka:19092` — feeds `${KAFKA_BROKERS:...}` (the INTERNAL listener)
+- `DB_HOST=postgres` — feeds `${db.host:...}` in the datasource URL
+- DB credentials arrive as **secrets** (`db_username` / `db_password` targets), not env vars
 
 **Secrets:** the `secrets:` section maps file-backed secrets from `./secrets/` (**gitignored** — never
 commit): `secrets/postgres_user.txt` and `secrets/postgres_password.txt`, one value per file. These are
@@ -567,8 +591,7 @@ see [Local Infrastructure](#local-infrastructure)):
 **Not Yet Implemented:**
 
 - Auth Service (Spring Security with JWT/OAuth2)
-- Containerization of the Spring Boot services themselves / Kubernetes deployment (infrastructure —
-  PostgreSQL + Kafka — already runs via `docker-compose.yml`; the config-tree secret wiring for
-  service containers is prepared)
+- Kubernetes deployment (the full stack — infrastructure + all 8 services — already runs via
+  `docker-compose.yml` and the shared root `Dockerfile`)
 - Comprehensive integration tests
 - API documentation (Swagger/OpenAPI)
