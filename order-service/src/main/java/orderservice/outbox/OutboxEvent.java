@@ -27,16 +27,16 @@ public class OutboxEvent {
     @Column(name = "version", nullable = false)
     private Integer version;
 
-    @Column(nullable = false)
+    @Column(name = "aggregate_type", nullable = false)
     private String aggregateType;   // e.g. "Order", "Product"
 
-    @Column(nullable = false)
+    @Column(name = "aggregate_id", nullable = false)
     private String aggregateId;     // e.g. the order ID
 
-    @Column(nullable = false)
+    @Column(name = "event_type", nullable = false)
     private String eventType;       // e.g. "OrderCreated", "OrderCancelled"
 
-    @Column(nullable = false)
+    @Column(name = "topic_name", nullable = false)
     private String topicName;
 
     @Column(columnDefinition = "TEXT", nullable = false)
@@ -47,9 +47,10 @@ public class OutboxEvent {
     private OutboxStatus status = OutboxStatus.PENDING;
 
     @CreationTimestamp
-    @Column(nullable = false)
+    @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @Column(name = "processed_at", nullable = false)
     private Instant processedAt;
 
     public OutboxEvent(String aggregateType, String aggregateId,
