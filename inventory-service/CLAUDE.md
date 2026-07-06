@@ -120,7 +120,6 @@ Base path: `/v1/inventory/` (`@RequestMapping("/v1/inventory/")` on `InventoryCo
   (BOM-managed; `flyway-core` alone no longer auto-configures under Spring Boot 4)
 - MapStruct for entity-DTO mapping
 - Lombok for boilerplate code reduction
-- Eureka client for service discovery
 - Spring Kafka 4 — inbound consumer of `StockStatusMessage` (`JacksonJsonDeserializer`, Jackson 3);
   idempotent, **non-transactional** (the inbox provides exactly-once, not Kafka transactions)
 - Spring `@Scheduled` — drives `InboxCleaner` (enabled by `@EnableScheduling` on the application class)
@@ -131,9 +130,10 @@ Base path: `/v1/inventory/` (`@RequestMapping("/v1/inventory/")` on `InventoryCo
 ### Microservice Integration
 
 - Connects to Spring Cloud Config Server (localhost:8071)
-- Registers with Eureka service registry
 - Uses Spring Cloud dependencies for distributed system patterns
-- Synchronously serves order-service's REST calls (`/prices`, `/reserve-stock`)
+- Synchronously serves order-service's REST calls (`/prices`, `/reserve-stock`) — order-service reaches
+  this service at a direct URL (`http://inventory-service:8074` in Docker, `http://localhost:8074` on host);
+  there is no service discovery
 - Consumes `StockStatusMessage` stock events from order-service over Kafka (`${topic.stock.status}`) —
   see the [Kafka Integration & Inbox Pattern](#kafka-inbox) section
 

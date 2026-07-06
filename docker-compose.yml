@@ -16,8 +16,10 @@
 #     kafka:19092 (INTERNAL) for containerized services.
 #   * DB credentials flow from ./secrets/ (gitignored) as Docker secrets;
 #     Spring reads them via its configtree:/run/secrets/ import. Non-secret
-#     endpoints (config server, Eureka, Kafka, DB host) are plain env vars
-#     resolved by placeholders served from the config repo.
+#     endpoints (config server, Kafka, DB host, service URLs) are plain env
+#     vars resolved by placeholders served from the config repo.
+#   * No service discovery: services reach each other by Compose DNS name and
+#     fixed port (the *_SERVICE_URL env vars below).
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -36,7 +38,6 @@ x-logging: &default-logging
 # Env every config-client service needs to find the infrastructure.
 x-spring-env: &spring-env
   SPRING_CLOUD_CONFIG_URI: http://config-service:8071
-  EUREKA_URI: http://discovery-service:8070/eureka/
 
 # Extra env for the business services (DB + Kafka coordinates).
 x-business-env: &business-env
@@ -59,8 +60,6 @@ x-business-depends: &business-depends
   kafka:
     condition: service_healthy
   config-service:
-    condition: service_healthy
-  discovery-service:
     condition: service_healthy
 
 services:
@@ -154,32 +153,6 @@ services:
       start_period: 40s
 
   # ---------------------------------------------------------------------------
-  # discovery-service - Eureka server (registers nothing, serves the registry)
-  # ---------------------------------------------------------------------------
-  discovery-service:
-    build:
-      context: .
-      args:
-        SERVICE: discovery-service
-    image: webstore/discovery-service
-    container_name: webstore-discovery-service
-    <<: [*restart-policy, *default-logging]
-    environment:
-      <<: *spring-env
-    ports:
-      - "8070:8070"
-    depends_on:
-      config-service:
-        condition: service_healthy
-    healthcheck:
-      # no actuator dependency in this module -> probe the Eureka API instead
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8070/eureka/apps >/dev/null"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 40s
-
-  # ---------------------------------------------------------------------------
   # Business services
   # ---------------------------------------------------------------------------
   product-service:
@@ -258,6 +231,11 @@ services:
     <<: [*restart-policy, *default-logging]
     environment:
       <<: *business-env
+      # Direct REST targets (no service discovery) — feed the
+      # ${INVENTORY_SERVICE_URL:...} / ${PAYMENT_SERVICE_URL:...} placeholders
+      # in the config repo's order-service.yml.
+      INVENTORY_SERVICE_URL: http://inventory-service:8074
+      PAYMENT_SERVICE_URL: http://payment-service:8078
     secrets: *db-secrets
     ports:
       - "8077:8077"
@@ -293,7 +271,7 @@ services:
       start_period: 60s
 
   # ---------------------------------------------------------------------------
-  # gateway-service - API gateway, starts last, single entry point on 8072
+  # gateway-service - API gateway, single entry point on 8072
   # ---------------------------------------------------------------------------
   gateway-service:
     build:
@@ -305,12 +283,17 @@ services:
     <<: [*restart-policy, *default-logging]
     environment:
       <<: *spring-env
+      # Static route targets — feed the ${*_SERVICE_URL:...} placeholders in
+      # the config repo's gateway-service.yml.
+      INVENTORY_SERVICE_URL: http://inventory-service:8074
+      ORDER_SERVICE_URL: http://order-service:8077
+      PAYMENT_SERVICE_URL: http://payment-service:8078
+      PRODUCT_SERVICE_URL: http://product-service:8073
+      USER_SERVICE_URL: http://user-service:8075
     ports:
       - "8072:8072"
     depends_on:
       config-service:
-        condition: service_healthy
-      discovery-service:
         condition: service_healthy
 
 # -----------------------------------------------------------------------------

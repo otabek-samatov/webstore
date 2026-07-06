@@ -35,7 +35,13 @@
       "Read(//c/Users/acer/Desktop/**)",
       "Bash(awk -F',' '{print $2}')",
       "Bash(xargs grep -n \"private \\\\|@Column\\\\|@Table\\\\|@Id\")",
-      "Bash(grep -v \"^\\\\s*//\")"
+      "Bash(grep -v \"^\\\\s*//\")",
+      "Bash(ls ~/.gradle/caches/modules-2/files-2.1/org.springframework.cloud/spring-cloud-netflix-eureka-client/ 2>/dev/null)",
+      "PowerShell(.\\\\gradlew.bat :order-service:compileJava :payment-service:compileJava :inventory-service:compileJava :product-service:compileJava --console=plain -q)",
+      "PowerShell(.\\\\gradlew.bat build -x test --console=plain -q)",
+      "PowerShell(.\\\\gradlew.bat :order-service:test :gateway-service:test --console=plain)",
+      "Bash(grep -oE \"Caused by:[^<]{0,200}\" order-service/build/reports/tests/test/classes/orderservice.OrderServiceApplicationTests.html)",
+      "Bash(grep -oE \"Caused by: [a-zA-Z0-9_.]+\\(Exception|Error\\)[^&]{0,200}\" order-service/build/test-results/test/TEST-orderservice.OrderServiceApplicationTests.xml)"
     ]
   }
 }

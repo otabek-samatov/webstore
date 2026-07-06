@@ -19,8 +19,6 @@ User Service – Registration, login, profile.
 
 Gateway Service – API gateway using Spring Cloud Gateway.
 
-Discovery Server – Service registry using Netflix Eureka or Consul.
-
 Config Server – Centralized configuration using Spring Cloud Config.
 
 Auth Service – With Spring Security and JWT/OAuth2.
@@ -33,7 +31,7 @@ Spring Boot: For rapid microservice development.
 
 Spring Data JPA: For data persistence (Hibernate + JPA).
 
-Spring Cloud: For distributed system essentials (Config Server, Eureka, Gateway).
+Spring Cloud: For distributed system essentials (Config Server, Gateway). Services reach each other by DNS name and fixed port (Docker Compose / Kubernetes), so there is no separate service registry.
 
 Spring Security: For authentication and authorization (with JWT).
 

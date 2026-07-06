@@ -11,9 +11,9 @@ running — without it, no other service can resolve its config.
 - **Spring `application.name`:** `config-server`
 - **Port:** `8071`
 - **Entry point:** `ConfigServerApplication` — a `@SpringBootApplication` annotated `@EnableConfigServer`.
-- **Does not register with Eureka** (no Eureka client dependency). Other services reach it directly at
-  `http://localhost:8071`, configured via their `spring.config.import: optional:configserver:` +
-  `spring.cloud.config.uri`.
+- Other services reach it directly at `http://localhost:8071` (containers use
+  `http://config-service:8071` via the `SPRING_CLOUD_CONFIG_URI` env var), configured via their
+  `spring.config.import: optional:configserver:` + `spring.cloud.config.uri`.
 
 ## Build & Run
 
@@ -71,6 +71,6 @@ spring.cloud.config.server.git:
 
 ## Startup Position
 
-**Start config-service first**, before discovery-service and all business services — they block on
-config resolution at boot. config-service itself depends on nothing in the system except network
-access to the `webstore-config` Git remote.
+**Start config-service first**, before all other services — they block on config resolution at boot.
+config-service itself depends on nothing in the system except network access to the
+`webstore-config` Git remote.
