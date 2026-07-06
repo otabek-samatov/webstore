@@ -28,7 +28,11 @@ Health/info: `http://localhost:8071/actuator/health` (all actuator endpoints are
 To inspect served config directly:
 `GET http://localhost:8071/<application>/<profile>` — e.g.
 `http://localhost:8071/inventory-service/default` returns the merged property sources
-(`application.yml` + `inventory-service.yml`).
+(`application.yml` + `inventory-service.yml`). Request a real profile to see the environment overlays,
+e.g. `http://localhost:8071/order-service/prod` merges
+`application.yml` + `application-prod.yml` + `order-service.yml` + `order-service-prod.yml`
+(the DEV/UAT/PROD overlays live in the `webstore-config` repo; profile selected at runtime via
+`SPRING_PROFILES_ACTIVE`, driven by `SPRING_PROFILE` in the `webstore` repo's `.env` files).
 
 ## Configuration Backend (Git)
 

@@ -56,6 +56,11 @@ x-logging-env: &logging-env
 x-spring-env: &spring-env
   <<: *logging-env
   SPRING_CLOUD_CONFIG_URI: http://config-service:${CONFIG_SERVICE_PORT}
+  # Active Spring profile — selects the profile overlays Config Server serves
+  # (application-<profile>.yml / <service>-<profile>.yml in the config repo).
+  # Driven by SPRING_PROFILE in the active .env file (.env / .env.uat /
+  # .env.prod); defaults to dev when unset.
+  SPRING_PROFILES_ACTIVE: ${SPRING_PROFILE:-dev}
 
 x-service-urls: &service-urls
   <<: *spring-env

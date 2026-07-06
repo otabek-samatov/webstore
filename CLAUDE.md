@@ -113,9 +113,18 @@ Services must be started in this order for proper operation:
 services:
 
 ```bash
-docker compose up -d --build          # build all service images + start everything
+docker compose up -d --build          # build all service images + start everything (DEV, default .env)
 docker compose up -d postgres kafka   # infrastructure only (services run on host)
+
+docker compose --env-file .env.uat  up -d   # UAT  environment
+docker compose --env-file .env.prod up -d   # PROD environment
 ```
+
+The environment is selected by the `.env` file in play (see [Environments &
+profiles](#environments-profiles)): the default `.env` is DEV; `.env.uat` / `.env.prod` carry the same
+variables plus their own `SPRING_PROFILE`, which Compose passes to every container as
+`SPRING_PROFILES_ACTIVE` so Config Server serves the matching `application-<profile>.yml` /
+`<service>-<profile>.yml` overlays.
 
 **Infrastructure:**
 
@@ -138,6 +147,10 @@ business services; gateway-service waits only on config-service).
 served from the config repo):
 
 - `SPRING_CLOUD_CONFIG_URI=http://config-service:8071` — overrides the source-tree `localhost:8071`
+- `SPRING_PROFILES_ACTIVE=${SPRING_PROFILE:-dev}` — declared in the `x-spring-env` anchor so it reaches
+  every service; driven by `SPRING_PROFILE` in the active `.env` file. Selects the profile overlays
+  Config Server serves (`application-<profile>.yml` / `<service>-<profile>.yml`). See
+  [Environments & profiles](#environments-profiles)
 - `KAFKA_BROKERS=kafka:19092` — feeds `${KAFKA_BROKERS:...}` (the INTERNAL listener)
 - `DB_HOST=postgres` — feeds `${db.host:...}` in the datasource URL
 - The five `*_SERVICE_URL` vars — declared **once** in the `x-service-urls` YAML anchor and merged
@@ -154,9 +167,10 @@ served from the config repo):
 used by the Compose stack lives in **`.env`** at the repo root (committed; not secret). Compose
 auto-loads it and substitutes the `${*_PORT}` placeholders throughout `docker-compose.yml` — host port
 mappings, healthcheck URLs, the `*_SERVICE_URL` targets, `SPRING_CLOUD_CONFIG_URI`, `KAFKA_BROKERS`,
-and the Kafka listener/advertised/controller ports. Vars: `CONFIG_SERVICE_PORT`, `GATEWAY_SERVICE_PORT`,
-`PRODUCT_SERVICE_PORT`, `INVENTORY_SERVICE_PORT`, `USER_SERVICE_PORT`, `ORDER_SERVICE_PORT`,
-`PAYMENT_SERVICE_PORT`, `POSTGRES_PORT`, `KAFKA_PORT`, `KAFKA_INTERNAL_PORT`, `KAFKA_CONTROLLER_PORT`.
+and the Kafka listener/advertised/controller ports. Vars: `SPRING_PROFILE`, `CONFIG_SERVICE_PORT`,
+`GATEWAY_SERVICE_PORT`, `PRODUCT_SERVICE_PORT`, `INVENTORY_SERVICE_PORT`, `USER_SERVICE_PORT`,
+`ORDER_SERVICE_PORT`, `PAYMENT_SERVICE_PORT`, `POSTGRES_PORT`, `KAFKA_PORT`, `KAFKA_INTERNAL_PORT`,
+`KAFKA_CONTROLLER_PORT`.
 
 > The per-service `*_SERVICE_PORT` value is also passed **into** each container as the uniform
 > `SERVICE_PORT` env var, so the container-internal `server.port` (served from the config repo) tracks
@@ -165,6 +179,28 @@ and the Kafka listener/advertised/controller ports. Vars: `CONFIG_SERVICE_PORT`,
 > listens on 5432 internally); (2) the port **defaults** baked into the `*_SERVICE_URL` /
 > `services.*.url` fallbacks in the config repo are host-run defaults and are **not** driven by `.env`
 > (Compose can't reach the config repo, and host runs don't load `.env`).
+
+<a id="environments-profiles"></a>**Environments & profiles (DEV / UAT / PROD):** there are two
+per-environment layers, switched together by picking a `.env` file:
+
+1. **Compose / infra layer — one `.env` file per environment** (`.env` = DEV, `.env.uat`, `.env.prod`).
+   Because `docker compose --env-file <file>` **replaces** (does not merge) the default `.env`, each
+   file is a **complete** copy of all Compose vars plus its own `SPRING_PROFILE`. Plain
+   `docker compose up` uses `.env`, so there is deliberately no separate `.env.dev`.
+2. **Spring application layer — profile overlays in the config repo.** Each `.env` sets `SPRING_PROFILE`,
+   which Compose forwards as `SPRING_PROFILES_ACTIVE` to every container. Config Server then merges
+   profile files on top of the base ones — precedence low→high:
+   `application.yml` → `application-<profile>.yml` → `<service>.yml` → `<service>-<profile>.yml`.
+   The shared overlays `application-{dev,uat,prod}.yml` exist today (e.g. PROD trims the actuator
+   surface, disables SQL logging, sizes Kafka for multiple brokers); add `<service>-<profile>.yml` for
+   service-specific per-env deltas (`order-service-prod.yml` is the seeded example).
+
+> Caveats: (a) the profile files live in the **separate** `webstore-config` repo and only take effect
+> once committed & pushed (Config Server reads Git, not the working copy); (b) `DB_HOST` /
+> `KAFKA_BROKERS` are still hardcoded to the Compose containers in `docker-compose.yml` — if UAT/PROD
+> use external managed DB/Kafka, parameterize those (and likely drop the `postgres`/`kafka` services
+> via a `docker-compose.prod.yml` override); (c) `replication.factor` 2/3 in the UAT/PROD overlays
+> require a matching broker count or `NewTopic` auto-creation fails.
 
 **Secrets:** the `secrets:` section maps file-backed secrets from `./secrets/` (**gitignored** — never
 commit): `secrets/postgres_user.txt` and `secrets/postgres_password.txt`, one value per file. These are
@@ -256,18 +292,26 @@ the single source of truth for the DB credentials; the services and the healthch
 webstore-config/
 └── config/
     ├── application.yml          # shared defaults applied to every service
+    ├── application-dev.yml      # shared per-profile overlays (DEV / UAT / PROD)
+    ├── application-uat.yml
+    ├── application-prod.yml
     ├── gateway-service.yml      # per-service overrides (one file per service)
     ├── product-service.yml
     ├── inventory-service.yml
     ├── user-service.yml
     ├── order-service.yml
+    ├── order-service-prod.yml   # per-service, per-profile overlay (example)
     └── payment-service.yml
 ```
 
 Spring Cloud Config matches each service's `spring.application.name` to the corresponding `<name>.yml` file
-and merges it on top of `application.yml`. To change runtime config (Kafka topic names, partition count,
-ports, gateway routes, etc.), edit a file under `C:\Data\Projects\webstore-config\config\` and
-commit; the Config Server serves the latest commit from the configured Git remote.
+and merges it on top of `application.yml`. When a profile is active (`SPRING_PROFILES_ACTIVE`, set per
+environment — see [Environments & profiles](#environments-profiles)) it also merges the matching
+`application-<profile>.yml` and `<service>-<profile>.yml` overlays. Full precedence, low→high:
+`application.yml` → `application-<profile>.yml` → `<service>.yml` → `<service>-<profile>.yml`.
+To change runtime config (Kafka topic names, partition count, ports, gateway routes, etc.), edit a file
+under `C:\Data\Projects\webstore-config\config\` and commit; the Config Server serves the latest commit
+from the configured Git remote.
 
 **What lives in `application.yml` (shared by all services):**
 
@@ -301,6 +345,12 @@ commit; the Config Server serves the latest commit from the configured Git remot
 - `service.schemaName` — PostgreSQL schema injected into the shared datasource URL
 - Service-specific overrides (e.g., `gateway-service.yml` defines `spring.cloud.gateway.routes`;
   `order-service.yml` defines the `services.inventory.url` / `services.payment.url` REST targets)
+
+**What lives in the profile overlays (`application-<profile>.yml` / `<service>-<profile>.yml`):** only the
+per-environment **deltas** — everything else inherits from the base files. The shared overlays
+(`application-{dev,uat,prod}.yml`) cover cross-cutting env differences (actuator exposure, SQL log level,
+`num.partitions` / `replication.factor`); add a `<service>-<profile>.yml` (e.g. `order-service-prod.yml`)
+only when one service needs an env-specific override the shared overlay can't express.
 
 **Gateway routes (defined in `gateway-service.yml`):**
 
@@ -338,9 +388,11 @@ Each route strips its prefix via `RewritePath=/<prefix>/(?<path>.*), /$\{path}` 
 
 **Editing config: workflow**
 
-1. Edit the relevant file in `C:\Data\Projects\webstore-config\config\`.
+1. Edit the relevant file in `C:\Data\Projects\webstore-config\config\` (the base file, or the
+   `application-<profile>.yml` / `<service>-<profile>.yml` overlay if the change is environment-specific).
 2. Commit and push to the Git remote — Config Server reads from Git, not the local working copy.
 3. Restart the affected service(s) or hit `/actuator/refresh` on a service with `@RefreshScope` beans.
+   (A profile overlay only applies to services started with that `SPRING_PROFILES_ACTIVE`.)
 
 ### Database Architecture
 
