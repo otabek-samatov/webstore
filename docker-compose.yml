@@ -55,20 +55,20 @@ x-logging-env: &logging-env
 
 x-spring-env: &spring-env
   <<: *logging-env
-  SPRING_CLOUD_CONFIG_URI: http://config-service:8071
+  SPRING_CLOUD_CONFIG_URI: http://config-service:${CONFIG_SERVICE_PORT}
 
 x-service-urls: &service-urls
   <<: *spring-env
-  INVENTORY_SERVICE_URL: http://inventory-service:8074
-  ORDER_SERVICE_URL: http://order-service:8077
-  PAYMENT_SERVICE_URL: http://payment-service:8078
-  PRODUCT_SERVICE_URL: http://product-service:8073
-  USER_SERVICE_URL: http://user-service:8075
+  INVENTORY_SERVICE_URL: http://inventory-service:${INVENTORY_SERVICE_PORT}
+  ORDER_SERVICE_URL: http://order-service:${ORDER_SERVICE_PORT}
+  PAYMENT_SERVICE_URL: http://payment-service:${PAYMENT_SERVICE_PORT}
+  PRODUCT_SERVICE_URL: http://product-service:${PRODUCT_SERVICE_PORT}
+  USER_SERVICE_URL: http://user-service:${USER_SERVICE_PORT}
 
 x-business-env: &business-env
   <<: *service-urls
   DB_HOST: postgres
-  KAFKA_BROKERS: kafka:19092
+  KAFKA_BROKERS: kafka:${KAFKA_INTERNAL_PORT}
 
 # DB credentials as mounted secret files -> Spring configtree properties
 # (/run/secrets/db_username -> property db_username).
@@ -107,7 +107,9 @@ services:
       - postgres_user
       - postgres_password
     ports:
-      - "5432:5432"
+      # Host-published port only; the container always listens on 5432
+      # (the postgres image's fixed default, matched by DB_PORT / healthcheck).
+      - "${POSTGRES_PORT}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql
     healthcheck:
@@ -126,16 +128,16 @@ services:
     container_name: webstore-kafka
     <<: *common
     ports:
-      - "9092:9092"
+      - "${KAFKA_PORT}:${KAFKA_PORT}"
     environment:
       # --- Node / roles ---
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:29093
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:${KAFKA_CONTROLLER_PORT}
 
       # --- Listeners (host + internal + controller) ---
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,INTERNAL://0.0.0.0:19092,CONTROLLER://0.0.0.0:29093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,INTERNAL://kafka:19092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:${KAFKA_PORT},INTERNAL://0.0.0.0:${KAFKA_INTERNAL_PORT},CONTROLLER://0.0.0.0:${KAFKA_CONTROLLER_PORT}
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:${KAFKA_PORT},INTERNAL://kafka:${KAFKA_INTERNAL_PORT}
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
@@ -150,7 +152,7 @@ services:
     volumes:
       - kafka-data:/var/lib/kafka/data
     healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:${KAFKA_PORT} >/dev/null 2>&1"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -168,11 +170,15 @@ services:
     image: webstore/config-service
     container_name: webstore-config-service
     <<: *common
-    environment: *logging-env
+    environment:
+      <<: *logging-env
+      # server.port inside the container (config-service reads this from its own
+      # source application.yml, not the config repo).
+      SERVICE_PORT: ${CONFIG_SERVICE_PORT}
     ports:
-      - "8071:8071"
+      - "${CONFIG_SERVICE_PORT}:${CONFIG_SERVICE_PORT}"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8071/actuator/health >/dev/null"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${CONFIG_SERVICE_PORT}/actuator/health >/dev/null"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -191,13 +197,15 @@ services:
     <<: *common
     environment:
       <<: *business-env
+      # Resolves server.port in the config repo's product-service.yml.
+      SERVICE_PORT: ${PRODUCT_SERVICE_PORT}
     secrets: *db-secrets
     ports:
-      - "8073:8073"
+      - "${PRODUCT_SERVICE_PORT}:${PRODUCT_SERVICE_PORT}"
     depends_on:
       <<: *business-depends
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8073/actuator/health >/dev/null"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${PRODUCT_SERVICE_PORT}/actuator/health >/dev/null"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -213,13 +221,15 @@ services:
     <<: *common
     environment:
       <<: *business-env
+      # Resolves server.port in the config repo's inventory-service.yml.
+      SERVICE_PORT: ${INVENTORY_SERVICE_PORT}
     secrets: *db-secrets
     ports:
-      - "8074:8074"
+      - "${INVENTORY_SERVICE_PORT}:${INVENTORY_SERVICE_PORT}"
     depends_on:
       <<: *business-depends
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8074/actuator/health >/dev/null"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${INVENTORY_SERVICE_PORT}/actuator/health >/dev/null"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -235,13 +245,15 @@ services:
     <<: *common
     environment:
       <<: *business-env
+      # Resolves server.port in the config repo's user-service.yml.
+      SERVICE_PORT: ${USER_SERVICE_PORT}
     secrets: *db-secrets
     ports:
-      - "8075:8075"
+      - "${USER_SERVICE_PORT}:${USER_SERVICE_PORT}"
     depends_on:
       <<: *business-depends
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8075/actuator/health >/dev/null"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${USER_SERVICE_PORT}/actuator/health >/dev/null"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -257,13 +269,15 @@ services:
     <<: *common
     environment:
       <<: *business-env
+      # Resolves server.port in the config repo's order-service.yml.
+      SERVICE_PORT: ${ORDER_SERVICE_PORT}
     secrets: *db-secrets
     ports:
-      - "8077:8077"
+      - "${ORDER_SERVICE_PORT}:${ORDER_SERVICE_PORT}"
     depends_on:
       <<: *business-depends
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8077/actuator/health >/dev/null"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${ORDER_SERVICE_PORT}/actuator/health >/dev/null"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -279,13 +293,15 @@ services:
     <<: *common
     environment:
       <<: *business-env
+      # Resolves server.port in the config repo's payment-service.yml.
+      SERVICE_PORT: ${PAYMENT_SERVICE_PORT}
     secrets: *db-secrets
     ports:
-      - "8078:8078"
+      - "${PAYMENT_SERVICE_PORT}:${PAYMENT_SERVICE_PORT}"
     depends_on:
       <<: *business-depends
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8078/actuator/health >/dev/null"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${PAYMENT_SERVICE_PORT}/actuator/health >/dev/null"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -304,8 +320,10 @@ services:
     <<: *common
     environment:
       <<: *service-urls
+      # Resolves server.port in the config repo's gateway-service.yml.
+      SERVICE_PORT: ${GATEWAY_SERVICE_PORT}
     ports:
-      - "8072:8072"
+      - "${GATEWAY_SERVICE_PORT}:${GATEWAY_SERVICE_PORT}"
     depends_on:
       config-service:
         condition: service_healthy
