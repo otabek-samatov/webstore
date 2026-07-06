@@ -1,3 +1,6 @@
+# Docker secrets (local credentials — never commit)
+secrets/
+
 # Ignore Gradle project-specific cache directory
 .gradle
 

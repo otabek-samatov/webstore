@@ -61,6 +61,7 @@ public class CreateOrderSaga {
     private final PaymentClient paymentClient;
     private final TransactionTemplate transactionTemplate;
     private final String stockStatusTopic;
+    private final String inventoryServiceUrl;
 
     public CreateOrderSaga(SagaOrchestrator orchestrator,
                            BaseValidator baseValidator,
@@ -72,7 +73,8 @@ public class CreateOrderSaga {
                            AddressMapper addressMapper,
                            PaymentClient paymentClient,
                            PlatformTransactionManager transactionManager,
-                           @Value("${topic.stock.status}") String stockStatusTopic) {
+                           @Value("${topic.stock.status}") String stockStatusTopic,
+                           @Value("${services.inventory.url:http://localhost:8074}") String inventoryServiceUrl) {
         this.orchestrator = orchestrator;
         this.baseValidator = baseValidator;
         this.orderItemValidator = orderItemValidator;
@@ -84,6 +86,7 @@ public class CreateOrderSaga {
         this.paymentClient = paymentClient;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.stockStatusTopic = stockStatusTopic;
+        this.inventoryServiceUrl = inventoryServiceUrl;
     }
 
     public Order execute(CreateOrderDto orderDto) {
@@ -102,8 +105,8 @@ public class CreateOrderSaga {
         context.put(CTX_ORDER_DTO, orderDto);
 
         List<SagaStep> steps = List.of(
-                new PriceItemsStep(restClient),
-                new ReserveStockStep(restClient, outboxPublisher, transactionTemplate, stockStatusTopic),
+                new PriceItemsStep(restClient, inventoryServiceUrl),
+                new ReserveStockStep(restClient, inventoryServiceUrl, outboxPublisher, transactionTemplate, stockStatusTopic),
                 new PersistOrderStep(orderRepository, orderItemMapper, addressMapper, transactionTemplate),
                 new ProcessPaymentStep(paymentClient, orderRepository, transactionTemplate)
         );

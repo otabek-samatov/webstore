@@ -34,6 +34,7 @@ class ReserveStockStep implements SagaStep {
     private static final String RELEASE_EVENT = "release";
 
     private final RestClient restClient;
+    private final String inventoryServiceUrl;
     private final OutboxPublisher outboxPublisher;
     private final TransactionTemplate transactionTemplate;
     private final String stockStatusTopic;
@@ -60,7 +61,7 @@ class ReserveStockStep implements SagaStep {
         }
 
         restClient.post()
-                .uri("http://inventory-service/v1/inventory/reserve-stock")
+                .uri(inventoryServiceUrl + "/v1/inventory/reserve-stock")
                 .body(invList)
                 .retrieve()
                 .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {

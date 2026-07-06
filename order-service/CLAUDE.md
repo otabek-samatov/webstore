@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build Commands
 
-This is a Gradle-based Spring Boot project using Java 21.
+This is a Gradle-based Spring Boot project using Java 25.
 
 ```bash
 # Build the project
@@ -135,15 +135,19 @@ actions — see the [Orchestration Saga](#orchestration-saga) section.
 
 ### Inter-Service Communication
 
-**Synchronous (REST) — outbound to inventory-service:**
+**Synchronous (REST) — outbound to inventory-service and payment-service:**
 
-Uses a Eureka-aware `@LoadBalanced` `RestClient` from `RestConfig`. Two integration points exist:
+Uses a plain `RestClient` (from `RestConfig`) with **direct, property-configured base URLs** — there
+is no service discovery. Base URLs come from `services.inventory.url` / `services.payment.url`
+(defaults `http://localhost:8074` / `http://localhost:8078` for host runs; Docker Compose overrides
+them via the `INVENTORY_SERVICE_URL` / `PAYMENT_SERVICE_URL` env vars, which feed the placeholders
+in the config repo's `order-service.yml`). Three integration points exist:
 
-| Call                                                       | Triggered by                                                                                | Failure → exception                                             |
-|------------------------------------------------------------|---------------------------------------------------------------------------------------------|-----------------------------------------------------------------|
-| `POST http://inventory-service/v1/inventory/prices`        | `PriceItemsStep` of `CreateOrderSaga` (on create), `OrderManager.addItems` (on item add)    | 4xx → `IllegalArgumentException`, 5xx → `IllegalStateException` |
-| `POST http://inventory-service/v1/inventory/reserve-stock` | `ReserveStockStep` of `CreateOrderSaga` (on create), `OrderManager.addItems` (on item add)  | 4xx → `NotEnoughStockException`, 5xx → `IllegalStateException`  |
-| `POST http://payment-service/v1/payments`                  | `PaymentClient`, called by `ProcessPaymentStep` (on create) and `OrderManager.retryPayment` | 4xx → `PaymentFailedException`, 5xx → `IllegalStateException`   |
+| Call                                                          | Triggered by                                                                                | Failure → exception                                             |
+|---------------------------------------------------------------|---------------------------------------------------------------------------------------------|-----------------------------------------------------------------|
+| `POST {services.inventory.url}/v1/inventory/prices`           | `PriceItemsStep` of `CreateOrderSaga` (on create), `OrderManager.addItems` (on item add)    | 4xx → `IllegalArgumentException`, 5xx → `IllegalStateException` |
+| `POST {services.inventory.url}/v1/inventory/reserve-stock`    | `ReserveStockStep` of `CreateOrderSaga` (on create), `OrderManager.addItems` (on item add)  | 4xx → `NotEnoughStockException`, 5xx → `IllegalStateException`  |
+| `POST {services.payment.url}/v1/payments`                     | `PaymentClient`, called by `ProcessPaymentStep` (on create) and `OrderManager.retryPayment` | 4xx → `PaymentFailedException`, 5xx → `IllegalStateException`   |
 
 The inventory calls send/receive `List<InventoryDto>` payloads. `InventoryDto` carries `productSKU`,
 `stockLevel`, `reservedStock`, `stockPrice`, `sellPrice`, and `measurementUnit`. The payment call is
@@ -617,9 +621,11 @@ saga are designed so that adding a second saga is purely additive — implement
 **Configuration:**
 
 - No `saga.*` configuration properties exist today. The shipping cost (`100`),
-  saga type (`"create-order"`), outbox aggregate type (`"CreateOrderSaga"`), and
-  the inventory/payment service URLs are hardcoded constants in the step classes.
-  If they need to vary, externalize through Config Server.
+  saga type (`"create-order"`), and outbox aggregate type (`"CreateOrderSaga"`) are
+  hardcoded constants in the step classes. The inventory/payment base URLs are
+  property-driven (`services.inventory.url` / `services.payment.url`, injected into
+  `CreateOrderSaga` and passed to the steps). If the constants need to vary,
+  externalize through Config Server.
 - The order total charged by `ProcessPaymentStep` is
   `Σ(unitPrice × quantity) + shippingCost + taxAmount`. `taxAmount` is currently
   `0`, so it is effectively items + shipping.
@@ -677,7 +683,9 @@ The service uses Spring Cloud Config for externalized configuration:
   (payment-service is the producer)
 - `num.partitions`: **3**, `replication.factor`: **1** (from `application.yml`; sized for a single-broker local Kafka)
 - `bootstrap.servers`: `localhost:9092`
-- Eureka registry: `http://localhost:8070/eureka/`
+- `services.inventory.url` / `services.payment.url` (from `order-service.yml`): direct REST targets,
+  `${INVENTORY_SERVICE_URL:http://localhost:8074}` / `${PAYMENT_SERVICE_URL:http://localhost:8078}`
+  (Docker Compose sets the env vars to the container DNS names)
 
 > Property names in code use the path form (`topic.stock.status`); the topic **value** that actually
 > lands on the wire is `stock-status-event`. The two are easy to confuse when grepping.
@@ -967,8 +975,11 @@ triggering Bean Validation before reaching `OrderManager`.
 
 **When integrating with another service over REST:**
 
-1. Use the injected `RestClient` (already `@LoadBalanced` via Eureka)
-2. Reference the target service by Eureka name (`http://inventory-service/...`)
+1. Use the injected plain `RestClient`
+2. Reference the target via a property-configured base URL following the existing pattern: a
+   `services.<name>.url` property in the config repo's `order-service.yml` with a
+   `${<NAME>_SERVICE_URL:http://localhost:<port>}` placeholder, plus the env var in
+   `docker-compose.yml` (no service discovery — targets are direct host:port URLs)
 3. Add explicit `onStatus` handlers for 4xx and 5xx — map to domain exceptions handled by
    `RestExceptionHandler` (`NotEnoughStockException`, `IllegalArgumentException`, `IllegalStateException`)
 
@@ -1044,14 +1055,15 @@ Current test coverage is minimal (only context-load test exists). When adding te
 
 ### Dependencies to Be Aware Of
 
-- **Spring Boot 4.1.0** (Spring Framework 7), Java 21
+- **Spring Boot 4.1.0** (Spring Framework 7), Java 25
 - **MapStruct 1.5.5.Final** — compile-time code generation for mappers
 - **Lombok** — annotation processor required for IDE compilation
 - **Web** via `spring-boot-starter-webmvc` (renamed from `spring-boot-starter-web` in Spring Boot 4)
 - **Flyway** — runs migrations on startup; wired via `spring-boot-starter-flyway` +
   `flyway-database-postgresql` (BOM-managed versions, ~Flyway 11; `flyway-core` alone no longer
   auto-configures migrations under Spring Boot 4)
-- **Spring Cloud 2025.1.2** — Eureka client, Config client, LoadBalancer
+- **Spring Cloud 2025.1.2** — Config client (no Eureka / LoadBalancer — service discovery was removed;
+  REST targets are direct URLs)
 - **Spring Kafka 4** — idempotent producer + consumer (no Kafka transactions; outbox replaces them).
   The consumer uses `JacksonJsonDeserializer` / the producer config references `JacksonJsonSerializer`
   (Jackson 3; replaces the deprecated-for-removal `JsonDeserializer` / `JsonSerializer`)
@@ -1074,13 +1086,12 @@ Current test coverage is minimal (only context-load test exists). When adding te
 This service requires the following to be running:
 
 1. **Config Server** (localhost:8071) — for configuration
-2. **Eureka Server** (localhost:8761) — for service discovery
-3. **PostgreSQL 17** — for data persistence
-4. **Kafka broker** — for event streaming
-5. **inventory-service** — for synchronous price lookup and stock reservation during order creation /
-   item addition (must be registered with Eureka)
-6. **payment-service** — called **synchronously** via `PaymentClient` during order creation
+2. **PostgreSQL 18** — for data persistence
+3. **Kafka broker** — for event streaming
+4. **inventory-service** — for synchronous price lookup and stock reservation during order creation /
+   item addition (reachable at `services.inventory.url`)
+5. **payment-service** — called **synchronously** via `PaymentClient` during order creation
    (`ProcessPaymentStep`) and on payment retry (`OrderManager.retryPayment`)
-   (`POST /v1/payments`, must be registered with Eureka); also **produces** payment-status events
+   (`POST /v1/payments`, reachable at `services.payment.url`); also **produces** payment-status events
    (`PaymentStatusMessage` on `${topic.payment.status}`) that asynchronously drive status transitions
    to `COMPLETED` / `REFUNDED`

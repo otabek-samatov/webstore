@@ -5,7 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 This is a Spring Boot microservice for managing products in a webstore. It's part of a larger Spring Cloud ecosystem
-using Eureka for service discovery and Spring Cloud Config for centralized configuration.
+using Spring Cloud Config for centralized configuration. There is **no service discovery** — services
+reach each other directly by DNS name + fixed port (Docker Compose DNS in containers, `localhost` on host runs).
 
 ## Development Commands
 
@@ -21,7 +22,7 @@ using Eureka for service discovery and Spring Cloud Config for centralized confi
 
 - Application auto-generates sample data on startup via `MainGenerator`
 - Database migrations handled automatically by Flyway on startup
-- Uses Java 21, Spring Boot 4.1.0 (Spring Framework 7), Spring Cloud 2025.1.2
+- Uses Java 25, Spring Boot 4.1.0 (Spring Framework 7), Spring Cloud 2025.1.2
 
 ## Core Architecture
 
@@ -82,8 +83,8 @@ Category (hierarchical)
 ### Configuration
 
 - **Spring Cloud Config**: External config server at `http://localhost:8071`
-- **Service Discovery**: Eureka client registration as `product-service`
-- **Application config**: `application.yml` with config server import
+- **Application config**: `application.yml` with config server import (`spring.application.name: product-service`
+  keys the config lookup and the gateway route target)
 
 ### Spring Boot 4 notes
 

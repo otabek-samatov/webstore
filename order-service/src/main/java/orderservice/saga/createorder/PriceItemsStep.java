@@ -29,6 +29,7 @@ import java.util.stream.Collectors;
 class PriceItemsStep implements SagaStep {
 
     private final RestClient restClient;
+    private final String inventoryServiceUrl;
 
     @Override
     public String name() {
@@ -58,7 +59,7 @@ class PriceItemsStep implements SagaStep {
         }
 
         List<InventoryDto> prices = restClient.post()
-                .uri("http://inventory-service/v1/inventory/prices")
+                .uri(inventoryServiceUrl + "/v1/inventory/prices")
                 .body(skus)
                 .retrieve()
                 .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {

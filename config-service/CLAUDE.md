@@ -11,9 +11,9 @@ running — without it, no other service can resolve its config.
 - **Spring `application.name`:** `config-server`
 - **Port:** `8071`
 - **Entry point:** `ConfigServerApplication` — a `@SpringBootApplication` annotated `@EnableConfigServer`.
-- **Does not register with Eureka** (no Eureka client dependency). Other services reach it directly at
-  `http://localhost:8071`, configured via their `spring.config.import: optional:configserver:` +
-  `spring.cloud.config.uri`.
+- Other services reach it directly at `http://localhost:8071` (containers use
+  `http://config-service:8071` via the `SPRING_CLOUD_CONFIG_URI` env var), configured via their
+  `spring.config.import: optional:configserver:` + `spring.cloud.config.uri`.
 
 ## Build & Run
 
@@ -55,12 +55,6 @@ spring.cloud.config.server.git:
 
 ## Gotchas
 
-- **The PostgreSQL datasource is vestigial.** `build.gradle` pulls in `spring-boot-starter-data-jpa`
-    + `postgresql`, and `application.yml` defines a `spring.datasource` pointing at the `webstore` DB.
-      The config backend is **Git**, not JDBC — nothing in this service uses the datasource. It exists
-      only so JPA auto-configuration finds a DataSource at startup. If you remove the JPA dependency you
-      can also drop the datasource block; if you keep it, the DB must be reachable at boot or
-      auto-configuration may fail.
 - **Application name is `config-server`, not `config-service`.** The directory/module is
   `config-service`; the Spring application name is `config-server`. There is no `config-server.yml`
   in the config repo because the server does not fetch config from itself.
@@ -69,12 +63,14 @@ spring.cloud.config.server.git:
 
 - `spring-cloud-config-server` (the server itself)
 - `spring-boot-starter-actuator`
-- `spring-boot-starter-data-jpa` + `postgresql` (currently unused — see Gotchas)
-- Spring Cloud BOM `2025.1.2`, Spring Boot `4.1.0` (Spring Framework 7), Java 21
+- Spring Cloud BOM `2025.1.2`, Spring Boot `4.1.0` (Spring Framework 7), Java 25
+
+> The formerly vestigial `spring-boot-starter-data-jpa` + `postgresql` dependencies and the hardcoded
+> `spring.datasource` block were removed — the config backend is Git, and a config server needs no
+> database.
 
 ## Startup Position
 
-**Start config-service first**, before discovery-service and all business services — they block on
-config resolution at boot. config-service itself depends on nothing in the system except network
-access to the `webstore-config` Git remote (and, because of the vestigial datasource, a reachable
-PostgreSQL at `localhost:5432`).
+**Start config-service first**, before all other services — they block on config resolution at boot.
+config-service itself depends on nothing in the system except network access to the
+`webstore-config` Git remote.

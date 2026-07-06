@@ -6,6 +6,7 @@ import orderservice.dto.PaymentDto;
 import orderservice.entities.Order;
 import orderservice.entities.OrderItem;
 import orderservice.exceptions.PaymentFailedException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -32,6 +33,9 @@ public class PaymentClient {
 
     private final RestClient restClient;
 
+    @Value("${services.payment.url:http://localhost:8078}")
+    private String paymentServiceUrl;
+
     /**
      * Charges the customer for the given order. The amount is computed from the
      * order's items, shipping, and tax — so the order's items must be initialised
@@ -48,7 +52,7 @@ public class PaymentClient {
         request.setAmount(computeTotal(order));
 
         PaymentDto response = restClient.post()
-                .uri("http://payment-service/v1/payments")
+                .uri(paymentServiceUrl + "/v1/payments")
                 .body(request)
                 .retrieve()
                 .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {

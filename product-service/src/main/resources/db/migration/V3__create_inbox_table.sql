@@ -7,7 +7,7 @@ CREATE TABLE inbox_messages
     message_id     VARCHAR(255) PRIMARY KEY,
     version        INTEGER                  NOT NULL,
     aggregate_type VARCHAR(255)             NOT NULL,
-    aggregate_id   VARCHAR(255),
+    aggregate_id   VARCHAR(255)             NOT NULL,
     event_type     VARCHAR(255)             NOT NULL,
     topic_name     VARCHAR(255)             NOT NULL,
     partition_no   INTEGER,

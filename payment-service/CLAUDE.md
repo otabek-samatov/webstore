@@ -10,11 +10,11 @@ refund operations for customer orders, and notifies order-service of payment out
 
 **Tech Stack:**
 
-- Java 21
+- Java 25
 - Spring Boot 4.1.0 (Spring Framework 7)
 - Spring Data JPA (Hibernate)
-- PostgreSQL 17
-- Spring Cloud 2025.1.2 (Config, Eureka)
+- PostgreSQL 18
+- Spring Cloud 2025.1.2 (Config)
 - Spring Kafka 4 — **producer only** (idempotent, non-transactional; see [Kafka & Outbox](#kafka--outbox))
 - Spring `@Scheduled` — drives the outbox poller / recovery / cleanup (`@EnableScheduling` on the app class)
 - MapStruct for DTO mapping
@@ -40,7 +40,7 @@ config (app name + `config.import: optional:configserver:`).
 # Clean build
 ./gradlew :payment-service:clean :payment-service:build
 
-# Run application locally (requires PostgreSQL, Config Server, Eureka, and Kafka running)
+# Run application locally (requires PostgreSQL, Config Server, and Kafka running)
 ./gradlew :payment-service:bootRun
 
 # Regenerate MapStruct implementations
@@ -51,12 +51,12 @@ config (app name + `config.import: optional:configserver:`).
 
 ### Microservice Context
 
-Payment Service is one of 8 microservices in the Webstore application. It integrates with:
+Payment Service is one of 7 microservices in the Webstore application. It integrates with:
 
-- **Order Service**: calls `POST /v1/payments` (charge on order creation / payment retry); receives
-  asynchronous payment-status events back from this service over Kafka.
+- **Order Service**: calls `POST /v1/payments` (charge on order creation / payment retry) at this
+  service's direct URL (`http://payment-service:8078` in Docker, `http://localhost:8078` on host —
+  no service discovery); receives asynchronous payment-status events back from this service over Kafka.
 - **Config Server**: retrieves runtime configuration.
-- **Eureka**: registers for service discovery.
 - **Kafka**: publishes payment-status events on `${topic.payment.status}`.
 
 ### Service Layer Architecture

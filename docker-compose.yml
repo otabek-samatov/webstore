@@ -1,0 +1,320 @@
+# =============================================================================
+# Webstore full stack
+#   Infrastructure:  PostgreSQL 18, Apache Kafka 4.3.1 (KRaft single node)
+#   Applications:    all 7 Spring Boot services, built from the shared
+#                    ./Dockerfile with a per-service SERVICE build arg
+#
+# Usage:
+#   docker compose up -d --build            # build images + start everything
+#   docker compose up -d postgres kafka     # infra only (services run on host)
+#
+# Notes:
+#   * Compose V2 no longer needs a top-level "version:" key.
+#   * All services share the default network created by Compose; they resolve
+#     each other by service name (postgres, kafka, config-service, ...).
+#   * Kafka has TWO client listeners: localhost:9092 for host-run apps and
+#     kafka:19092 (INTERNAL) for containerized services.
+#   * DB credentials flow from ./secrets/ (gitignored) as Docker secrets;
+#     Spring reads them via its configtree:/run/secrets/ import. Non-secret
+#     endpoints (config server, Kafka, DB host, service URLs) are plain env
+#     vars resolved by placeholders served from the config repo.
+#   * No service discovery: services reach each other by Compose DNS name and
+#     fixed port (the *_SERVICE_URL env vars below).
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# YAML anchors: shared fragments reused across services.
+# -----------------------------------------------------------------------------
+# Restart policy + log rotation shared by every container.
+x-common: &common
+  restart: unless-stopped
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+# Env anchors form a single-inheritance CHAIN (each level merges exactly one
+# parent, so IDE schema inspections stay quiet — no sequence merges):
+#
+#   spring-env (config server URI)
+#     └─ service-urls (+ direct REST/route targets)   ← gateway-service
+#          └─ business-env (+ DB & Kafka coordinates) ← business services
+#
+# The *_SERVICE_URL values are declared ONCE here; they feed the
+# ${*_SERVICE_URL:...} placeholders in the config repo. Entries a consumer
+# doesn't reference are simply ignored.
+x-spring-env: &spring-env
+  SPRING_CLOUD_CONFIG_URI: http://config-service:8071
+
+x-service-urls: &service-urls
+  <<: *spring-env
+  INVENTORY_SERVICE_URL: http://inventory-service:8074
+  ORDER_SERVICE_URL: http://order-service:8077
+  PAYMENT_SERVICE_URL: http://payment-service:8078
+  PRODUCT_SERVICE_URL: http://product-service:8073
+  USER_SERVICE_URL: http://user-service:8075
+
+x-business-env: &business-env
+  <<: *service-urls
+  DB_HOST: postgres
+  KAFKA_BROKERS: kafka:19092
+
+# DB credentials as mounted secret files -> Spring configtree properties
+# (/run/secrets/db_username -> property db_username).
+x-db-secrets: &db-secrets
+  - source: postgres_user
+    target: db_username
+  - source: postgres_password
+    target: db_password
+
+# Everything a business service waits for before starting.
+x-business-depends: &business-depends
+  postgres:
+    condition: service_healthy
+  kafka:
+    condition: service_healthy
+  config-service:
+    condition: service_healthy
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL 18
+  #   Volume target is /var/lib/postgresql (18+ layout), NOT .../data.
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:18.4
+    container_name: webstore-postgres
+    <<: *common
+    environment:
+      # The postgres image reads each credential from the file the *_FILE
+      # variable points at (mounted by Compose under /run/secrets/).
+      POSTGRES_USER_FILE: /run/secrets/postgres_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_DB: webstore
+    secrets:
+      - postgres_user
+      - postgres_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$(cat /run/secrets/postgres_user)\" -d webstore"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Apache Kafka 4.3.1 - KRaft combined mode (broker + controller in one node)
+  #   PLAINTEXT  -> advertised as localhost:9092  (host-run clients)
+  #   INTERNAL   -> advertised as kafka:19092     (containerized services)
+  # ---------------------------------------------------------------------------
+  kafka:
+    image: apache/kafka:4.3.1
+    container_name: webstore-kafka
+    <<: *common
+    ports:
+      - "9092:9092"
+    environment:
+      # --- Node / roles ---
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:29093
+
+      # --- Listeners (host + internal + controller) ---
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,INTERNAL://0.0.0.0:19092,CONTROLLER://0.0.0.0:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,INTERNAL://kafka:19092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+
+      # --- Single-node replication settings (must be 1 with one broker) ---
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
+      # --- Log directory (mapped to the named volume below) ---
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # config-service - Spring Cloud Config Server (starts first; serves the
+  # config repo from GitHub, so it needs outbound internet access)
+  # ---------------------------------------------------------------------------
+  config-service:
+    build:
+      context: .
+      args:
+        SERVICE: config-service
+    image: webstore/config-service
+    container_name: webstore-config-service
+    <<: *common
+    ports:
+      - "8071:8071"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8071/actuator/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  # ---------------------------------------------------------------------------
+  # Business services
+  # ---------------------------------------------------------------------------
+  product-service:
+    build:
+      context: .
+      args:
+        SERVICE: product-service
+    image: webstore/product-service
+    container_name: webstore-product-service
+    <<: *common
+    environment:
+      <<: *business-env
+    secrets: *db-secrets
+    ports:
+      - "8073:8073"
+    depends_on:
+      <<: *business-depends
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8073/actuator/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+
+  inventory-service:
+    build:
+      context: .
+      args:
+        SERVICE: inventory-service
+    image: webstore/inventory-service
+    container_name: webstore-inventory-service
+    <<: *common
+    environment:
+      <<: *business-env
+    secrets: *db-secrets
+    ports:
+      - "8074:8074"
+    depends_on:
+      <<: *business-depends
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8074/actuator/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  user-service:
+    build:
+      context: .
+      args:
+        SERVICE: user-service
+    image: webstore/user-service
+    container_name: webstore-user-service
+    <<: *common
+    environment:
+      <<: *business-env
+    secrets: *db-secrets
+    ports:
+      - "8075:8075"
+    depends_on:
+      <<: *business-depends
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8075/actuator/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  order-service:
+    build:
+      context: .
+      args:
+        SERVICE: order-service
+    image: webstore/order-service
+    container_name: webstore-order-service
+    <<: *common
+    environment:
+      <<: *business-env
+    secrets: *db-secrets
+    ports:
+      - "8077:8077"
+    depends_on:
+      <<: *business-depends
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8077/actuator/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  payment-service:
+    build:
+      context: .
+      args:
+        SERVICE: payment-service
+    image: webstore/payment-service
+    container_name: webstore-payment-service
+    <<: *common
+    environment:
+      <<: *business-env
+    secrets: *db-secrets
+    ports:
+      - "8078:8078"
+    depends_on:
+      <<: *business-depends
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8078/actuator/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # gateway-service - API gateway, single entry point on 8072
+  # ---------------------------------------------------------------------------
+  gateway-service:
+    build:
+      context: .
+      args:
+        SERVICE: gateway-service
+    image: webstore/gateway-service
+    container_name: webstore-gateway-service
+    <<: *common
+    environment:
+      <<: *service-urls
+    ports:
+      - "8072:8072"
+    depends_on:
+      config-service:
+        condition: service_healthy
+
+# -----------------------------------------------------------------------------
+# Secrets: file-backed, mounted into containers at /run/secrets/<name>.
+# Files live in ./secrets/ (gitignored) — one value per file.
+# Business services receive them renamed (target:) to db_username /
+# db_password so the file names match the config-tree property names the
+# config repo references (${db_username} / ${db_password}).
+# -----------------------------------------------------------------------------
+secrets:
+  postgres_user:
+    file: ./secrets/postgres_user.txt
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+
+# -----------------------------------------------------------------------------
+# Named volumes: survive container re-creation.
+# -----------------------------------------------------------------------------
+volumes:
+  postgres-data:
+  kafka-data:

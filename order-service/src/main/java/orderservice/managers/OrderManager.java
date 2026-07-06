@@ -17,6 +17,7 @@ import orderservice.repositories.OrderItemRepository;
 import orderservice.repositories.OrderRepository;
 import orderservice.saga.createorder.CreateOrderSaga;
 import orderservice.validators.OrderItemValidator;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
@@ -46,6 +47,9 @@ public class OrderManager {
     private final OutboxPublisher outboxPublisher;
     private final CreateOrderSaga createOrderSaga;
     private final PaymentClient paymentClient;
+
+    @Value("${services.inventory.url:http://localhost:8074}")
+    private String inventoryServiceUrl;
 
     public Order createOrder(CreateOrderDto orderDto) {
         return createOrderSaga.execute(orderDto);
@@ -230,7 +234,7 @@ public class OrderManager {
         }
 
         restClient.post()
-                .uri("http://inventory-service/v1/inventory/reserve-stock")
+                .uri(inventoryServiceUrl + "/v1/inventory/reserve-stock")
                 .body(invList)
                 .retrieve()
                 .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {
@@ -256,7 +260,7 @@ public class OrderManager {
         }
 
         List<InventoryDto> prices = restClient.post()
-                .uri("http://inventory-service/v1/inventory/prices")
+                .uri(inventoryServiceUrl + "/v1/inventory/prices")
                 .body(productList)
                 .retrieve()
                 .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {

@@ -32,15 +32,16 @@ public class InboxMessage {
     @Column(name = "version", nullable = false)
     private Integer version;
 
-    @Column(nullable = false)
+    @Column(name = "aggregate_type", nullable = false)
     private String aggregateType;
 
+    @Column(name = "aggregate_id", nullable = false)
     private String aggregateId;
 
-    @Column(nullable = false)
+    @Column(name = "event_type", nullable = false)
     private String eventType;
 
-    @Column(nullable = false)
+    @Column(name = "topic_name", nullable = false)
     private String topicName;
 
     @Column(name = "partition_no")
@@ -57,9 +58,10 @@ public class InboxMessage {
     private InboxStatus status = InboxStatus.RECEIVED;
 
     @CreationTimestamp
-    @Column(nullable = false)
+    @Column(name = "received_at", nullable = false)
     private Instant receivedAt;
 
+    @Column(name = "processed_at", nullable = false)
     private Instant processedAt;
 
     public InboxMessage(String messageId,

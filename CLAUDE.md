@@ -5,18 +5,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 Webstore is a microservices-based e-commerce backend application for selling books. This is a **multi-module Gradle
-monorepo** with 8 independent microservices.
+monorepo** with 7 independent microservices.
 
 **Technology Stack:**
 
-- Java 21
+- Java 25 (Gradle toolchain in root `build.gradle`)
 - Spring Boot 4.1.0 (built on Spring Framework 7)
 - Spring Cloud 2025.1.2 (Oakwood)
-- PostgreSQL 17
-- Apache Kafka 4
-- Netflix Eureka (Service Discovery)
+- PostgreSQL 18 (Docker container `postgres:18.4`, see [Local Infrastructure](#local-infrastructure))
+- Apache Kafka 4.3 (Docker container `apache/kafka:4.3.1`, KRaft single node)
 - Spring Cloud Config (Centralized Configuration)
 - Spring Cloud Gateway Server Web MVC (API Gateway)
+
+> **No service discovery.** Eureka (and the old discovery-service module) was removed. Services reach
+> each other at **direct URLs**: Docker Compose DNS names + fixed ports in containers
+> (`http://inventory-service:8074`), `localhost` + fixed ports on host runs. The URLs are
+> property-driven with per-environment env-var overrides (`*_SERVICE_URL`); in Kubernetes they will
+> map onto K8s Service names, which also provide the load balancing.
 
 > **Spring Boot 4 upgrade notes (applies repo-wide):** every module now pins Spring Boot `4.1.0` and
 > Spring Cloud `2025.1.2`. Key migration deltas baked into the build:
@@ -33,8 +38,8 @@ monorepo** with 8 independent microservices.
 
 ## Build Commands
 
-This is a Gradle-based multi-module project using Gradle 8.14.4 (Spring Boot 4 requires Gradle 8.14+ on
-the 8.x line, or Gradle 9.x).
+This is a Gradle-based multi-module project using Gradle 9.6.0 (wrapper; Spring Boot 4 requires
+Gradle 8.14+ on the 8.x line, or Gradle 9.x).
 
 ```bash
 # Build all services
@@ -68,11 +73,10 @@ the 8.x line, or Gradle 9.x).
 
 ### Service Inventory
 
-The system consists of 8 microservices defined in `settings.gradle`:
+The system consists of 7 microservices defined in `settings.gradle`:
 
 | Service               | Port | Purpose                                                                              | Database                        |
 |-----------------------|------|--------------------------------------------------------------------------------------|---------------------------------|
-| **discovery-service** | 8070 | Service registry using Netflix Eureka. Spring `application.name`: `discovery-server` | N/A                             |
 | **config-service**    | 8071 | Centralized configuration via Spring Cloud Config                                    | N/A                             |
 | **gateway-service**   | 8072 | API Gateway using Spring Cloud Gateway MVC                                           | N/A                             |
 | **product-service**   | 8073 | Book catalog with authors, publishers, categories                                    | PostgreSQL (`product_schema`)   |
@@ -93,15 +97,63 @@ implementation guidance.
 
 Services must be started in this order for proper operation:
 
-1. **config-service** (8071) - Required by all other services for configuration
-2. **discovery-service** (8070) - Required for service discovery (Eureka)
-3. **Infrastructure Services:**
+1. **Infrastructure** (`docker compose up -d` — see [Local Infrastructure](#local-infrastructure)):
     - PostgreSQL (5432)
-   - Kafka Broker (9092)
-4. **Business Services** (any order):
+    - Kafka Broker (9092)
+2. **config-service** (8071) - Required by all other services for configuration
+3. **Business Services** (any order):
     - product-service (8073), inventory-service (8074), user-service (8075)
    - order-service (8077), payment-service (8078)
-5. **gateway-service** (8072) - API Gateway (routes to other services)
+4. **gateway-service** (8072) - API Gateway (routes are static, so it only needs config-service to
+   boot; requests to a backend that isn't up yet fail until that service starts)
+
+<a id="local-infrastructure"></a>### Local Infrastructure & Containers (Docker Compose)
+
+`docker-compose.yml` in the repo root runs the **entire stack** — infrastructure plus all 7 Spring Boot
+services:
+
+```bash
+docker compose up -d --build          # build all service images + start everything
+docker compose up -d postgres kafka   # infrastructure only (services run on host)
+```
+
+**Infrastructure:**
+
+- **postgres** — `postgres:18.4`, container `webstore-postgres`, port `5432`, named volume mounted at
+  `/var/lib/postgresql` (PG 18+ volume layout). Credentials come from **Docker secrets**, not env vars:
+  `POSTGRES_USER_FILE` / `POSTGRES_PASSWORD_FILE` point at `/run/secrets/postgres_user` /
+  `/run/secrets/postgres_password`.
+- **kafka** — `apache/kafka:4.3.1`, container `webstore-kafka`, KRaft combined mode (single node),
+  **two client listeners**: `PLAINTEXT` advertised as `localhost:9092` (host-run apps) and `INTERNAL`
+  advertised as `kafka:19092` (containerized services).
+
+**Service images:** all 7 services build from the **shared root `Dockerfile`** (multi-stage: Gradle
+wrapper build on `eclipse-temurin:25-jdk`, runtime on `eclipse-temurin:25-jre` + curl for healthchecks),
+selected via the `SERVICE` build arg that compose passes per service. `.dockerignore` excludes
+`secrets/` so credentials can never enter an image layer. Startup ordering is enforced with
+healthchecks + `depends_on: service_healthy` (postgres/kafka → config-service →
+business services; gateway-service waits only on config-service).
+
+**Container environment wiring** (plain env vars for non-secret endpoints, resolved by placeholders
+served from the config repo):
+
+- `SPRING_CLOUD_CONFIG_URI=http://config-service:8071` — overrides the source-tree `localhost:8071`
+- `KAFKA_BROKERS=kafka:19092` — feeds `${KAFKA_BROKERS:...}` (the INTERNAL listener)
+- `DB_HOST=postgres` — feeds `${db.host:...}` in the datasource URL
+- The five `*_SERVICE_URL` vars — declared **once** in the `x-service-urls` YAML anchor and merged
+  into the services that call or route to others (order-service, gateway-service). They feed the
+  `${*_SERVICE_URL:http://localhost:<port>}` placeholders in the config repo, pointing REST calls /
+  gateway routes at the container DNS names; entries a consumer doesn't reference are ignored
+- DB credentials arrive as **secrets** (`db_username` / `db_password` targets), not env vars
+
+**Secrets:** the `secrets:` section maps file-backed secrets from `./secrets/` (**gitignored** — never
+commit): `secrets/postgres_user.txt` and `secrets/postgres_password.txt`, one value per file. These are
+the single source of truth for the DB credentials; the services and the healthcheck read them at runtime
+(see Configuration Management below for how services resolve them).
+
+> Postgres only reads the secrets on **first initialization** of an empty data volume. To change the
+> password later: `ALTER USER` inside the container, update the secret file, recreate the container,
+> and update the credential source the services use (env vars on host / mounted secrets in Docker).
 
 ## System Architecture
 
@@ -109,18 +161,20 @@ Services must be started in this order for proper operation:
 
 **1. Synchronous Communication (REST):**
 
-- Services use `RestClient` (Spring Framework) with Eureka service discovery
-- Services call each other using service names (e.g., `http://inventory-service/v1/...`)
-- Load balancing via `@LoadBalanced` RestClient.Builder
+- Services use a plain `RestClient` (Spring Framework) with **direct, property-configured URLs** —
+  no service discovery, no client-side load balancing
+- order-service (the only REST caller) resolves its targets from `services.inventory.url` /
+  `services.payment.url` (defaults `http://localhost:<port>`; Docker overrides via
+  `INVENTORY_SERVICE_URL` / `PAYMENT_SERVICE_URL` env vars)
 
 **Key Inter-Service REST Calls:**
 
 - Order Service → Inventory Service (price lookup + stock reservation during order creation /
   item add):
-    - `POST http://inventory-service/v1/inventory/prices`
-    - `POST http://inventory-service/v1/inventory/reserve-stock`
+    - `POST {services.inventory.url}/v1/inventory/prices`
+    - `POST {services.inventory.url}/v1/inventory/reserve-stock`
 - Order Service → Payment Service (charge on order creation / payment retry):
-    - `POST http://payment-service/v1/payments`
+    - `POST {services.payment.url}/v1/payments`
 
 > Order creation does **not** fetch a cart — order items are supplied directly in the
 > `CreateOrderDto` request body by the caller.
@@ -170,9 +224,11 @@ Services must be started in this order for proper operation:
 **Spring Cloud Config Server (port 8071):**
 
 - Git-backed configuration: https://github.com/otabek-samatov/webstore-config
-- Local clone (authoritative source for all runtime properties): **`C:\Projects\webstore-config`**
+- Local clone (authoritative source for all runtime properties): **`C:\Data\Projects\webstore-config`**
 - All services fetch configuration from Config Server on startup
 - Database connections, Kafka topics, and service-specific properties externalized
+- **No credentials in the config repo** — the datasource username/password are placeholders resolved
+  per environment (see below)
 
 **`webstore-config` repository layout:**
 
@@ -180,8 +236,7 @@ Services must be started in this order for proper operation:
 webstore-config/
 └── config/
     ├── application.yml          # shared defaults applied to every service
-    ├── discovery-service.yml    # per-service overrides (one file per service)
-    ├── gateway-service.yml
+    ├── gateway-service.yml      # per-service overrides (one file per service)
     ├── product-service.yml
     ├── inventory-service.yml
     ├── user-service.yml
@@ -191,15 +246,21 @@ webstore-config/
 
 Spring Cloud Config matches each service's `spring.application.name` to the corresponding `<name>.yml` file
 and merges it on top of `application.yml`. To change runtime config (Kafka topic names, partition count,
-DB credentials, ports, gateway routes, etc.), edit a file under `C:\Projects\webstore-config\config\` and
+ports, gateway routes, etc.), edit a file under `C:\Data\Projects\webstore-config\config\` and
 commit; the Config Server serves the latest commit from the configured Git remote.
 
 **What lives in `application.yml` (shared by all services):**
 
-- **Eureka client:** `defaultZone: http://localhost:8070/eureka/`, `preferIpAddress: true`
 - **Actuator:** `management.endpoints.web.exposure.include: "*"`
-- **Datasource:** `jdbc:postgresql://localhost:5432/webstore?currentSchema=${service.schemaName}`,
-  user `user` / password `password`, driver `org.postgresql.Driver`
+- **Datasource:** `jdbc:postgresql://${db.host:localhost}:${db.port:5432}/${db.name:webstore}?currentSchema=${service.schemaName}`,
+  driver `org.postgresql.Driver`. Host/port/database have local-dev defaults, overridable via
+  `DB_HOST` / `DB_PORT` / `DB_NAME` env vars (relaxed binding).
+- **Datasource credentials:** `username: ${db_username}` / `password: ${db_password}` — **no literal
+  credentials in the repo.** Resolution per environment:
+    - **Host runs (today):** from `DB_USERNAME` / `DB_PASSWORD` environment variables (Spring relaxed
+      binding maps `db_username` → `DB_USERNAME`). Values must match `webstore/secrets/*.txt`.
+    - **Containerized runs (future):** from Docker secret files via each service's
+      `optional:configtree:/run/secrets/` config import (files named `db_username` / `db_password`).
 - **JPA/Hibernate:** `ddl-auto: validate` (Flyway is authoritative for schema), `show-sql: true`,
   PostgreSQL dialect
 - **Kafka:** `bootstrap.servers: localhost:9092`, `num.partitions: 3`, `replication.factor: 1`
@@ -217,18 +278,20 @@ commit; the Config Server serves the latest commit from the configured Git remot
 - `server.port` — fixed default for the service (see Service Inventory table above)
 - `service.schemaName` — PostgreSQL schema injected into the shared datasource URL
 - Service-specific overrides (e.g., `gateway-service.yml` defines `spring.cloud.gateway.routes`;
-  `discovery-service.yml` overrides Eureka to act as the server with `registerWithEureka: false` /
-  `fetchRegistry: false`)
+  `order-service.yml` defines the `services.inventory.url` / `services.payment.url` REST targets)
 
 **Gateway routes (defined in `gateway-service.yml`):**
 
-| External path   | Routed to (Eureka name)  |
-|-----------------|--------------------------|
-| `/inventory/**` | `lb://inventory-service` |
-| `/order/**`     | `lb://order-service`     |
-| `/payment/**`   | `lb://payment-service`   |
-| `/product/**`   | `lb://product-service`   |
-| `/user/**`      | `lb://user-service`      |
+Route targets are direct URLs via `${*_SERVICE_URL:http://localhost:<port>}` placeholders — host-run
+defaults on `localhost`, container values injected by Compose env vars:
+
+| External path   | Target env var          | Docker value                    |
+|-----------------|-------------------------|---------------------------------|
+| `/inventory/**` | `INVENTORY_SERVICE_URL` | `http://inventory-service:8074` |
+| `/order/**`     | `ORDER_SERVICE_URL`     | `http://order-service:8077`     |
+| `/payment/**`   | `PAYMENT_SERVICE_URL`   | `http://payment-service:8078`   |
+| `/product/**`   | `PRODUCT_SERVICE_URL`   | `http://product-service:8073`   |
+| `/user/**`      | `USER_SERVICE_URL`      | `http://user-service:8075`      |
 
 Each route strips its prefix via `RewritePath=/<prefix>/(?<path>.*), /$\{path}` before forwarding.
 
@@ -240,17 +303,20 @@ Each route strips its prefix via `RewritePath=/<prefix>/(?<path>.*), /$\{path}` 
     application:
       name: {service-name}
     config:
-      import: "optional:configserver:"
+      import: "optional:configserver:,optional:configtree:/run/secrets/"
     cloud:
       config:
         uri: http://localhost:8071
   ```
+- The `optional:configtree:/run/secrets/` import (business services only) turns Docker secret files
+  into properties when running in a container (`/run/secrets/db_username` → property `db_username`);
+  on host runs the directory doesn't exist and the import is a silent no-op.
 - Everything else (DB, Kafka, port, schema, etc.) is resolved from the Config Server at startup —
   do **not** duplicate those values into the service's source-tree `application.yml`.
 
 **Editing config: workflow**
 
-1. Edit the relevant file in `C:\Projects\webstore-config\config\`.
+1. Edit the relevant file in `C:\Data\Projects\webstore-config\config\`.
 2. Commit and push to the Git remote — Config Server reads from Git, not the local working copy.
 3. Restart the affected service(s) or hit `/actuator/refresh` on a service with `@RefreshScope` beans.
 
@@ -335,7 +401,8 @@ PostgreSQL Database
 **4. Configuration Classes:**
 
 - `KafkaConfig.java` - Kafka producer/consumer configuration with exactly-once semantics
-- `RestConfig.java` - RestClient with Eureka integration
+- `RestConfig.java` - plain `RestClient` bean (order-service only — the sole service making
+  outbound REST calls)
 
 **5. Database Versioning:**
 
@@ -349,19 +416,21 @@ PostgreSQL Database
 - Transactional outbox / inbox for reliable Kafka delivery (no Kafka transactions)
 - Transactional boundaries at manager layer
 
-## API Gateway & Service Discovery
+## API Gateway & Service Addressing
 
 **API Gateway (Spring Cloud Gateway Server Web MVC):**
 
 - Single entry point for all client requests
-- Routes to microservices using Eureka service names
+- Routes to microservices at direct URLs (see the gateway routes table above)
 - Configured via Config Server
 
-**Service Discovery (Netflix Eureka):**
+**Service addressing (no discovery layer):**
 
-- All services register with Eureka Server (port 8761)
-- Services discover each other by application name
-- Enables dynamic load balancing and failover
+- Services are reached by stable DNS name + fixed port: Compose service names inside Docker,
+  `localhost` on host runs — in Kubernetes these become K8s Service names
+- All cross-service URLs are properties with `${*_SERVICE_URL:...}` env-var overrides; nothing
+  registers anywhere at runtime
+- Load balancing across replicas is the platform's job (Compose DNS / K8s Services), not the client's
 
 ## Kafka Configuration Details
 
@@ -412,7 +481,9 @@ overrides are still needed only to avoid a local port clash.)
 2. Create service directory with `build.gradle`
 3. Follow standard package structure (controllers/managers/repositories/etc.)
 4. Configure `application.yml` with service name and Config Server URI
-5. Register with Eureka by including `spring-cloud-starter-netflix-eureka-client`
+5. Give it a fixed port in its `<service>.yml` (config repo) and, if it must be reachable from other
+   services or the gateway, add a `${<NAME>_SERVICE_URL:http://localhost:<port>}` placeholder there
+   plus the env var in `docker-compose.yml` (no service registry — addressing is static)
 6. Add Flyway migrations in `src/main/resources/db/migration/`
 7. Create service-specific `CLAUDE.md`
 
@@ -468,9 +539,11 @@ overrides are still needed only to avoid a local port clash.)
 **1. Service Won't Start:**
 
 - Ensure Config Server is running first (port 8071)
-- Ensure Eureka Server is running (port 8761)
 - Check Config Server can reach Git repository
-- Verify PostgreSQL is running and accessible
+- Verify PostgreSQL is running and accessible (`docker compose up -d postgres`)
+- `Could not resolve placeholder 'db_username'` → the service was started without DB credentials.
+  On host runs set the `DB_USERNAME` / `DB_PASSWORD` environment variables (values must match
+  `secrets/*.txt`); in a container mount the Docker secrets as `db_username` / `db_password`.
 
 **2. Kafka Issues:**
 
@@ -483,9 +556,10 @@ overrides are still needed only to avoid a local port clash.)
 
 **3. REST Call Failures:**
 
-- Verify target service is registered with Eureka
-- Check service name matches Eureka application name
-- Ensure `@LoadBalanced` is used on RestClient.Builder
+- Verify the target service is up and its URL property resolves correctly for the environment
+  (`services.inventory.url` / `services.payment.url` in order-service; `*_SERVICE_URL` env vars in
+  Docker — a `localhost` default leaking into a container means the env var isn't set)
+- Remember containers use Compose DNS names + fixed ports; host runs use `localhost` + fixed ports
 
 **4. Database Migration Errors:**
 
@@ -515,10 +589,12 @@ All services share common dependencies defined in root `build.gradle`:
 
 ## External Dependencies
 
-Required infrastructure for running webstore:
+Required infrastructure for running webstore (both provided by the repo-root `docker-compose.yml` —
+see [Local Infrastructure](#local-infrastructure)):
 
-1. **PostgreSQL 17** (localhost:5432/webstore)
-2. **Apache Kafka 4** with broker and topics configured
+1. **PostgreSQL 18** (localhost:5432/webstore, container `postgres:18.4`)
+2. **Apache Kafka 4.3** (localhost:9092, container `apache/kafka:4.3.1`, KRaft single node; topics
+   are auto-created by the services' `NewTopic` beans)
 3. **Git Repository** for Config Server: https://github.com/otabek-samatov/webstore-config
 
 ## Project Status
@@ -529,6 +605,8 @@ Required infrastructure for running webstore:
 **Not Yet Implemented:**
 
 - Auth Service (Spring Security with JWT/OAuth2)
-- Docker/Kubernetes deployment configurations
+- Kubernetes deployment (the full stack — infrastructure + all 7 services — already runs via
+  `docker-compose.yml` and the shared root `Dockerfile`; the direct-URL addressing maps 1:1 onto
+  K8s Services)
 - Comprehensive integration tests
 - API documentation (Swagger/OpenAPI)
