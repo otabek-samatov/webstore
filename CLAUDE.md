@@ -378,8 +378,10 @@ Each route strips its prefix via `RewritePath=/<prefix>/(?<path>.*), /$\{path}` 
       import: "optional:configserver:,optional:configtree:/run/secrets/"
     cloud:
       config:
-        uri: http://localhost:8071
+        uri: ${SPRING_CLOUD_CONFIG_URI:http://localhost:8071}
   ```
+- The Config Server URL is a placeholder: `localhost:8071` is the host-run default; in a container
+  Compose overrides it via the `SPRING_CLOUD_CONFIG_URI` env var (`http://config-service:8071`).
 - The `optional:configtree:/run/secrets/` import (business services only) turns Docker secret files
   into properties when running in a container (`/run/secrets/db_username` → property `db_username`);
   on host runs the directory doesn't exist and the import is a silent no-op.
