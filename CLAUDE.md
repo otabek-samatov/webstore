@@ -140,9 +140,10 @@ served from the config repo):
 - `SPRING_CLOUD_CONFIG_URI=http://config-service:8071` — overrides the source-tree `localhost:8071`
 - `KAFKA_BROKERS=kafka:19092` — feeds `${KAFKA_BROKERS:...}` (the INTERNAL listener)
 - `DB_HOST=postgres` — feeds `${db.host:...}` in the datasource URL
-- `INVENTORY_SERVICE_URL` / `PAYMENT_SERVICE_URL` (order-service) and the five `*_SERVICE_URL` vars
-  (gateway-service) — feed the `${*_SERVICE_URL:http://localhost:<port>}` placeholders in the config
-  repo, pointing REST calls / gateway routes at the container DNS names
+- The five `*_SERVICE_URL` vars — declared **once** in the `x-service-urls` YAML anchor and merged
+  into the services that call or route to others (order-service, gateway-service). They feed the
+  `${*_SERVICE_URL:http://localhost:<port>}` placeholders in the config repo, pointing REST calls /
+  gateway routes at the container DNS names; entries a consumer doesn't reference are ignored
 - DB credentials arrive as **secrets** (`db_username` / `db_password` targets), not env vars
 
 **Secrets:** the `secrets:` section maps file-backed secrets from `./secrets/` (**gitignored** — never

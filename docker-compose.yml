@@ -45,6 +45,17 @@ x-business-env: &business-env
   DB_HOST: postgres
   KAFKA_BROKERS: kafka:19092
 
+# Direct REST / route targets (no service discovery), declared ONCE and merged
+# into every service that calls or routes to others (order-service, gateway).
+# They feed the ${*_SERVICE_URL:...} placeholders in the config repo; entries a
+# consumer doesn't reference are simply ignored.
+x-service-urls: &service-urls
+  INVENTORY_SERVICE_URL: http://inventory-service:8074
+  ORDER_SERVICE_URL: http://order-service:8077
+  PAYMENT_SERVICE_URL: http://payment-service:8078
+  PRODUCT_SERVICE_URL: http://product-service:8073
+  USER_SERVICE_URL: http://user-service:8075
+
 # DB credentials as mounted secret files -> Spring configtree properties
 # (/run/secrets/db_username -> property db_username).
 x-db-secrets: &db-secrets
@@ -230,12 +241,7 @@ services:
     container_name: webstore-order-service
     <<: [*restart-policy, *default-logging]
     environment:
-      <<: *business-env
-      # Direct REST targets (no service discovery) — feed the
-      # ${INVENTORY_SERVICE_URL:...} / ${PAYMENT_SERVICE_URL:...} placeholders
-      # in the config repo's order-service.yml.
-      INVENTORY_SERVICE_URL: http://inventory-service:8074
-      PAYMENT_SERVICE_URL: http://payment-service:8078
+      <<: [*business-env, *service-urls]
     secrets: *db-secrets
     ports:
       - "8077:8077"
@@ -282,14 +288,7 @@ services:
     container_name: webstore-gateway-service
     <<: [*restart-policy, *default-logging]
     environment:
-      <<: *spring-env
-      # Static route targets — feed the ${*_SERVICE_URL:...} placeholders in
-      # the config repo's gateway-service.yml.
-      INVENTORY_SERVICE_URL: http://inventory-service:8074
-      ORDER_SERVICE_URL: http://order-service:8077
-      PAYMENT_SERVICE_URL: http://payment-service:8078
-      PRODUCT_SERVICE_URL: http://product-service:8073
-      USER_SERVICE_URL: http://user-service:8075
+      <<: [*spring-env, *service-urls]
     ports:
       - "8072:8072"
     depends_on:
