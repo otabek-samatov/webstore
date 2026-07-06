@@ -37,14 +37,24 @@ x-common: &common
 # Env anchors form a single-inheritance CHAIN (each level merges exactly one
 # parent, so IDE schema inspections stay quiet — no sequence merges):
 #
-#   spring-env (config server URI)
-#     └─ service-urls (+ direct REST/route targets)   ← gateway-service
-#          └─ business-env (+ DB & Kafka coordinates) ← business services
+#   logging-env (structured JSON console logs)        ← config-service
+#     └─ spring-env (+ config server URI)
+#          └─ service-urls (+ direct REST/route targets)   ← gateway-service
+#               └─ business-env (+ DB & Kafka coordinates) ← business services
 #
 # The *_SERVICE_URL values are declared ONCE here; they feed the
 # ${*_SERVICE_URL:...} placeholders in the config repo. Entries a consumer
 # doesn't reference are simply ignored.
+
+# One JSON object per log event (Spring Boot structured logging, ECS format).
+# Multiline messages (formatted SQL, stack traces) become an escaped string in
+# a single event instead of fragmenting into one docker-log entry per line.
+# Container-only on purpose: host runs keep the human-readable console layout.
+x-logging-env: &logging-env
+  LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
+
 x-spring-env: &spring-env
+  <<: *logging-env
   SPRING_CLOUD_CONFIG_URI: http://config-service:8071
 
 x-service-urls: &service-urls
@@ -158,6 +168,7 @@ services:
     image: webstore/config-service
     container_name: webstore-config-service
     <<: *common
+    environment: *logging-env
     ports:
       - "8071:8071"
     healthcheck:

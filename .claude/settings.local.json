@@ -41,7 +41,9 @@
       "PowerShell(.\\\\gradlew.bat build -x test --console=plain -q)",
       "PowerShell(.\\\\gradlew.bat :order-service:test :gateway-service:test --console=plain)",
       "Bash(grep -oE \"Caused by:[^<]{0,200}\" order-service/build/reports/tests/test/classes/orderservice.OrderServiceApplicationTests.html)",
-      "Bash(grep -oE \"Caused by: [a-zA-Z0-9_.]+\\(Exception|Error\\)[^&]{0,200}\" order-service/build/test-results/test/TEST-orderservice.OrderServiceApplicationTests.xml)"
+      "Bash(grep -oE \"Caused by: [a-zA-Z0-9_.]+\\(Exception|Error\\)[^&]{0,200}\" order-service/build/test-results/test/TEST-orderservice.OrderServiceApplicationTests.xml)",
+      "PowerShell(docker compose -f C:\\\\Data\\\\Projects\\\\webstore\\\\docker-compose.yml up -d 2>&1)",
+      "PowerShell($found = $null; foreach \\($i in 1..24\\) { $found = docker logs webstore-payment-service --tail 200 2>&1 | Select-String -SimpleMatch 'org.hibernate.SQL' | Select-Object -Last 1; if \\($found\\) { break }; Start-Sleep -Seconds 5 }; if \\($found\\) { $found.Line } else { 'no SQL log line yet'; docker logs webstore-payment-service --tail 5 })"
     ]
   }
 }
