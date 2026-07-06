@@ -144,7 +144,27 @@ served from the config repo):
   into the services that call or route to others (order-service, gateway-service). They feed the
   `${*_SERVICE_URL:http://localhost:<port>}` placeholders in the config repo, pointing REST calls /
   gateway routes at the container DNS names; entries a consumer doesn't reference are ignored
+- `SERVICE_PORT` — each service container gets this set to **its own** port; it feeds the
+  `server.port: ${SERVICE_PORT:<default>}` placeholder in the config repo (config-service reads it
+  from its **source** `application.yml` instead, since it isn't configured from the config repo).
+  See [Port configuration](#port-configuration) below
 - DB credentials arrive as **secrets** (`db_username` / `db_password` targets), not env vars
+
+<a id="port-configuration"></a>**Port configuration (`.env` — single source of truth):** every port
+used by the Compose stack lives in **`.env`** at the repo root (committed; not secret). Compose
+auto-loads it and substitutes the `${*_PORT}` placeholders throughout `docker-compose.yml` — host port
+mappings, healthcheck URLs, the `*_SERVICE_URL` targets, `SPRING_CLOUD_CONFIG_URI`, `KAFKA_BROKERS`,
+and the Kafka listener/advertised/controller ports. Vars: `CONFIG_SERVICE_PORT`, `GATEWAY_SERVICE_PORT`,
+`PRODUCT_SERVICE_PORT`, `INVENTORY_SERVICE_PORT`, `USER_SERVICE_PORT`, `ORDER_SERVICE_PORT`,
+`PAYMENT_SERVICE_PORT`, `POSTGRES_PORT`, `KAFKA_PORT`, `KAFKA_INTERNAL_PORT`, `KAFKA_CONTROLLER_PORT`.
+
+> The per-service `*_SERVICE_PORT` value is also passed **into** each container as the uniform
+> `SERVICE_PORT` env var, so the container-internal `server.port` (served from the config repo) tracks
+> `.env` too — change a port once in `.env` and both the host mapping and the app's port move together.
+> Two caveats: (1) postgres is mapped `${POSTGRES_PORT}:5432` (host side only — the image always
+> listens on 5432 internally); (2) the port **defaults** baked into the `*_SERVICE_URL` /
+> `services.*.url` fallbacks in the config repo are host-run defaults and are **not** driven by `.env`
+> (Compose can't reach the config repo, and host runs don't load `.env`).
 
 **Secrets:** the `secrets:` section maps file-backed secrets from `./secrets/` (**gitignored** — never
 commit): `secrets/postgres_user.txt` and `secrets/postgres_password.txt`, one value per file. These are
@@ -275,7 +295,9 @@ commit; the Config Server serves the latest commit from the configured Git remot
 
 **What lives in each `<service>.yml`:**
 
-- `server.port` — fixed default for the service (see Service Inventory table above)
+- `server.port` — `${SERVICE_PORT:<default>}`: the inline default (see Service Inventory table above)
+  applies to host runs; containers override it with the `SERVICE_PORT` env var Compose injects from
+  `.env` (see [Port configuration](#port-configuration))
 - `service.schemaName` — PostgreSQL schema injected into the shared datasource URL
 - Service-specific overrides (e.g., `gateway-service.yml` defines `spring.cloud.gateway.routes`;
   `order-service.yml` defines the `services.inventory.url` / `services.payment.url` REST targets)
@@ -481,9 +503,12 @@ overrides are still needed only to avoid a local port clash.)
 2. Create service directory with `build.gradle`
 3. Follow standard package structure (controllers/managers/repositories/etc.)
 4. Configure `application.yml` with service name and Config Server URI
-5. Give it a fixed port in its `<service>.yml` (config repo) and, if it must be reachable from other
-   services or the gateway, add a `${<NAME>_SERVICE_URL:http://localhost:<port>}` placeholder there
-   plus the env var in `docker-compose.yml` (no service registry — addressing is static)
+5. Give it a port: add `<NAME>_SERVICE_PORT` to `.env`, set `server.port: ${SERVICE_PORT:<default>}`
+   in its `<service>.yml` (config repo), and in `docker-compose.yml` map `SERVICE_PORT:
+   ${<NAME>_SERVICE_PORT}` into the container + use `${<NAME>_SERVICE_PORT}` for the port mapping and
+   healthcheck. If it must be reachable from other services or the gateway, also add a
+   `${<NAME>_SERVICE_URL:http://localhost:<port>}` placeholder in the config repo plus the env var in
+   `docker-compose.yml` (no service registry — addressing is static)
 6. Add Flyway migrations in `src/main/resources/db/migration/`
 7. Create service-specific `CLAUDE.md`
 
