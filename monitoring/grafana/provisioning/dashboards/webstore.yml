@@ -1,0 +1,14 @@
+# Provisioned dashboard provider — loads every JSON dashboard from the
+# directory mounted at /var/lib/grafana/dashboards (see docker-compose.yml).
+apiVersion: 1
+
+providers:
+  - name: webstore
+    folder: Webstore
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false
