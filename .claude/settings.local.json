@@ -45,7 +45,9 @@
       "PowerShell(docker compose -f C:\\\\Data\\\\Projects\\\\webstore\\\\docker-compose.yml up -d 2>&1)",
       "PowerShell($found = $null; foreach \\($i in 1..24\\) { $found = docker logs webstore-payment-service --tail 200 2>&1 | Select-String -SimpleMatch 'org.hibernate.SQL' | Select-Object -Last 1; if \\($found\\) { break }; Start-Sleep -Seconds 5 }; if \\($found\\) { $found.Line } else { 'no SQL log line yet'; docker logs webstore-payment-service --tail 5 })",
       "Bash(ls /c/Data/Projects/webstore-config/CLAUDE.md 2>/dev/null && echo \"config-repo CLAUDE exists\" || echo \"no config-repo CLAUDE.md\")",
-      "Bash(docker exec *)"
+      "Bash(docker exec *)",
+      "PowerShell(try { \\(Invoke-WebRequest -Uri http://localhost:8073/actuator/prometheus -UseBasicParsing -TimeoutSec 5\\).StatusCode } catch { $_.Exception.Message })",
+      "PowerShell(\\(Invoke-RestMethod -Uri \"http://localhost:9090/api/v1/targets\" -TimeoutSec 5\\).data.activeTargets | ForEach-Object { \"{0}`t{1}`t{2}\" -f $_.labels.job, $_.health, $_.lastError })"
     ]
   }
 }

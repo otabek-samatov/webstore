@@ -136,6 +136,42 @@ variables plus their own `SPRING_PROFILE`, which Compose passes to every contain
   **two client listeners**: `PLAINTEXT` advertised as `localhost:9092` (host-run apps) and `INTERNAL`
   advertised as `kafka:19092` (containerized services).
 
+**Monitoring (Prometheus + Grafana):** two additional containers, optional for the stack itself
+(no service depends on them); config lives under `./monitoring/`:
+
+- **prometheus** — `prom/prometheus:v3.5.0`, container `webstore-prometheus`, host port `9090`
+  (`PROMETHEUS_PORT`), 15-day retention on the `prometheus-data` volume. Scrapes every service's
+  `/actuator/prometheus` endpoint every 15 s using **container DNS names + internal ports**
+  (`./monitoring/prometheus/prometheus.yml`; one scrape job per service, so the `job` label is the
+  service name). ⚠️ Compose does **not** substitute `${VAR}` inside mounted files — the target ports
+  in `prometheus.yml` are hardcoded and must be kept in sync with `.env` if a service port changes.
+- **grafana** — `grafana/grafana:12.0.0`, container `webstore-grafana`, host port `3000`
+  (`GRAFANA_PORT`), data on the `grafana-data` volume. Auto-provisions the Prometheus datasource
+  (uid `prometheus`, at `http://prometheus:9090`) and every dashboard JSON in
+  `./monitoring/grafana/dashboards/` (seeded with `webstore-services.json` — per-service HTTP
+  rate/latency/5xx, JVM heap/CPU/GC/threads, HikariCP, log-event panels, switched by a `$service`
+  variable). Credentials default to `admin`/`admin` — **DEV only**; override via
+  `GF_SECURITY_ADMIN_*` (e.g. `GF_SECURITY_ADMIN_PASSWORD__FILE` + a Docker secret) for UAT/PROD.
+
+**Accessing the monitoring UIs** (with the stack up; all host ports come from the active `.env`
+file — see [Port configuration](#port-configuration)):
+
+- **Prometheus:** `http://localhost:${PROMETHEUS_PORT}` (default `9090`) — query UI at `/query`,
+  scrape-target health at `/targets` (all 7 service jobs should show **UP**).
+- **Grafana:** `http://localhost:${GRAFANA_PORT}` (default `3000`) — log in with `admin` / `admin`
+  (DEV default), then **Dashboards → Webstore → Webstore Services**; pick the service with the
+  `$service` dropdown. The datasource and dashboard are provisioned automatically — no manual
+  setup on first login.
+- **Raw metrics of one service:** `http://localhost:${<NAME>_SERVICE_PORT}/actuator/prometheus`
+  (e.g. `http://localhost:8077/actuator/prometheus` for order-service with the default
+  `ORDER_SERVICE_PORT`).
+
+Metrics come from `micrometer-registry-prometheus` (a `runtimeOnly` dependency in **every** service's
+`build.gradle`) + actuator. The `prometheus` endpoint is exposed in all profiles: DEV exposes `*`, and
+the UAT/PROD overlays in the config repo include `prometheus` in their trimmed actuator surface. On
+host runs the endpoint is at `http://localhost:<port>/actuator/prometheus` (the Docker Prometheus
+can't scrape host-run services — its targets are container DNS names).
+
 **Service images:** all 7 services build from the **shared root `Dockerfile`** (multi-stage: Gradle
 wrapper build on `eclipse-temurin:25-jdk`, runtime on `eclipse-temurin:25-jre` + curl for healthchecks),
 selected via the `SERVICE` build arg that compose passes per service. `.dockerignore` excludes
@@ -170,7 +206,7 @@ mappings, healthcheck URLs, the `*_SERVICE_URL` targets, `SPRING_CLOUD_CONFIG_UR
 and the Kafka listener/advertised/controller ports. Vars: `SPRING_PROFILE`, `CONFIG_SERVICE_PORT`,
 `GATEWAY_SERVICE_PORT`, `PRODUCT_SERVICE_PORT`, `INVENTORY_SERVICE_PORT`, `USER_SERVICE_PORT`,
 `ORDER_SERVICE_PORT`, `PAYMENT_SERVICE_PORT`, `POSTGRES_PORT`, `KAFKA_PORT`, `KAFKA_INTERNAL_PORT`,
-`KAFKA_CONTROLLER_PORT`.
+`KAFKA_CONTROLLER_PORT`, `PROMETHEUS_PORT`, `GRAFANA_PORT`.
 
 > The per-service `*_SERVICE_PORT` value is also passed **into** each container as the uniform
 > `SERVICE_PORT` env var, so the container-internal `server.port` (served from the config repo) tracks
@@ -508,6 +544,28 @@ PostgreSQL Database
   registers anywhere at runtime
 - Load balancing across replicas is the platform's job (Compose DNS / K8s Services), not the client's
 
+## API Documentation (Swagger/OpenAPI)
+
+The 5 business services (product, inventory, user, order, payment) generate interactive API docs via
+**springdoc-openapi** (`org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3` — the 3.x line is
+required for Spring Boot 4; 2.x only supports Boot 3). Zero configuration: springdoc introspects the
+Spring MVC controllers at runtime. config-service and gateway-service expose no business API and have
+no springdoc dependency.
+
+Per service (ports from `.env` — see [Port configuration](#port-configuration)):
+
+- **Swagger UI:** `http://localhost:${<NAME>_SERVICE_PORT}/swagger-ui.html`
+  (e.g. `http://localhost:8077/swagger-ui.html` for order-service)
+- **OpenAPI JSON:** `http://localhost:${<NAME>_SERVICE_PORT}/v3/api-docs`
+- **Through the gateway:** the existing routes proxy the spec too —
+  `http://localhost:${GATEWAY_SERVICE_PORT}/<prefix>/v3/api-docs` (e.g. `/order/v3/api-docs`); the
+  Swagger UI itself is best opened directly on each service (its asset paths don't survive the
+  prefix rewrite).
+
+**Per environment:** enabled in DEV and UAT; **disabled in PROD** — `application-prod.yml` in the
+config repo sets `springdoc.api-docs.enabled: false` and `springdoc.swagger-ui.enabled: false`
+(remember: config repo changes take effect only once committed & pushed).
+
 ## Kafka Configuration Details
 
 ### Delivery Semantics (transactional outbox / inbox)
@@ -688,4 +746,3 @@ see [Local Infrastructure](#local-infrastructure)):
   `docker-compose.yml` and the shared root `Dockerfile`; the direct-URL addressing maps 1:1 onto
   K8s Services)
 - Comprehensive integration tests
-- API documentation (Swagger/OpenAPI)
