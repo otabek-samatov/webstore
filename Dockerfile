@@ -16,7 +16,11 @@ RUN sed -i 's/\r$//' gradlew && chmod +x gradlew
 ARG SERVICE
 # Cache mount keeps the Gradle distribution + dependency cache across builds
 # of all 8 services, so only the first build pays the full download cost.
-RUN --mount=type=cache,target=/root/.gradle \
+# sharing=locked: compose builds all services in parallel, and concurrent Gradle
+# processes can't share /root/.gradle across containers (the wrapper-dist and
+# dependency-cache file locks time out after 120s). Locking serializes this step;
+# after the first build the warm cache makes the rest fast.
+RUN --mount=type=cache,target=/root/.gradle,sharing=locked \
     ./gradlew :${SERVICE}:bootJar -x test --no-daemon
 
 # ---- Runtime stage: JRE only -------------------------------------------------
