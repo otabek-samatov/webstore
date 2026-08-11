@@ -31,4 +31,9 @@ public class SecurityUser implements UserDetails {
     public String getUsername() {
         return user.getUserName();
     }
+
+    @Override
+    public boolean isEnabled() {
+        return Boolean.TRUE.equals(user.getIsActive());
+    }
 }

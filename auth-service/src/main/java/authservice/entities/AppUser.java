@@ -35,7 +35,8 @@ public class AppUser extends CoreEntity {
     private Boolean isActive;
 
     @Getter(AccessLevel.NONE)
-    @ElementCollection
+    @Setter(AccessLevel.NONE)
+    @ElementCollection(fetch = FetchType.EAGER)
     @Column(name = "authority")
     @CollectionTable(name = "users_authorities", joinColumns = @JoinColumn(name = "owner_id"))
     private Set<String> authorities = new LinkedHashSet<>();

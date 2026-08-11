@@ -47,7 +47,10 @@
       "Bash(ls /c/Data/Projects/webstore-config/CLAUDE.md 2>/dev/null && echo \"config-repo CLAUDE exists\" || echo \"no config-repo CLAUDE.md\")",
       "Bash(docker exec *)",
       "PowerShell(try { \\(Invoke-WebRequest -Uri http://localhost:8073/actuator/prometheus -UseBasicParsing -TimeoutSec 5\\).StatusCode } catch { $_.Exception.Message })",
-      "PowerShell(\\(Invoke-RestMethod -Uri \"http://localhost:9090/api/v1/targets\" -TimeoutSec 5\\).data.activeTargets | ForEach-Object { \"{0}`t{1}`t{2}\" -f $_.labels.job, $_.health, $_.lastError })"
+      "PowerShell(\\(Invoke-RestMethod -Uri \"http://localhost:9090/api/v1/targets\" -TimeoutSec 5\\).data.activeTargets | ForEach-Object { \"{0}`t{1}`t{2}\" -f $_.labels.job, $_.health, $_.lastError })",
+      "Bash(ls ~/.gradle/caches/modules-2/files-2.1/ 2>/dev/null | grep -i \"springframework.security\" ; echo \"=== security artifacts cached ===\"; ls ~/.gradle/caches/modules-2/files-2.1/org.springframework.security/ 2>/dev/null)",
+      "Bash(echo \"=== webstore-config ===\"; ls /c/Data/Projects/webstore-config/config/ 2>/dev/null; echo \"=== auth-service migrations ===\"; ls -R /c/Data/Projects/webstore/auth-service/src/main/resources/ 2>/dev/null; echo \"=== test ===\"; cat /c/Data/Projects/webstore/auth-service/src/test/java/authservice/AuthServiceApplicationTests.java)",
+      "WebFetch(domain:www.javadoc.io)"
     ]
   }
 }
