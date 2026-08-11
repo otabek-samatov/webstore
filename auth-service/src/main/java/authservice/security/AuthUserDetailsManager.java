@@ -56,7 +56,7 @@ public class AuthUserDetailsManager implements UserDetailsManager {
             throw new IllegalArgumentException("Password must not be empty");
         }
 
-        if (appUserRepository.existsAppUserByUserName(user.getUsername())) {
+        if (appUserRepository.existsAppUserByUserNameIgnoreCase(user.getUsername())) {
             throw new IllegalArgumentException("Username already exists: " + user.getUsername());
         }
 
@@ -77,7 +77,7 @@ public class AuthUserDetailsManager implements UserDetailsManager {
     @Override
     @Transactional
     public void updateUser(UserDetails user) {
-        AppUser appUser = appUserRepository.findByUserName(user.getUsername())
+        AppUser appUser = appUserRepository.findByUserNameIgnoreCase(user.getUsername())
                 .orElseThrow(() -> new UsernameNotFoundException("Username not found: " + user.getUsername()));
 
         appUser.setAuthorities(user.getAuthorities().stream().map(GrantedAuthority::getAuthority).toList());
@@ -88,7 +88,7 @@ public class AuthUserDetailsManager implements UserDetailsManager {
     @Override
     @Transactional
     public void deleteUser(String username) {
-        appUserRepository.findByUserName(username).ifPresent(appUserRepository::delete);
+        appUserRepository.findByUserNameIgnoreCase(username).ifPresent(appUserRepository::delete);
     }
 
     @Override
@@ -104,7 +104,7 @@ public class AuthUserDetailsManager implements UserDetailsManager {
         }
 
         String username = currentUser.getName();
-        AppUser appUser = appUserRepository.findByUserName(username)
+        AppUser appUser = appUserRepository.findByUserNameIgnoreCase(username)
                 .orElseThrow(() -> new UsernameNotFoundException("Username not found: " + username));
 
         if (oldPassword == null || !passwordEncoder.matches(oldPassword, appUser.getPassword())) {
@@ -124,13 +124,13 @@ public class AuthUserDetailsManager implements UserDetailsManager {
     @Override
     @Transactional(readOnly = true)
     public boolean userExists(String username) {
-        return appUserRepository.existsAppUserByUserName(username);
+        return appUserRepository.existsAppUserByUserNameIgnoreCase(username);
     }
 
     @Override
     @Transactional(readOnly = true)
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        AppUser appUser = appUserRepository.findByUserName(username)
+        AppUser appUser = appUserRepository.findByUserNameIgnoreCase(username)
                 .orElseThrow(() -> new UsernameNotFoundException("Username not found: " + username));
 
         // AppUser.authorities is an EAGER @ElementCollection, so SecurityUser stays usable in the

@@ -50,7 +50,17 @@
       "PowerShell(\\(Invoke-RestMethod -Uri \"http://localhost:9090/api/v1/targets\" -TimeoutSec 5\\).data.activeTargets | ForEach-Object { \"{0}`t{1}`t{2}\" -f $_.labels.job, $_.health, $_.lastError })",
       "Bash(ls ~/.gradle/caches/modules-2/files-2.1/ 2>/dev/null | grep -i \"springframework.security\" ; echo \"=== security artifacts cached ===\"; ls ~/.gradle/caches/modules-2/files-2.1/org.springframework.security/ 2>/dev/null)",
       "Bash(echo \"=== webstore-config ===\"; ls /c/Data/Projects/webstore-config/config/ 2>/dev/null; echo \"=== auth-service migrations ===\"; ls -R /c/Data/Projects/webstore/auth-service/src/main/resources/ 2>/dev/null; echo \"=== test ===\"; cat /c/Data/Projects/webstore/auth-service/src/test/java/authservice/AuthServiceApplicationTests.java)",
-      "WebFetch(domain:www.javadoc.io)"
+      "WebFetch(domain:www.javadoc.io)",
+      "Bash(openssl rand *)",
+      "Bash(git check-ignore *)",
+      "Bash(xargs -I{} echo \"AUTH_SERVICE_URL injected into {} services\")",
+      "Bash(unzip -l /c/Users/acer/.gradle/caches/modules-2/files-2.1/org.springframework.security/spring-security-oauth2-authorization-server/7.1.0/3600b2a48f1ab6a3c52a7a34ad70c3147aa5c08e/spring-security-oauth2-authorization-server-7.1.0.jar)",
+      "Bash(javap -p -cp /tmp/scu org.springframework.security.config.annotation.web.configurers.oauth2.server.authorization.OAuth2ConfigurerUtils)",
+      "Bash(rm -rf /tmp/as)",
+      "Bash(mkdir -p /tmp/as)",
+      "Bash(unzip -o -q /c/Users/acer/.gradle/caches/modules-2/files-2.1/org.springframework.security/spring-security-oauth2-authorization-server/7.1.0/3600b2a48f1ab6a3c52a7a34ad70c3147aa5c08e/spring-security-oauth2-authorization-server-7.1.0.jar -d /tmp/as)",
+      "Read(//tmp/**)",
+      "Bash(sed -n '1,60p' /c/Data/Projects/webstore/user-service/src/main/resources/db/migration/V1__*.sql)"
     ]
   }
 }

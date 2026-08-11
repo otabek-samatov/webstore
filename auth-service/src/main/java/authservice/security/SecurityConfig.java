@@ -5,19 +5,18 @@ import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.oauth2.core.oidc.OidcScopes;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.server.authorization.client.InMemoryRegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
@@ -74,8 +73,19 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * @param serviceClientSecret raw secret, encoded below with the {@link PasswordEncoder} bean so
+     *                            the stored value is a {@code {bcrypt}} hash, never plaintext.
+     *                            Resolved exactly like the DB credentials — from
+     *                            {@code /run/secrets/auth_client_secret} via the configtree import
+     *                            in containers, or the {@code AUTH_CLIENT_SECRET} env var on host
+     *                            runs. No default on purpose: a missing secret must fail startup
+     *                            rather than silently fall back to a known value.
+     */
     @Bean
-    public RegisteredClientRepository registeredClientRepository() {
+    public RegisteredClientRepository registeredClientRepository(
+            PasswordEncoder passwordEncoder,
+            @Value("${auth_client_secret}") String serviceClientSecret) {
         // Public client + PKCE, driven by Postman's OAuth 2.0 helper. This is the only flow that
         // authenticates a real user, so it is what exercises AuthUserDetailsManager.
         RegisteredClient postmanClient = RegisteredClient.withId(UUID.randomUUID().toString())
@@ -96,7 +106,7 @@ public class SecurityConfig {
         // other webstore services would use to call each other.
         RegisteredClient serviceClient = RegisteredClient.withId(UUID.randomUUID().toString())
                 .clientId("webstore-service-client")
-                .clientSecret("{noop}secret")
+                .clientSecret(passwordEncoder.encode(serviceClientSecret))
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
                 .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
                 .scope("webstore.read")
@@ -104,11 +114,6 @@ public class SecurityConfig {
                 .build();
 
         return new InMemoryRegisteredClientRepository(postmanClient, serviceClient);
-    }
-
-    @Bean
-    public JwtDecoder jwtDecoder(JWKSource<SecurityContext> jwkSource) {
-        return OAuth2AuthorizationServerConfiguration.jwtDecoder(jwkSource);
     }
 
     @Bean
