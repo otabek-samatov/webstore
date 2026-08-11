@@ -73,7 +73,7 @@ Gradle 8.14+ on the 8.x line, or Gradle 9.x).
 
 ### Service Inventory
 
-The system consists of 7 microservices defined in `settings.gradle`:
+The system consists of 8 microservices defined in `settings.gradle`:
 
 | Service               | Port | Purpose                                                                              | Database                        |
 |-----------------------|------|--------------------------------------------------------------------------------------|---------------------------------|
@@ -81,9 +81,15 @@ The system consists of 7 microservices defined in `settings.gradle`:
 | **gateway-service**   | 8072 | API Gateway using Spring Cloud Gateway MVC                                           | N/A                             |
 | **product-service**   | 8073 | Book catalog with authors, publishers, categories                                    | PostgreSQL (`product_schema`)   |
 | **inventory-service** | 8074 | Stock level management and reservation tracking                                      | PostgreSQL (`inventory_schema`) |
-| **user-service**      | 8075 | User registration, authentication, profiles, roles                                   | PostgreSQL (`user_schema`)      |
+| **user-service**      | 8075 | User accounts, profiles, addresses, roles                                            | PostgreSQL (`user_schema`)      |
+| **auth-service**      | 8076 | OAuth 2.1 / OIDC authorization server (**incomplete** — see its `CLAUDE.md`)         | PostgreSQL (`auth_schema`)      |
 | **order-service**     | 8077 | Order placement and tracking                                                         | PostgreSQL (`order_schema`)     |
 | **payment-service**   | 8078 | Payment processing and refunds                                                       | PostgreSQL (`payment_schema`)   |
+
+> ⚠️ **user-service and auth-service both store users.** user-service owns `user_schema.users` +
+> `security_role`; auth-service owns `auth_schema.users` + `users_authorities` with its own
+> credentials. Two systems of record for the same people, and nothing reconciles them — which
+> service owns credentials is an **open architectural decision**. See `auth-service/CLAUDE.md`.
 
 > Ports and schema names above are the **defaults** from `webstore-config/config/<service>.yml`. Multi-instance
 > deployments override `server.port` per instance to avoid a local port clash, but there is **no**
@@ -109,7 +115,7 @@ Services must be started in this order for proper operation:
 
 <a id="local-infrastructure"></a>### Local Infrastructure & Containers (Docker Compose)
 
-`docker-compose.yml` in the repo root runs the **entire stack** — infrastructure plus all 7 Spring Boot
+`docker-compose.yml` in the repo root runs the **entire stack** — infrastructure plus all 8 Spring Boot
 services:
 
 ```bash
@@ -157,7 +163,8 @@ variables plus their own `SPRING_PROFILE`, which Compose passes to every contain
 file — see [Port configuration](#port-configuration)):
 
 - **Prometheus:** `http://localhost:${PROMETHEUS_PORT}` (default `9090`) — query UI at `/query`,
-  scrape-target health at `/targets` (all 7 service jobs should show **UP**).
+  scrape-target health at `/targets` (all 8 service jobs should show **UP** — ⚠️ auth-service has
+  no scrape job yet, so it will not appear).
 - **Grafana:** `http://localhost:${GRAFANA_PORT}` (default `3000`) — log in with `admin` / `admin`
   (DEV default), then **Dashboards → Webstore → Webstore Services**; pick the service with the
   `$service` dropdown. The datasource and dashboard are provisioned automatically — no manual
@@ -172,7 +179,7 @@ the UAT/PROD overlays in the config repo include `prometheus` in their trimmed a
 host runs the endpoint is at `http://localhost:<port>/actuator/prometheus` (the Docker Prometheus
 can't scrape host-run services — its targets are container DNS names).
 
-**Service images:** all 7 services build from the **shared root `Dockerfile`** (multi-stage: Gradle
+**Service images:** all 8 services build from the **shared root `Dockerfile`** (multi-stage: Gradle
 wrapper build on `eclipse-temurin:25-jdk`, runtime on `eclipse-temurin:25-jre` + curl for healthchecks),
 selected via the `SERVICE` build arg that compose passes per service. `.dockerignore` excludes
 `secrets/` so credentials can never enter an image layer. Startup ordering is enforced with
@@ -395,6 +402,7 @@ defaults on `localhost`, container values injected by Compose env vars:
 
 | External path   | Target env var          | Docker value                    |
 |-----------------|-------------------------|---------------------------------|
+| `/auth/**`      | `AUTH_SERVICE_URL`      | `http://auth-service:8076`      |
 | `/inventory/**` | `INVENTORY_SERVICE_URL` | `http://inventory-service:8074` |
 | `/order/**`     | `ORDER_SERVICE_URL`     | `http://order-service:8077`     |
 | `/payment/**`   | `PAYMENT_SERVICE_URL`   | `http://payment-service:8078`   |
@@ -402,6 +410,13 @@ defaults on `localhost`, container values injected by Compose env vars:
 | `/user/**`      | `USER_SERVICE_URL`      | `http://user-service:8075`      |
 
 Each route strips its prefix via `RewritePath=/<prefix>/(?<path>.*), /$\{path}` before forwarding.
+
+> ⚠️ **Prefix stripping is a problem for `/auth/**`.** An authorization server advertises its own
+> URLs, and auth-service currently derives its issuer from the incoming request — so through the
+> gateway it publishes unreachable container URLs in `/.well-known/openid-configuration`, the `iss`
+> claim, and the JWKS URI. Fixing it means pinning the issuer to the external URL via an
+> `AuthorizationServerSettings` bean. Until then, reach auth-service directly on `localhost:8076`.
+> `client_credentials` works through the gateway either way (single POST, no discovery or redirects).
 
 **Application Properties Pattern (per service, in source tree):**
 
@@ -741,8 +756,13 @@ see [Local Infrastructure](#local-infrastructure)):
 
 **Not Yet Implemented:**
 
-- Auth Service (Spring Security with JWT/OAuth2)
-- Kubernetes deployment (the full stack — infrastructure + all 7 services — already runs via
+- **Platform-wide security.** auth-service exists and issues tokens, but **nothing consumes them** —
+  the other seven services are not resource servers, so every existing endpoint is unauthenticated.
+  Making this real means adding `spring-boot-starter-oauth2-resource-server` + `issuer-uri` to each
+  service, forwarding tokens through the gateway, and adding authorization rules per endpoint.
+- **auth-service itself is incomplete** — no controllers, no way to create the first user, no tests,
+  issuer unpinned, ephemeral signing key, in-memory client registry. See `auth-service/CLAUDE.md`.
+- Kubernetes deployment (the full stack — infrastructure + all 8 services — already runs via
   `docker-compose.yml` and the shared root `Dockerfile`; the direct-URL addressing maps 1:1 onto
   K8s Services)
 - Comprehensive integration tests

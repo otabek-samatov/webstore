@@ -60,7 +60,9 @@
       "Bash(mkdir -p /tmp/as)",
       "Bash(unzip -o -q /c/Users/acer/.gradle/caches/modules-2/files-2.1/org.springframework.security/spring-security-oauth2-authorization-server/7.1.0/3600b2a48f1ab6a3c52a7a34ad70c3147aa5c08e/spring-security-oauth2-authorization-server-7.1.0.jar -d /tmp/as)",
       "Read(//tmp/**)",
-      "Bash(sed -n '1,60p' /c/Data/Projects/webstore/user-service/src/main/resources/db/migration/V1__*.sql)"
+      "Bash(sed -n '1,60p' /c/Data/Projects/webstore/user-service/src/main/resources/db/migration/V1__*.sql)",
+      "Bash(xargs -I{} sh -c 'echo \"--- {}\"; wc -l < {}')",
+      "Bash(python -)"
     ]
   }
 }

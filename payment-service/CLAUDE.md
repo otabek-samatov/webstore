@@ -51,7 +51,7 @@ config (app name + `config.import: optional:configserver:`).
 
 ### Microservice Context
 
-Payment Service is one of 7 microservices in the Webstore application. It integrates with:
+Payment Service is one of 8 microservices in the Webstore application. It integrates with:
 
 - **Order Service**: calls `POST /v1/payments` (charge on order creation / payment retry) at this
   service's direct URL (`http://payment-service:8078` in Docker, `http://localhost:8078` on host —
