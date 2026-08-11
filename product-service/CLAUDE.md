@@ -64,6 +64,59 @@ Category (hierarchical)
 - 3-level category hierarchy (Fiction/Non-Fiction → subcategories → specializations)
 - Uses Datafaker for realistic test data with duplicate prevention via ISBN/name checks
 
+## Security (OAuth2 Resource Server)
+
+product-service is the **first webstore service to validate tokens**. The catalog is readable by
+anyone; modifying it requires a JWT issued by auth-service whose holder has the `WRITE` authority.
+
+| Path | Access |
+|---|---|
+| `GET /v1/books/**` | public — all four controllers' reads |
+| `/actuator/health/**`, `/actuator/prometheus` | public |
+| `/swagger-ui/**`, `/v3/api-docs/**` | public (springdoc is disabled entirely in PROD) |
+| everything else — POST / PUT / DELETE | `hasAuthority("WRITE")` |
+
+Configured in `configs/SecurityConfig.java`. The issuer comes from
+`spring.security.oauth2.resourceserver.jwt.issuer-uri` in the config repo's `product-service.yml`
+(`${AUTH_ISSUER_URI:http://localhost:8076}`).
+
+**Validation is local.** The JWKS is fetched from the issuer once and cached — auth-service is not
+called per request and is not in the request path.
+
+**Rules are default-deny.** Reads are listed explicitly and everything else falls through to
+`hasAuthority("WRITE")`. A controller added later is protected until someone deliberately opens it,
+rather than public by accident. Keep it that way — don't invert to "permit everything, protect the
+writes by name".
+
+### Four things that will bite
+
+**CSRF must stay disabled.** This is a stateless bearer-token API — nothing is attached
+automatically by the browser, so CSRF has no attack surface. Leave it enabled and every
+POST/PUT/DELETE returns **403 despite a perfectly valid token**, with nothing in the response
+pointing at CSRF.
+
+**The `JwtAuthenticationConverter` is not optional.** The default converter reads the `scope` claim
+and prefixes each value with `SCOPE_`, so a user token yields `SCOPE_openid` / `SCOPE_profile` and
+never `WRITE` — every write would 403. The bean overrides the claim name to `authorities` and clears
+the prefix so values arrive verbatim (`READ`, `WRITE`, `ROLE_ADMIN`). It only works because
+auth-service's `OAuth2TokenCustomizer` puts that claim on the token in the first place; the two are
+a matched pair, and changing the claim name on one side breaks the other silently.
+
+**`issuer-uri` must equal the token's `iss` claim exactly**, or every request 401s. auth-service
+currently derives its issuer from the request host, so the `localhost:8076` default only lines up
+for host runs. See `auth-service/CLAUDE.md` — the issuer needs pinning before this works in Docker
+or through the gateway.
+
+**`client_credentials` tokens cannot write here.** They carry no user and therefore no authorities.
+If service-to-service writes are ever needed, either widen the rule to accept a scope
+(`hasAuthority("SCOPE_webstore.write")`) or give the client authorities of its own.
+
+### Diagnosing a rejected write
+
+- **401** — token missing, expired, malformed, or `iss` mismatch. Check `issuer-uri` first.
+- **403** — token is valid but carries no `WRITE`. Decode it: if there's no `authorities` claim the
+  problem is on the auth-service side; if the claim is there, the converter isn't wired.
+
 ## Key Implementation Details
 
 ### Entity Design Patterns
@@ -88,6 +141,8 @@ Category (hierarchical)
 
 ### Spring Boot 4 notes
 
+- Security comes from **`spring-boot-starter-oauth2-resource-server`** (not `-starter-security` —
+  the resource-server starter pulls in `spring-security-config`/`-web` plus `-oauth2-jose`).
 - Uses the **`spring-boot-starter-webmvc`** starter (renamed from `spring-boot-starter-web` in Spring Boot 4).
 - Flyway is wired via **`spring-boot-starter-flyway`** + `flyway-database-postgresql` (BOM-managed
   versions, ~Flyway 11) — `flyway-core` alone no longer auto-configures migrations in Spring Boot 4.

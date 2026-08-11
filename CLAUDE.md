@@ -756,10 +756,12 @@ see [Local Infrastructure](#local-infrastructure)):
 
 **Not Yet Implemented:**
 
-- **Platform-wide security.** auth-service exists and issues tokens, but **nothing consumes them** —
-  the other seven services are not resource servers, so every existing endpoint is unauthenticated.
-  Making this real means adding `spring-boot-starter-oauth2-resource-server` + `issuer-uri` to each
-  service, forwarding tokens through the gateway, and adding authorization rules per endpoint.
+- **Platform-wide security.** auth-service issues tokens and **product-service is the first (and so
+  far only) consumer** — its `GET /v1/books/**` reads are public while writes require a token whose
+  holder has the `WRITE` authority (see `product-service/CLAUDE.md`). The other five business
+  services and the gateway are still entirely unauthenticated. Extending this means adding
+  `spring-boot-starter-oauth2-resource-server` + `issuer-uri` to each remaining service, a
+  `JwtAuthenticationConverter` reading the `authorities` claim, and per-endpoint rules.
 - **auth-service itself is incomplete** — no controllers, no way to create the first user, no tests,
   issuer unpinned, ephemeral signing key, in-memory client registry. See `auth-service/CLAUDE.md`.
 - Kubernetes deployment (the full stack — infrastructure + all 8 services — already runs via

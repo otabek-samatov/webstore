@@ -186,12 +186,51 @@ authorization-code flow.
 Only the authorization_code flow authenticates a real user, so it is the only one that exercises
 `AuthUserDetailsManager`.
 
+### The `authorities` claim
+
+By default an access token carries only `scope` — what the **client** was granted (`openid`,
+`profile`), not what the **user** may do. A resource server would therefore see `SCOPE_openid` and
+nothing else, and any rule like `hasAuthority("WRITE")` would 403 for a user who genuinely holds it.
+
+The `OAuth2TokenCustomizer<JwtEncodingContext>` bean copies the principal's authorities onto the
+access token as an `authorities` claim:
+
+```json
+{ "sub": "admin", "scope": ["openid","profile"], "authorities": ["ROLE_ADMIN","READ","WRITE"] }
+```
+
+- Guarded to `OAuth2TokenType.ACCESS_TOKEN` — the id_token is an identity document and doesn't need
+  them.
+- Under `client_credentials` there is no user, so the claim is empty. That is correct, and it means
+  **machine clients cannot satisfy user-authority rules** on a resource server.
+
+> ⚠️ **This claim is half of a matched pair.** product-service's `JwtAuthenticationConverter` is
+> configured with `setAuthoritiesClaimName("authorities")` and an empty authority prefix. Rename the
+> claim here and every resource server silently starts seeing no authorities — the symptom is a 403
+> on a valid token, with nothing pointing at the cause. See `product-service/CLAUDE.md`.
+
 ### Secrets
 
 `auth_client_secret` follows the same path as the DB credentials: `secrets/auth_client_secret.txt`
 (gitignored) → Docker secret → `/run/secrets/auth_client_secret` → property via the
 `optional:configtree:/run/secrets/` import. Host runs use `AUTH_CLIENT_SECRET`. There is **no inline
 default** — a missing secret must fail startup rather than fall back to a known value.
+
+> ⚠️ **Generate the secret as hex, never base64.** RFC 6749 §2.3.1 requires the client id and secret
+> to be form-urlencoded inside the Basic auth header, and
+> `ClientSecretBasicAuthenticationConverter` duly calls `URLDecoder.decode` on both. A `+` in a
+> base64 secret is therefore decoded to a **space** server-side and can never match — the symptom is
+> a bare `{"error":"invalid_client"}` with nothing in the logs.
+>
+> Also strip `\r`, not just `\n`. On Windows a naive `tr -d '\n'` leaves a trailing carriage return:
+> bash `$(cat …)` preserves it, PowerShell `Get-Content` strips it, so the app and the client
+> silently disagree. Generate with:
+>
+> ```bash
+> openssl rand -hex 32 | tr -d '\r\n' > secrets/auth_client_secret.txt
+> ```
+>
+> The secret is bcrypt-encoded **at startup**, so changing the file requires a restart.
 
 ## Database
 
@@ -223,7 +262,7 @@ secret encoding; case-insensitive username matching; disabled-user rejection.
 | RSA key regenerated per boot | Restarts invalidate all tokens; two instances sign with different keys. DEV-only — needs a keystore |
 | In-memory `RegisteredClientRepository` | Clients vanish on restart. Move to `JdbcRegisteredClientRepository` |
 | CSRF enabled, no API carve-out | Fine today (`formLogin` carries the token); will 403 Postman `POST`s once controllers exist |
-| No service validates the tokens | The other six services are not resource servers, so nothing consumes what this issues |
+| Only product-service validates tokens | It is the first resource server (writes require `WRITE`); the other five business services plus the gateway are still unauthenticated |
 
 ### Open architectural questions
 
