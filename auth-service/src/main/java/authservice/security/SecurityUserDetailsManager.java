@@ -19,7 +19,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.util.Arrays;
 import java.util.Collection;
 
 /**
@@ -101,6 +100,11 @@ public class SecurityUserDetailsManager implements UserDetailsManager {
      * <p>Both spellings are accepted, because Spring's own builder produces both:
      * {@code User.withUsername(…).roles("ADMIN")} yields {@code ROLE_ADMIN} while
      * {@code .authorities("ADMIN")} yields the bare name.
+     *
+     * <p>{@link RoleType#SERVICE} is rejected outright. It identifies a machine client authenticating
+     * under {@code client_credentials}, and is granted by client registration — never by a row in
+     * {@code users}. Without this check a registration endpoint would let anyone mint a human account
+     * holding the role that opens every service-to-service endpoint.
      */
     private static RoleType toRole(Collection<? extends GrantedAuthority> authorities) {
         if (authorities.size() != 1) {
@@ -108,17 +112,12 @@ public class SecurityUserDetailsManager implements UserDetailsManager {
                     + authorities.size() + " were supplied: " + authorities);
         }
 
-        String name = authorities.iterator().next().getAuthority();
-        if (name.startsWith(SecurityUserDetails.ROLE_PREFIX)) {
-            name = name.substring(SecurityUserDetails.ROLE_PREFIX.length());
+        RoleType role = RoleType.fromAuthority(authorities.iterator().next().getAuthority());
+        if (role == RoleType.SERVICE) {
+            throw new IllegalArgumentException("The " + RoleType.SERVICE
+                    + " role belongs to machine clients and cannot be assigned to a user account");
         }
-
-        try {
-            return RoleType.valueOf(name);
-        } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("Unknown role: " + name + ". Valid roles are "
-                    + Arrays.toString(RoleType.values()), ex);
-        }
+        return role;
     }
 
     @Override

@@ -115,10 +115,24 @@ Credentials default to `admin` / `78`, overridable via `auth.dev.admin-username`
 A single flat table — `users` in `auth_schema`. No join tables.
 
 **One role, and roles are the only authorization concept.** There are no free-form permissions —
-`READ` / `WRITE` were removed in `V2`. `RoleType` (`ADMIN`, `CUSTOMER`) is the complete vocabulary, a
-user holds exactly one of them, and a resource server writes `hasRole("ADMIN")`. Adding a constant to
-the enum is the only way to widen it, which is deliberate: the set of names a rule may reference is
-enumerable and compiler-checked.
+`READ` / `WRITE` were removed in `V2`. `RoleType` is the complete vocabulary, a principal holds
+exactly one of them, and a resource server writes `hasRole(...)`. Adding a constant to the enum is
+the only way to widen it, which is deliberate: the set of names a rule may reference is enumerable
+and compiler-checked.
+
+| Role | Held by | Granted by |
+|---|---|---|
+| `ADMIN` | a human administrator | `users.role` |
+| `CUSTOMER` | a shopper | `users.role` |
+| `SERVICE` | a machine client under `client_credentials` | **client registration**, not a user row |
+
+> ⚠️ **`SERVICE` is not assignable to a person.** `SecurityUserDetailsManager.toRole` throws if it
+> ever appears in a `UserDetails`. Without that check, a registration endpoint would let anyone mint
+> an account holding the role that opens every service-to-service endpoint.
+
+`RoleType` also owns the translation to Spring Security's spelling — `authority()` produces
+`ROLE_ADMIN`, `fromAuthority(...)` parses either form. The `ROLE_` literal exists **once** in the
+codebase, in that enum. Reintroducing a second copy is how you get `ROLE_ROLE_ADMIN`.
 
 The role is a **plain column**, not a collection and not a FK to a role table. A user is never both
 `ADMIN` and `CUSTOMER`, and a role has no attributes worth joining for on every login. Two things
@@ -131,10 +145,9 @@ follow that are worth knowing before "improving" it:
   same two names that way (`SecurityRole` entity + FK) because it exposes CRUD over them; auth-service
   has no such endpoint.
 
-`role` stores the **bare** name (`ADMIN`). The `ROLE_` prefix Spring Security expects lives in exactly
-one place — `SecurityUserDetails.ROLE_PREFIX` — applied on the way out and stripped on the way in by
-`SecurityUserDetailsManager`. Keep it that way; a prefix stored in the DB *and* added in code yields
-`ROLE_ROLE_ADMIN`.
+`role` stores the **bare** name (`ADMIN`); the `ROLE_` prefix is added by `RoleType.authority()` on the
+way out and stripped by `RoleType.fromAuthority(...)` on the way in. A prefix stored in the DB *and*
+added in code yields `ROLE_ROLE_ADMIN`.
 
 `AppUser` extends `CoreEntity` (`id` + `@Version version`), same base-class pattern as every other
 service. Sequence `user_seq`, `allocationSize = 50`.
@@ -228,13 +241,20 @@ authorization-code flow.
 
 ### Registered clients
 
-| Client | Grant | Authentication |
-|---|---|---|
-| `postman-client` | authorization_code + refresh_token, PKCE required | public (`NONE`), redirect `https://oauth.pstmn.io/v1/callback` |
-| `webstore-service-client` | client_credentials | secret from `auth_client_secret`, bcrypt-encoded at startup |
+| Client | Grant | Authentication | Role |
+|---|---|---|---|
+| `postman-client` | authorization_code + refresh_token, PKCE required | public (`NONE`), redirect `https://oauth.pstmn.io/v1/callback` | none — carries the *user's* role |
+| `webstore-service-client` | client_credentials | secret from `auth_client_secret`, bcrypt-encoded at startup | `SERVICE` |
 
 Only the authorization_code flow authenticates a real user, so it is the only one that exercises
 `SecurityUserDetailsManager`.
+
+**A machine client's role is client data, not a branch in the customizer.** It lives in
+`ClientSettings` under `settings.client.role` (the `CLIENT_ROLE_SETTING` constant), so registering
+another service client is a registration change only — and it survives the eventual move to
+`JdbcRegisteredClientRepository`, where clients become rows. A client with no such setting gets an
+**empty** claim rather than a default; granting a role to every registered client by accident is the
+failure this shape is meant to prevent.
 
 ### The `authorities` claim
 
@@ -251,8 +271,11 @@ token as an `authorities` claim, prefix included:
 
 - Guarded to `OAuth2TokenType.ACCESS_TOKEN` — the id_token is an identity document and doesn't need
   them.
-- Under `client_credentials` there is no user, so the claim is empty. That is correct, and it means
-  **machine clients cannot satisfy any role rule** on a resource server.
+- **The role has two sources, because the principal differs by grant.** Under `authorization_code`
+  the principal is the end user and the role comes from `users.role`. Under `client_credentials` the
+  principal is the *client*, whose authorities are always empty — so the role is read from its
+  registration instead. A `client_credentials` token from `webstore-service-client` therefore carries
+  `["ROLE_SERVICE"]`, not an empty claim.
 
 **The claim is still named `authorities`, not `roles`, now that it carries only roles.** Its values
 are literal `GrantedAuthority` strings (`ROLE_ADMIN`), which is what a resource server's
@@ -352,9 +375,14 @@ re-running against a migrated database.
    `spring-boot-starter-oauth2-resource-server` + `issuer-uri`, the gateway must forward tokens, and
    every existing endpoint needs an authorization rule — written as `hasRole(...)`, since roles are
    the only thing a token carries.
-3. **`ADMIN` / `CUSTOMER` is a coarse vocabulary.** With permissions gone, any new distinction ("may
-   refund but not cancel") has to become a new `RoleType` constant. Watch for role explosion as the
-   remaining services are onboarded.
+3. **The vocabulary is coarse.** With permissions gone, any new distinction ("may refund but not
+   cancel") has to become a new `RoleType` constant. Watch for role explosion as the remaining
+   services are onboarded.
+4. **`SERVICE` is one role for all machine traffic.** Every service authenticating as
+   `webstore-service-client` is indistinguishable from every other, so a rule can say "some service"
+   but never "order-service specifically". If that granularity is ever needed, the shape is one
+   registered client per calling service, each with its own role — the `CLIENT_ROLE_SETTING` lookup
+   already supports it without a code change.
 
 ## Deployment
 

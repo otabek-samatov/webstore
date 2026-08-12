@@ -74,12 +74,18 @@ anyone; modifying it requires a JWT issued by auth-service whose holder has the 
 | `GET /v1/books/**` | public — all four controllers' reads |
 | `/actuator/health/**`, `/actuator/prometheus` | public |
 | `/swagger-ui/**`, `/v3/api-docs/**` | public (springdoc is disabled entirely in PROD) |
-| everything else — POST / PUT / DELETE | `hasRole("ADMIN")` |
+| everything else — POST / PUT / DELETE | `hasAnyRole("ADMIN", "SERVICE")` |
 
 > **Roles are the only authorization concept platform-wide.** auth-service has no permissions —
 > `READ` / `WRITE` were removed there in `V2`, and a token carries exactly one role. Any rule added
-> here must therefore be a `hasRole(...)` over `ADMIN` / `CUSTOMER`; there is no finer grain to
-> reach for. See `auth-service/CLAUDE.md`.
+> here must therefore be a `hasRole(...)` over `ADMIN` / `CUSTOMER` / `SERVICE`; there is no finer
+> grain to reach for. See `auth-service/CLAUDE.md`.
+
+**`SERVICE` is unrestricted here — deliberately.** It is the role on `client_credentials` tokens, so
+another webstore service calling in may do anything a catalog admin can. That is a real trust
+decision, not an oversight: the role is granted by client registration, and every service shares the
+one `webstore-service-client`, so any service holding the secret can write to the catalog. Narrow it
+to specific paths if that becomes too broad.
 
 Configured in `configs/SecurityConfig.java`. The issuer comes from
 `spring.security.oauth2.resourceserver.jwt.issuer-uri` in the config repo's `product-service.yml`
@@ -89,9 +95,9 @@ Configured in `configs/SecurityConfig.java`. The issuer comes from
 called per request and is not in the request path.
 
 **Rules are default-deny.** Reads are listed explicitly and everything else falls through to
-`hasRole("ADMIN")`. A controller added later is protected until someone deliberately opens it,
-rather than public by accident. Keep it that way — don't invert to "permit everything, protect the
-writes by name".
+`hasAnyRole("ADMIN", "SERVICE")`. A controller added later is protected until someone deliberately
+opens it, rather than public by accident. Keep it that way — don't invert to "permit everything,
+protect the writes by name".
 
 ### Four things that will bite
 
@@ -117,17 +123,19 @@ currently derives its issuer from the request host, so the `localhost:8076` defa
 for host runs. See `auth-service/CLAUDE.md` — the issuer needs pinning before this works in Docker
 or through the gateway.
 
-**`client_credentials` tokens cannot write here.** They carry no user and therefore no role. If
-service-to-service writes are ever needed, either widen the rule to accept a scope
-(`hasAuthority("SCOPE_webstore.write")`) or give the client a role of its own.
+**`client_credentials` tokens can write here.** They carry no user, but auth-service reads the role
+from the client's registration and puts `ROLE_SERVICE` on the token — which the catch-all rule
+accepts. A machine token that 403s means the client has no `settings.client.role` on its
+registration, not that machine tokens are inherently roleless.
 
 ### Diagnosing a rejected write
 
 - **401** — token missing, expired, malformed, or `iss` mismatch. Check `issuer-uri` first.
-- **403** — token is valid but its holder isn't an `ADMIN`. Decode it: if there's no `authorities`
-  claim the problem is on the auth-service side; if the claim is there but reads `ROLE_CUSTOMER`, the
-  account genuinely lacks the role; if it reads `ROLE_ADMIN` and you still get 403, the converter
-  isn't wired (or has picked up a `ROLE_` prefix it shouldn't have).
+- **403** — token is valid but its holder is neither `ADMIN` nor `SERVICE`. Decode it: no
+  `authorities` claim at all means the problem is on the auth-service side (for a machine token,
+  most likely a missing client role setting); `ROLE_CUSTOMER` means the account genuinely lacks the
+  role; `ROLE_ADMIN` or `ROLE_SERVICE` present *and still* 403 means the converter isn't wired, or
+  has picked up a `ROLE_` prefix it shouldn't have.
 
 ## Key Implementation Details
 

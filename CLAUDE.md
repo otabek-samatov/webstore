@@ -764,9 +764,11 @@ see [Local Infrastructure](#local-infrastructure)):
   `spring-boot-starter-oauth2-resource-server` + `issuer-uri` to each remaining service, a
   `JwtAuthenticationConverter` reading the `authorities` claim, and per-endpoint rules.
 
-  **Authorization is roles-only.** A user holds exactly one `RoleType` (`ADMIN` / `CUSTOMER`) and a
-  token carries just that; there are no permissions such as `READ` / `WRITE`. Every rule is a
-  `hasRole(...)`. See `auth-service/CLAUDE.md`.
+  **Authorization is roles-only.** A principal holds exactly one `RoleType` and a token carries just
+  that; there are no permissions such as `READ` / `WRITE`. Every rule is a `hasRole(...)`. `ADMIN`
+  and `CUSTOMER` come from a user row; `SERVICE` is granted by client registration and rides on
+  `client_credentials` tokens, which is how service-to-service calls will authenticate once the
+  remaining services become resource servers. See `auth-service/CLAUDE.md`.
 - **auth-service itself is incomplete** — no controllers (so users can only be created by the
   dev-profile `DevDataSeeder`, never under `uat`/`prod`), no tests, issuer unpinned, ephemeral
   signing key, in-memory client registry. See `auth-service/CLAUDE.md`.

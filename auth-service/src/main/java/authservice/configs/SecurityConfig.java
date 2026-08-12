@@ -1,5 +1,6 @@
 package authservice.configs;
 
+import authservice.entities.RoleType;
 import authservice.security.SecurityUserDetailsManager;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
@@ -41,6 +42,21 @@ import java.util.stream.Collectors;
 
 @Configuration
 public class SecurityConfig {
+
+    /**
+     * Name of the claim carrying the principal's role. Read verbatim by every resource server's
+     * {@code JwtGrantedAuthoritiesConverter} — see the customizer below before renaming it.
+     */
+    private static final String AUTHORITIES_CLAIM = "authorities";
+
+    /**
+     * Key under which a machine client's {@link RoleType} is stored in its {@link ClientSettings}.
+     *
+     * <p>Held as client data rather than a branch in the customizer so that registering another
+     * service client is a registration change only — and so it survives the move to
+     * {@code JdbcRegisteredClientRepository}, where clients become rows instead of code.
+     */
+    private static final String CLIENT_ROLE_SETTING = "settings.client.role";
 
     /**
      * Protocol endpoints only ({@code /oauth2/**}, {@code /.well-known/**}, {@code /userinfo}).
@@ -110,7 +126,9 @@ public class SecurityConfig {
                 .build();
 
         // Machine-to-machine: one POST to /oauth2/token, no user involved. This is the grant the
-        // other webstore services would use to call each other.
+        // other webstore services use to call each other — order-service reserving stock, for
+        // instance. The SERVICE role below is what lets such a token satisfy a hasRole(...) rule;
+        // without it the token carries no role at all and every protected endpoint 403s.
         RegisteredClient serviceClient = RegisteredClient.withId(UUID.randomUUID().toString())
                 .clientId("webstore-service-client")
                 .clientSecret(passwordEncoder.encode(serviceClientSecret))
@@ -118,6 +136,9 @@ public class SecurityConfig {
                 .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
                 .scope("webstore.read")
                 .scope("webstore.write")
+                .clientSettings(ClientSettings.builder()
+                        .setting(CLIENT_ROLE_SETTING, RoleType.SERVICE.name())
+                        .build())
                 .build();
 
         return new InMemoryRegisteredClientRepository(postmanClient, serviceClient);
@@ -133,15 +154,20 @@ public class SecurityConfig {
      * resource server would see {@code SCOPE_openid} and nothing else, so any rule like
      * {@code hasRole("ADMIN")} would always 403 even for a genuine admin.
      *
-     * <p>The claim keeps the name {@code authorities} even though it now carries only roles: its
+     * <p>The claim keeps the name {@code authorities} even though it carries only roles: its
      * values are still literal {@code GrantedAuthority} strings, prefix included, which is exactly
      * what a resource server's {@code JwtGrantedAuthoritiesConverter} expects to read verbatim.
      * Renaming it to {@code roles} would invite stripping the prefix too, and a claim of bare
      * {@code ADMIN} silently fails every {@code hasRole("ADMIN")} check.
      *
      * <p>Only access tokens are customized; the id_token is an identity document and doesn't need
-     * them. Under {@code client_credentials} there is no user, so the claim comes out empty — which
-     * is correct: a machine client holds no roles, and therefore cannot satisfy any role rule.
+     * them.
+     *
+     * <p><b>Two sources, because the principal differs by grant.</b> Under {@code authorization_code}
+     * the principal is the end user and the role comes from {@code auth_schema.users}. Under
+     * {@code client_credentials} the principal is the client itself, whose authorities are always
+     * empty — so the role is read from its registration instead. Without that branch a
+     * service-to-service token would carry no role and 403 on every protected endpoint.
      */
     @Bean
     public OAuth2TokenCustomizer<JwtEncodingContext> jwtTokenCustomizer() {
@@ -149,11 +175,30 @@ public class SecurityConfig {
             if (!OAuth2TokenType.ACCESS_TOKEN.equals(context.getTokenType())) {
                 return;
             }
+
+            if (AuthorizationGrantType.CLIENT_CREDENTIALS.equals(context.getAuthorizationGrantType())) {
+                context.getClaims().claim(AUTHORITIES_CLAIM, clientAuthorities(context.getRegisteredClient()));
+                return;
+            }
+
             Set<String> roles = context.getPrincipal().getAuthorities().stream()
                     .map(GrantedAuthority::getAuthority)
                     .collect(Collectors.toSet());
-            context.getClaims().claim("authorities", roles);
+            context.getClaims().claim(AUTHORITIES_CLAIM, roles);
         };
+    }
+
+    /**
+     * The role a machine client holds, taken from its {@link ClientSettings}.
+     *
+     * <p>A client with no {@link #CLIENT_ROLE_SETTING} gets an empty claim rather than a default —
+     * granting a role to every registered client by accident is exactly the failure this is meant to
+     * prevent. {@code postman-client} has none, so even if it were ever given
+     * {@code client_credentials} it could not reach a service endpoint.
+     */
+    private static Set<String> clientAuthorities(RegisteredClient registeredClient) {
+        String role = registeredClient.getClientSettings().getSetting(CLIENT_ROLE_SETTING);
+        return role == null ? Set.of() : Set.of(RoleType.valueOf(role).authority());
     }
 
     @Bean
