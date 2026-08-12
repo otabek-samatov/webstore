@@ -13,8 +13,8 @@ It issues tokens and owns a credential store (`auth_schema.users`); it does not 
 - **Base package:** `authservice`
 
 > ⚠️ **This service is not yet functional.** It compiles and the schema migrates, but there are no
-> controllers, no way to create the first user, no tests, and no service consumes the tokens it
-> issues. See [Current State](#current-state) before assuming any part of it works end to end.
+> controllers, no tests, and only a dev-profile seeder to create users. See
+> [Current State](#current-state) before assuming any part of it works end to end.
 
 ## Build and Run
 
@@ -81,13 +81,34 @@ User login must go through authorization_code. Since there is no UI, `formLogin`
 ```
 authservice/
 ├── AuthServiceApplication.java
+├── configs/            SecurityConfig, DevDataSeeder
 ├── entities/           AppUser, CoreEntity, Authority (unused)
 ├── repositories/       AppUserRepository
-└── security/           SecurityConfig, AuthUserDetailsManager, SecurityUser
+└── security/           SecurityUserDetailsManager, SecurityUserDetails
 ```
 
 There are deliberately **no** `controllers/`, `managers/`, `dto/`, or `mappers/` packages yet — see
 [Current State](#current-state).
+
+### `DevDataSeeder`
+
+A `CommandLineRunner` that creates an `admin` account on startup if one doesn't exist. Because there
+is no registration endpoint, this is currently the **only** way a row reaches
+`auth_schema.users` — and the only caller of `SecurityUserDetailsManager.createUser`.
+
+It goes through `createUser` rather than seeding SQL deliberately: the password is hashed by the
+same `PasswordEncoder` the login path verifies against, so there is no hand-computed bcrypt hash to
+drift out of sync.
+
+Credentials default to `admin` / `78`, overridable via `auth.dev.admin-username` /
+`auth.dev.admin-password`.
+
+> ⚠️ Annotated `@Profile({"default", "dev"})` — **`"default"` is load-bearing.** The source
+> `application.yaml` sets no profile, so a plain host run has *no* active profile; `@Profile("dev")`
+> alone would silently not run and leave you with an empty table and no error explaining it.
+> `"default"` is Spring's name for "no profile set". It still never runs under `uat` or `prod`.
+>
+> Delete this class once a registration endpoint exists.
 
 ### Domain model
 
@@ -104,13 +125,13 @@ service. Sequence `user_seq`, `allocationSize = 50`.
 | `user_name` | `updatable = false`; `setUserName` throws `IllegalStateException` if reassigned |
 | `password` | always a `{bcrypt}` hash — see the encoding convention below |
 | `created_at` | `@CreationTimestamp` |
-| `is_active` | `NOT NULL DEFAULT TRUE`; drives `SecurityUser.isEnabled()` |
+| `is_active` | `NOT NULL DEFAULT TRUE`; drives `SecurityUserDetails.isEnabled()` |
 
 ### Security classes
 
-- **`SecurityUser`** — `UserDetails` wrapper around `AppUser`. `isEnabled()` returns
+- **`SecurityUserDetails`** — `UserDetails` wrapper around `AppUser`. `isEnabled()` returns
   `Boolean.TRUE.equals(user.getIsActive())`, so a null reads as **disabled** (fail closed).
-- **`AuthUserDetailsManager`** — `@Component`, implements `UserDetailsManager`. All logic lives here.
+- **`SecurityUserDetailsManager`** — `@Component`, implements `UserDetailsManager`. All logic lives here.
 - **`SecurityConfig`** — two filter chains, client registrations, `PasswordEncoder`, `JWKSource`.
 
 ## Conventions and traps
@@ -138,7 +159,7 @@ CREATE UNIQUE INDEX uc_users_user_name_ci ON users (UPPER(user_name));
 **`UPPER` is load-bearing.** Spring Data's `IgnoreCase` keyword renders `upper(...)`. A `LOWER(...)`
 index would still be correct but silently unusable by the query — a sequential scan on every login.
 If you change one side, change the other. Every repository method and every call site in
-`AuthUserDetailsManager` must stay `…IgnoreCase`; an exact-match lookup would let a duplicate past the
+`SecurityUserDetailsManager` must stay `…IgnoreCase`; an exact-match lookup would let a duplicate past the
 `exists` check and turn a clean `IllegalArgumentException` into a `DataIntegrityViolationException`.
 
 The stored value keeps its original casing — only *matching* is case-insensitive.
@@ -158,7 +179,7 @@ literal `{noop}` value.
 
 ### `@ElementCollection` is EAGER on purpose
 
-`SecurityUser` is read by the filter chain long after `loadUserByUsername`'s transaction closes.
+`SecurityUserDetails` is read by the filter chain long after `loadUserByUsername`'s transaction closes.
 LAZY would throw `LazyInitializationException`. If a future query returns many `AppUser` rows, keep
 EAGER and add `@BatchSize` rather than reverting.
 
@@ -173,7 +194,7 @@ Two chains, and the order matters:
 
 Dropping the `securityMatcher` makes chain 1 match every request; dropping `authorizeHttpRequests`
 removes the `AuthorizationFilter` entirely and leaves the service **fully open** — it fails open, not
-loudly. `httpBasic` exists so Postman can exercise `AuthUserDetailsManager` without the full
+loudly. `httpBasic` exists so Postman can exercise `SecurityUserDetailsManager` without the full
 authorization-code flow.
 
 ### Registered clients
@@ -184,7 +205,7 @@ authorization-code flow.
 | `webstore-service-client` | client_credentials | secret from `auth_client_secret`, bcrypt-encoded at startup |
 
 Only the authorization_code flow authenticates a real user, so it is the only one that exercises
-`AuthUserDetailsManager`.
+`SecurityUserDetailsManager`.
 
 ### The `authorities` claim
 
@@ -247,15 +268,23 @@ is why `is_active NOT NULL` and the expression index don't conflict with the map
 
 <a id="current-state"></a>## Current State
 
-**Works:** schema migrates; `SecurityConfig` builds two correctly-scoped chains; password and client
-secret encoding; case-insensitive username matching; disabled-user rejection.
+**Verified against a running instance** (not just "compiles"): Flyway applies `V1` and Hibernate
+validation passes; `DevDataSeeder` creates `admin` with a `{bcrypt}` hash; HTTP Basic against
+`/actuator/beans` returns 200 (proving the full `loadUserByUsername` → bcrypt → `isEnabled()` →
+authorities path, including that the EAGER collection survives the closed transaction);
+`client_credentials` issues an RS256 JWT (proving the client secret round-trips through the
+`PasswordEncoder`); and the full authorization_code + PKCE flow issues a user token with
+`"sub": "admin"`.
+
+**Written but not yet exercised:** the `authorities` claim on the access token, and
+product-service's `hasAuthority("WRITE")` rules that consume it.
 
 **Does not work / not done:**
 
 | Gap | Consequence |
 |---|---|
 | No controllers | `createUser` / `updateUser` / `deleteUser` / `changePassword` are unreachable from outside the JVM |
-| No user rows, nothing seeds | No way to obtain the first user, so no way to log in |
+| Users only exist via `DevDataSeeder` | Works for DEV/host runs, but under `uat`/`prod` the seeder is inactive and there is no way to create a user at all |
 | No tests | Only a 13-line `contextLoads` that fails without config-server + DB |
 | Issuer not pinned | Discovery advertises the request host, so through the gateway it publishes unreachable container URLs. Needs an `AuthorizationServerSettings` bean with the external issuer |
 | `/userinfo` returns 401 | `.oidc()` enables the endpoint but chain 1 has no `.oauth2ResourceServer(...jwt())` to authenticate bearer tokens |

@@ -66,7 +66,8 @@
       "Bash(javap -p -c -cp /tmp/as org.springframework.security.oauth2.server.authorization.web.authentication.ClientSecretBasicAuthenticationConverter)",
       "Bash(git -C /c/Data/Projects/webstore-config status --short)",
       "Bash(git -C /c/Data/Projects/webstore-config log --oneline -3)",
-      "Bash(git -C /c/Data/Projects/webstore-config log --oneline -1 -- config/gateway-service.yml)"
+      "Bash(git -C /c/Data/Projects/webstore-config log --oneline -1 -- config/gateway-service.yml)",
+      "Bash(grep -rn \"security/           SecurityConfig\\\\|security/SecurityConfig\\\\|security\\\\\\\\\\\\\\\\SecurityConfig\" --include=\"*.md\" .)"
     ]
   }
 }

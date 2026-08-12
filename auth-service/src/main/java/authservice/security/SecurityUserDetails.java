@@ -7,13 +7,12 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
-import java.util.List;
 
-public class SecurityUser implements UserDetails {
+public class SecurityUserDetails implements UserDetails {
 
     private final AppUser user;
 
-    public SecurityUser(AppUser user) {
+    public SecurityUserDetails(AppUser user) {
         this.user = user;
     }
 

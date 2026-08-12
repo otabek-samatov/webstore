@@ -1,5 +1,6 @@
-package authservice.security;
+package authservice.configs;
 
+import authservice.security.SecurityUserDetailsManager;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
@@ -65,7 +66,7 @@ public class SecurityConfig {
     /**
      * Everything else. {@code formLogin} serves the generated login page the chain above redirects
      * to; {@code httpBasic} exists so Postman can authenticate against
-     * {@link AuthUserDetailsManager} directly without running the full authorization-code flow.
+     * {@link SecurityUserDetailsManager} directly without running the full authorization-code flow.
      */
     @Bean
     @Order(2)
@@ -93,7 +94,7 @@ public class SecurityConfig {
             PasswordEncoder passwordEncoder,
             @Value("${auth_client_secret}") String serviceClientSecret) {
         // Public client + PKCE, driven by Postman's OAuth 2.0 helper. This is the only flow that
-        // authenticates a real user, so it is what exercises AuthUserDetailsManager.
+        // authenticates a real user, so it is what exercises SecurityUserDetailsManager.
         RegisteredClient postmanClient = RegisteredClient.withId(UUID.randomUUID().toString())
                 .clientId("postman-client")
                 .clientAuthenticationMethod(ClientAuthenticationMethod.NONE)

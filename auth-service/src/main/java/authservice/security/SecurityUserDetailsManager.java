@@ -15,7 +15,6 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.UserDetailsManager;
 import org.springframework.stereotype.Component;
-import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
@@ -33,17 +32,17 @@ import org.springframework.util.StringUtils;
  *       existing hash. Use {@link #changePassword(String, String)} instead.</li>
  * </ul>
  *
- * <p>This class is not annotated as a component: it is declared as a {@code @Bean} by the
- * security configuration, which also supplies the {@link PasswordEncoder}.
+ * <p>Registered by component scanning. The {@link PasswordEncoder} it depends on is declared in
+ * {@code authservice.configs.SecurityConfig}.
  */
 
 @Component
-public class AuthUserDetailsManager implements UserDetailsManager {
+public class SecurityUserDetailsManager implements UserDetailsManager {
 
     private final AppUserRepository appUserRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public AuthUserDetailsManager(AppUserRepository appUserRepository, PasswordEncoder passwordEncoder) {
+    public SecurityUserDetailsManager(AppUserRepository appUserRepository, PasswordEncoder passwordEncoder) {
         this.appUserRepository = appUserRepository;
         this.passwordEncoder = passwordEncoder;
     }
@@ -133,8 +132,8 @@ public class AuthUserDetailsManager implements UserDetailsManager {
         AppUser appUser = appUserRepository.findByUserNameIgnoreCase(username)
                 .orElseThrow(() -> new UsernameNotFoundException("Username not found: " + username));
 
-        // AppUser.authorities is an EAGER @ElementCollection, so SecurityUser stays usable in the
+        // AppUser.authorities is an EAGER @ElementCollection, so SecurityUserDetails stays usable in the
         // filter chain after this transaction closes.
-        return new SecurityUser(appUser);
+        return new SecurityUserDetails(appUser);
     }
 }

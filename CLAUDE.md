@@ -762,8 +762,9 @@ see [Local Infrastructure](#local-infrastructure)):
   services and the gateway are still entirely unauthenticated. Extending this means adding
   `spring-boot-starter-oauth2-resource-server` + `issuer-uri` to each remaining service, a
   `JwtAuthenticationConverter` reading the `authorities` claim, and per-endpoint rules.
-- **auth-service itself is incomplete** — no controllers, no way to create the first user, no tests,
-  issuer unpinned, ephemeral signing key, in-memory client registry. See `auth-service/CLAUDE.md`.
+- **auth-service itself is incomplete** — no controllers (so users can only be created by the
+  dev-profile `DevDataSeeder`, never under `uat`/`prod`), no tests, issuer unpinned, ephemeral
+  signing key, in-memory client registry. See `auth-service/CLAUDE.md`.
 - Kubernetes deployment (the full stack — infrastructure + all 8 services — already runs via
   `docker-compose.yml` and the shared root `Dockerfile`; the direct-URL addressing maps 1:1 onto
   K8s Services)
