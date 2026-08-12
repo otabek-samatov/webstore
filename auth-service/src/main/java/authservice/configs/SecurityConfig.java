@@ -88,7 +88,13 @@ public class SecurityConfig {
     @Order(2)
     public SecurityFilterChain defaultFilterChain(HttpSecurity http) throws Exception {
         http.authorizeHttpRequests(authorize -> authorize
+                        // Infrastructure. The Compose healthcheck curls /actuator/health, and
+                        // Prometheus is set up to scrape /actuator/prometheus — both would break.
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus").permitAll()
+                        // API docs. Public only in DEV/UAT: the config repo's application-prod.yml
+                        // disables springdoc outright, so these 404 in PROD rather than relying on
+                        // this rule. The spec is empty today — this service has no controllers yet.
+                        .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .anyRequest().authenticated())
                 .formLogin(Customizer.withDefaults())
                 .httpBasic(Customizer.withDefaults());

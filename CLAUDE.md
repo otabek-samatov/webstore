@@ -562,11 +562,14 @@ PostgreSQL Database
 
 ## API Documentation (Swagger/OpenAPI)
 
-The 5 business services (product, inventory, user, order, payment) generate interactive API docs via
-**springdoc-openapi** (`org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3` — the 3.x line is
-required for Spring Boot 4; 2.x only supports Boot 3). Zero configuration: springdoc introspects the
-Spring MVC controllers at runtime. config-service and gateway-service expose no business API and have
-no springdoc dependency.
+Six services depend on **springdoc-openapi** (`org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3`
+— the 3.x line is required for Spring Boot 4; 2.x only supports Boot 3): the 5 business services
+(product, inventory, user, order, payment) plus **auth-service**. Zero configuration: springdoc
+introspects the Spring MVC controllers at runtime. config-service and gateway-service expose no
+business API and have no springdoc dependency.
+
+> ⚠️ auth-service has the dependency but **no controllers**, so its spec is empty — the docs are
+> live and reachable, and document nothing. See `auth-service/CLAUDE.md`.
 
 Per service (ports from `.env` — see [Port configuration](#port-configuration)):
 

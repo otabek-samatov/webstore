@@ -232,7 +232,28 @@ Two chains, and the order matters:
 | Bean | Order | Scope |
 |---|---|---|
 | `authorizationServerFilterChain` | 1 | `securityMatcher(getEndpointsMatcher())` — protocol endpoints only |
-| `defaultFilterChain` | 2 | everything else; `formLogin` + `httpBasic`, actuator health/prometheus `permitAll` |
+| `defaultFilterChain` | 2 | everything else; `formLogin` + `httpBasic`; actuator health/prometheus and the springdoc paths `permitAll` |
+
+**All authorization rules in this service live in those two `authorizeHttpRequests` blocks — four
+rules in total.** Everything else in `SecurityConfig` (client registrations, the token customizer,
+`PasswordEncoder`, `JWKSource`) configures *what a token contains* or *how secrets are handled*, not
+who may reach what. The list is short because there are no controllers yet; `anyRequest()
+.authenticated()` is currently covering the whole API surface.
+
+| Path | Access |
+|---|---|
+| `/oauth2/**`, `/.well-known/**`, `/userinfo` | chain 1 — `authenticated()` (client or user, depending on endpoint) |
+| `/actuator/health/**`, `/actuator/prometheus` | public |
+| `/swagger-ui.html`, `/swagger-ui/**`, `/v3/api-docs/**` | public in DEV/UAT; disabled entirely in PROD |
+| `/login` | never reaches `AuthorizationFilter` — the login-page filters short-circuit first |
+| everything else | `authenticated()` |
+
+> auth-service **does** depend on `springdoc-openapi-starter-webmvc-ui` (`build.gradle`), unlike
+> config-service and gateway-service. The generated spec is empty today because the service has no
+> `@RestController`s — the dependency and the rule above only start to matter once the registration
+> endpoint exists. At that point, reconsider whether this service's API shape should be public:
+> unlike the book catalog, it documents credential management. `application-prod.yml` disabling
+> springdoc is what keeps that from being a PROD concern either way.
 
 Dropping the `securityMatcher` makes chain 1 match every request; dropping `authorizeHttpRequests`
 removes the `AuthorizationFilter` entirely and leaves the service **fully open** — it fails open, not
