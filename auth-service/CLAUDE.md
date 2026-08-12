@@ -82,7 +82,7 @@ User login must go through authorization_code. Since there is no UI, `formLogin`
 authservice/
 ├── AuthServiceApplication.java
 ├── configs/            SecurityConfig, DevDataSeeder
-├── entities/           AppUser, CoreEntity, Authority (unused)
+├── entities/           AppUser, CoreEntity, RoleType
 ├── repositories/       AppUserRepository
 └── security/           SecurityUserDetailsManager, SecurityUserDetails
 ```
@@ -112,10 +112,29 @@ Credentials default to `admin` / `78`, overridable via `auth.dev.admin-username`
 
 ### Domain model
 
-```
-users (auth_schema)
-└── users_authorities   (@ElementCollection, EAGER, owner_id → users.id)
-```
+A single flat table — `users` in `auth_schema`. No join tables.
+
+**One role, and roles are the only authorization concept.** There are no free-form permissions —
+`READ` / `WRITE` were removed in `V2`. `RoleType` (`ADMIN`, `CUSTOMER`) is the complete vocabulary, a
+user holds exactly one of them, and a resource server writes `hasRole("ADMIN")`. Adding a constant to
+the enum is the only way to widen it, which is deliberate: the set of names a rule may reference is
+enumerable and compiler-checked.
+
+The role is a **plain column**, not a collection and not a FK to a role table. A user is never both
+`ADMIN` and `CUSTOMER`, and a role has no attributes worth joining for on every login. Two things
+follow that are worth knowing before "improving" it:
+
+- There is no `LazyInitializationException` hazard. A column is loaded with the row, so
+  `SecurityUserDetails` stays usable in the filter chain after `loadUserByUsername`'s transaction
+  closes — the reason the old `@ElementCollection` had to be EAGER.
+- Promote it to `@ManyToOne` only if roles ever gain metadata of their own. user-service models the
+  same two names that way (`SecurityRole` entity + FK) because it exposes CRUD over them; auth-service
+  has no such endpoint.
+
+`role` stores the **bare** name (`ADMIN`). The `ROLE_` prefix Spring Security expects lives in exactly
+one place — `SecurityUserDetails.ROLE_PREFIX` — applied on the way out and stripped on the way in by
+`SecurityUserDetailsManager`. Keep it that way; a prefix stored in the DB *and* added in code yields
+`ROLE_ROLE_ADMIN`.
 
 `AppUser` extends `CoreEntity` (`id` + `@Version version`), same base-class pattern as every other
 service. Sequence `user_seq`, `allocationSize = 50`.
@@ -126,6 +145,7 @@ service. Sequence `user_seq`, `allocationSize = 50`.
 | `password` | always a `{bcrypt}` hash — see the encoding convention below |
 | `created_at` | `@CreationTimestamp` |
 | `is_active` | `NOT NULL DEFAULT TRUE`; drives `SecurityUserDetails.isEnabled()` |
+| `role` | `NOT NULL`, `@Enumerated(STRING)` over `RoleType`; bare name, no `ROLE_` prefix |
 
 ### Security classes
 
@@ -177,11 +197,20 @@ an already-encoded password:
 The same rule applies to client secrets in `SecurityConfig` — `passwordEncoder.encode(...)`, never a
 literal `{noop}` value.
 
-### `@ElementCollection` is EAGER on purpose
+### `UserDetails` says collection; the domain says one
 
-`SecurityUserDetails` is read by the filter chain long after `loadUserByUsername`'s transaction closes.
-LAZY would throw `LazyInitializationException`. If a future query returns many `AppUser` rows, keep
-EAGER and add `@BatchSize` rather than reverting.
+`UserDetails.getAuthorities()` is a `Collection` — the framework's model, not this one. The boundary
+is `SecurityUserDetailsManager.toRole(...)`, and it is strict in both directions:
+
+- **Inbound** (`createUser` / `updateUser`): anything other than **exactly one** recognised role
+  throws `IllegalArgumentException` — none, several, or a name outside `RoleType`. Both spellings are
+  accepted, since Spring's own builder produces both: `.roles("ADMIN")` yields `ROLE_ADMIN`,
+  `.authorities("ADMIN")` yields the bare name.
+- **Outbound** (`SecurityUserDetails.getAuthorities()`): a one-element `List`.
+
+Rejecting rather than resolving is deliberate. A caller still passing `READ` / `WRITE`, or two roles,
+has a stale mental model; picking one for them would create an account with privileges nobody asked
+for and nothing pointing at why.
 
 ## SecurityConfig layout
 
@@ -210,25 +239,31 @@ Only the authorization_code flow authenticates a real user, so it is the only on
 ### The `authorities` claim
 
 By default an access token carries only `scope` — what the **client** was granted (`openid`,
-`profile`), not what the **user** may do. A resource server would therefore see `SCOPE_openid` and
-nothing else, and any rule like `hasAuthority("WRITE")` would 403 for a user who genuinely holds it.
+`profile`), not who the **user** is. A resource server would therefore see `SCOPE_openid` and
+nothing else, and any rule like `hasRole("ADMIN")` would 403 for a genuine admin.
 
-The `OAuth2TokenCustomizer<JwtEncodingContext>` bean copies the principal's authorities onto the
-access token as an `authorities` claim:
+The `OAuth2TokenCustomizer<JwtEncodingContext>` bean copies the principal's roles onto the access
+token as an `authorities` claim, prefix included:
 
 ```json
-{ "sub": "admin", "scope": ["openid","profile"], "authorities": ["ROLE_ADMIN","READ","WRITE"] }
+{ "sub": "admin", "scope": ["openid","profile"], "authorities": ["ROLE_ADMIN"] }
 ```
 
 - Guarded to `OAuth2TokenType.ACCESS_TOKEN` — the id_token is an identity document and doesn't need
   them.
 - Under `client_credentials` there is no user, so the claim is empty. That is correct, and it means
-  **machine clients cannot satisfy user-authority rules** on a resource server.
+  **machine clients cannot satisfy any role rule** on a resource server.
+
+**The claim is still named `authorities`, not `roles`, now that it carries only roles.** Its values
+are literal `GrantedAuthority` strings (`ROLE_ADMIN`), which is what a resource server's
+`JwtGrantedAuthoritiesConverter` reads verbatim. A claim named `roles` would invite dropping the
+prefix to match, and a claim of bare `ADMIN` fails every `hasRole("ADMIN")` check silently.
 
 > ⚠️ **This claim is half of a matched pair.** product-service's `JwtAuthenticationConverter` is
-> configured with `setAuthoritiesClaimName("authorities")` and an empty authority prefix. Rename the
-> claim here and every resource server silently starts seeing no authorities — the symptom is a 403
-> on a valid token, with nothing pointing at the cause. See `product-service/CLAUDE.md`.
+> configured with `setAuthoritiesClaimName("authorities")` and an **empty** authority prefix — empty
+> because the prefix is already on the value. Change the claim name here, or add a prefix on either
+> side, and every resource server silently stops matching — the symptom is a 403 on a valid token,
+> with nothing pointing at the cause. See `product-service/CLAUDE.md`.
 
 ### Secrets
 
@@ -255,8 +290,19 @@ default** — a missing secret must fail startup rather than fall back to a know
 
 ## Database
 
-Flyway migrations in `src/main/resources/db/migration/`. `V1__init_tables.sql` creates `user_seq`,
-`users`, `users_authorities`, and the case-insensitive unique index.
+Flyway migrations in `src/main/resources/db/migration/`:
+
+| Migration | Purpose |
+|---|---|
+| `V1__init_tables.sql` | `user_seq`, `users`, `users_authorities`, the case-insensitive unique index |
+| `V2__replace_authorities_with_roles.sql` | `users.role` column; collapses each user's `ROLE_*` rows to one value minus the prefix, drops `users_authorities` |
+
+> Two deliberate choices in `V2`'s backfill. It filters on an explicit `IN ('ROLE_ADMIN','ROLE_CUSTOMER')`
+> list rather than `LIKE 'ROLE_%'` — the column is read back through `@Enumerated(STRING)`, so a value
+> outside `RoleType` migrates cleanly and then throws on login instead of failing at migration time;
+> extend the list only with names that exist in the enum. And where a user held several, `ORDER BY`
+> keeps `ROLE_ADMIN` so nobody silently loses privileges, while a user with no role row at all falls
+> back to `CUSTOMER` — never up to `ADMIN`.
 
 `ddl-auto: validate` (inherited from the config repo) means entity/schema drift is fatal at startup.
 Hibernate validates **tables, columns, and types** — not constraints, indexes, or nullability. That
@@ -277,7 +323,9 @@ authorities path, including that the EAGER collection survives the closed transa
 `"sub": "admin"`.
 
 **Written but not yet exercised:** the `authorities` claim on the access token, and
-product-service's `hasAuthority("WRITE")` rules that consume it.
+product-service's `hasRole("ADMIN")` rules that consume it. The verification above predates the
+roles-only change (`V2`) — the `loadUserByUsername` → bcrypt → `isEnabled()` → roles path needs
+re-running against a migrated database.
 
 **Does not work / not done:**
 
@@ -291,17 +339,22 @@ product-service's `hasAuthority("WRITE")` rules that consume it.
 | RSA key regenerated per boot | Restarts invalidate all tokens; two instances sign with different keys. DEV-only — needs a keystore |
 | In-memory `RegisteredClientRepository` | Clients vanish on restart. Move to `JdbcRegisteredClientRepository` |
 | CSRF enabled, no API carve-out | Fine today (`formLogin` carries the token); will 403 Postman `POST`s once controllers exist |
-| Only product-service validates tokens | It is the first resource server (writes require `WRITE`); the other five business services plus the gateway are still unauthenticated |
+| Only product-service validates tokens | It is the first resource server (writes require the `ADMIN` role); the other five business services plus the gateway are still unauthenticated |
 
 ### Open architectural questions
 
-1. **Duplicate user store.** user-service owns `user_schema.users` + `security_role`; auth-service
-   owns `auth_schema.users` + `users_authorities`. Two systems of record for the same people, and
-   nothing reconciles them. This should be settled before more is built on either side.
+1. **Duplicate user store — now a duplicate *role* store too.** user-service owns
+   `user_schema.users` + `security_role`; auth-service owns `auth_schema.users` with its own `role`
+   column. Both define a `RoleType` enum with the same two constants and the same one-role-per-user
+   cardinality — the models now agree, which makes them easy to merge and equally easy to let drift
+   apart. Nothing reconciles them. Settle this before more is built on either side.
 2. **Do the other six services become resource servers?** If yes, each needs
    `spring-boot-starter-oauth2-resource-server` + `issuer-uri`, the gateway must forward tokens, and
-   every existing endpoint needs an authorization rule.
-3. **`Authority` enum (`READ` / `WRITE`) is unused** — authorities are free-form strings.
+   every existing endpoint needs an authorization rule — written as `hasRole(...)`, since roles are
+   the only thing a token carries.
+3. **`ADMIN` / `CUSTOMER` is a coarse vocabulary.** With permissions gone, any new distinction ("may
+   refund but not cancel") has to become a new `RoleType` constant. Watch for role explosion as the
+   remaining services are onboarded.
 
 ## Deployment
 

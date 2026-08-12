@@ -11,13 +11,13 @@ import org.springframework.security.web.SecurityFilterChain;
 
 /**
  * Resource-server configuration: the catalog is readable by anyone, but modifying it requires a
- * valid JWT whose holder has the {@code WRITE} authority.
+ * valid JWT whose holder has the {@code ADMIN} role.
  *
  * <p>Token validation is <b>local</b> — the JWKS is fetched from the issuer once and cached, so
  * auth-service is not called per request and is not in the hot path.
  *
  * <p>Rules are written default-deny: reads are listed explicitly and everything else falls through
- * to {@code hasAuthority("WRITE")}. A controller added later is therefore protected until someone
+ * to {@code hasRole("ADMIN")}. A controller added later is therefore protected until someone
  * deliberately opens it, rather than being public by accident.
  */
 @Configuration
@@ -41,8 +41,8 @@ public class SecurityConfig {
                         // Catalog reads are public: browsing books needs no account.
                         .requestMatchers(HttpMethod.GET, "/v1/books/**").permitAll()
                         // Everything else — POST / PUT / DELETE on every controller — needs a token
-                        // whose holder has WRITE.
-                        .anyRequest().hasAuthority("WRITE"))
+                        // whose holder is an ADMIN.
+                        .anyRequest().hasRole("ADMIN"))
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt
                         .jwtAuthenticationConverter(jwtAuthenticationConverter)));
 
@@ -53,10 +53,16 @@ public class SecurityConfig {
      * Maps the {@code authorities} claim that auth-service adds onto the access token.
      *
      * <p>The default converter reads {@code scope} and prefixes each value with {@code SCOPE_},
-     * which would yield {@code SCOPE_openid} / {@code SCOPE_profile} and never {@code WRITE}. Here
-     * the claim name is overridden and the prefix cleared, so the authorities arrive verbatim —
-     * {@code READ}, {@code WRITE}, {@code ROLE_ADMIN} — exactly as stored in
-     * {@code auth_schema.users_authorities}.
+     * which would yield {@code SCOPE_openid} / {@code SCOPE_profile} and never a role. Here the
+     * claim name is overridden and the prefix cleared, so the values arrive verbatim —
+     * {@code ROLE_ADMIN}, {@code ROLE_CUSTOMER} — already carrying the prefix auth-service applied
+     * when it read {@code auth_schema.users_roles}.
+     *
+     * <p><b>The empty prefix is load-bearing, and looks wrong at a glance.</b> It is tempting to
+     * "fix" it to {@code ROLE_} now that the claim holds only roles — but the claim values are
+     * already prefixed, so that would produce {@code ROLE_ROLE_ADMIN} and 403 every admin write.
+     * Either both sides carry the prefix (as here) or neither does; the two settings are a matched
+     * pair with auth-service's {@code OAuth2TokenCustomizer}.
      */
     @Bean
     public JwtAuthenticationConverter jwtAuthenticationConverter() {

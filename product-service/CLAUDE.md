@@ -67,14 +67,19 @@ Category (hierarchical)
 ## Security (OAuth2 Resource Server)
 
 product-service is the **first webstore service to validate tokens**. The catalog is readable by
-anyone; modifying it requires a JWT issued by auth-service whose holder has the `WRITE` authority.
+anyone; modifying it requires a JWT issued by auth-service whose holder has the `ADMIN` role.
 
 | Path | Access |
 |---|---|
 | `GET /v1/books/**` | public — all four controllers' reads |
 | `/actuator/health/**`, `/actuator/prometheus` | public |
 | `/swagger-ui/**`, `/v3/api-docs/**` | public (springdoc is disabled entirely in PROD) |
-| everything else — POST / PUT / DELETE | `hasAuthority("WRITE")` |
+| everything else — POST / PUT / DELETE | `hasRole("ADMIN")` |
+
+> **Roles are the only authorization concept platform-wide.** auth-service has no permissions —
+> `READ` / `WRITE` were removed there in `V2`, and a token carries exactly one role. Any rule added
+> here must therefore be a `hasRole(...)` over `ADMIN` / `CUSTOMER`; there is no finer grain to
+> reach for. See `auth-service/CLAUDE.md`.
 
 Configured in `configs/SecurityConfig.java`. The issuer comes from
 `spring.security.oauth2.resourceserver.jwt.issuer-uri` in the config repo's `product-service.yml`
@@ -84,7 +89,7 @@ Configured in `configs/SecurityConfig.java`. The issuer comes from
 called per request and is not in the request path.
 
 **Rules are default-deny.** Reads are listed explicitly and everything else falls through to
-`hasAuthority("WRITE")`. A controller added later is protected until someone deliberately opens it,
+`hasRole("ADMIN")`. A controller added later is protected until someone deliberately opens it,
 rather than public by accident. Keep it that way — don't invert to "permit everything, protect the
 writes by name".
 
@@ -97,25 +102,32 @@ pointing at CSRF.
 
 **The `JwtAuthenticationConverter` is not optional.** The default converter reads the `scope` claim
 and prefixes each value with `SCOPE_`, so a user token yields `SCOPE_openid` / `SCOPE_profile` and
-never `WRITE` — every write would 403. The bean overrides the claim name to `authorities` and clears
-the prefix so values arrive verbatim (`READ`, `WRITE`, `ROLE_ADMIN`). It only works because
+never a role — every write would 403. The bean overrides the claim name to `authorities` and clears
+the prefix so values arrive verbatim (`ROLE_ADMIN`, `ROLE_CUSTOMER`). It only works because
 auth-service's `OAuth2TokenCustomizer` puts that claim on the token in the first place; the two are
 a matched pair, and changing the claim name on one side breaks the other silently.
+
+**The empty authority prefix looks wrong and must stay.** Now that the claim holds only roles it is
+tempting to set the prefix to `ROLE_` — but auth-service already applies it before the value goes on
+the wire, so that yields `ROLE_ROLE_ADMIN` and 403s every admin write. Either both sides carry the
+prefix (as today) or neither does.
 
 **`issuer-uri` must equal the token's `iss` claim exactly**, or every request 401s. auth-service
 currently derives its issuer from the request host, so the `localhost:8076` default only lines up
 for host runs. See `auth-service/CLAUDE.md` — the issuer needs pinning before this works in Docker
 or through the gateway.
 
-**`client_credentials` tokens cannot write here.** They carry no user and therefore no authorities.
-If service-to-service writes are ever needed, either widen the rule to accept a scope
-(`hasAuthority("SCOPE_webstore.write")`) or give the client authorities of its own.
+**`client_credentials` tokens cannot write here.** They carry no user and therefore no role. If
+service-to-service writes are ever needed, either widen the rule to accept a scope
+(`hasAuthority("SCOPE_webstore.write")`) or give the client a role of its own.
 
 ### Diagnosing a rejected write
 
 - **401** — token missing, expired, malformed, or `iss` mismatch. Check `issuer-uri` first.
-- **403** — token is valid but carries no `WRITE`. Decode it: if there's no `authorities` claim the
-  problem is on the auth-service side; if the claim is there, the converter isn't wired.
+- **403** — token is valid but its holder isn't an `ADMIN`. Decode it: if there's no `authorities`
+  claim the problem is on the auth-service side; if the claim is there but reads `ROLE_CUSTOMER`, the
+  account genuinely lacks the role; if it reads `ROLE_ADMIN` and you still get 403, the converter
+  isn't wired (or has picked up a `ROLE_` prefix it shouldn't have).
 
 ## Key Implementation Details
 

@@ -87,9 +87,10 @@ The system consists of 8 microservices defined in `settings.gradle`:
 | **payment-service**   | 8078 | Payment processing and refunds                                                       | PostgreSQL (`payment_schema`)   |
 
 > ⚠️ **user-service and auth-service both store users.** user-service owns `user_schema.users` +
-> `security_role`; auth-service owns `auth_schema.users` + `users_authorities` with its own
-> credentials. Two systems of record for the same people, and nothing reconciles them — which
-> service owns credentials is an **open architectural decision**. See `auth-service/CLAUDE.md`.
+> `security_role`; auth-service owns `auth_schema.users` with its own credentials and its own `role`
+> column. Two systems of record for the same people — and, since both now define a `RoleType` enum
+> with the same constants, two definitions of the same roles. Nothing reconciles them; which service
+> owns credentials is an **open architectural decision**. See `auth-service/CLAUDE.md`.
 
 > Ports and schema names above are the **defaults** from `webstore-config/config/<service>.yml`. Multi-instance
 > deployments override `server.port` per instance to avoid a local port clash, but there is **no**
@@ -758,10 +759,14 @@ see [Local Infrastructure](#local-infrastructure)):
 
 - **Platform-wide security.** auth-service issues tokens and **product-service is the first (and so
   far only) consumer** — its `GET /v1/books/**` reads are public while writes require a token whose
-  holder has the `WRITE` authority (see `product-service/CLAUDE.md`). The other five business
+  holder has the `ADMIN` role (see `product-service/CLAUDE.md`). The other five business
   services and the gateway are still entirely unauthenticated. Extending this means adding
   `spring-boot-starter-oauth2-resource-server` + `issuer-uri` to each remaining service, a
   `JwtAuthenticationConverter` reading the `authorities` claim, and per-endpoint rules.
+
+  **Authorization is roles-only.** A user holds exactly one `RoleType` (`ADMIN` / `CUSTOMER`) and a
+  token carries just that; there are no permissions such as `READ` / `WRITE`. Every rule is a
+  `hasRole(...)`. See `auth-service/CLAUDE.md`.
 - **auth-service itself is incomplete** — no controllers (so users can only be created by the
   dev-profile `DevDataSeeder`, never under `uat`/`prod`), no tests, issuer unpinned, ephemeral
   signing key, in-memory client registry. See `auth-service/CLAUDE.md`.

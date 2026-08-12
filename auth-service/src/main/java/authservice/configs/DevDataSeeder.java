@@ -40,9 +40,11 @@ public class DevDataSeeder {
                 return;
             }
 
+            // roles(...) — not authorities(...) — so the value arrives as ROLE_ADMIN, the spelling
+            // SecurityUserDetailsManager maps back onto RoleType.ADMIN.
             userDetailsManager.createUser(User.withUsername(username)
                     .password(password)
-                    .authorities("ROLE_ADMIN", "READ", "WRITE")
+                    .roles("ADMIN")
                     .build());
 
             log.warn("Dev seed: created user '{}' with a development password. "

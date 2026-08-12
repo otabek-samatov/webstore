@@ -13,10 +13,15 @@ It is a plain CRUD service — no Kafka, no outbound REST calls, no outbox/inbox
 - **Base package:** `userservice`
 
 > ⚠️ **Overlaps with auth-service.** This service has a `users` table with `user_name` / `password` /
-> `is_active` and a `security_role` table. auth-service now has its own `users` +
-> `users_authorities` in `auth_schema`, with its own credentials. **Two systems of record for the
-> same people, and nothing reconciles them.** Before adding authentication behaviour here, check
+> `is_active` and a `security_role` table. auth-service has its own `users` in `auth_schema`, with
+> its own credentials and its own `role` column. **Two systems of record for the same people, and
+> nothing reconciles them.** Before adding authentication behaviour here, check
 > `auth-service/CLAUDE.md` — which service owns credentials is an open decision.
+>
+> Both services now define a `RoleType` enum with the same constants (`ADMIN`, `CUSTOMER`) and the
+> same one-role-per-user cardinality. The two happen to agree today; nothing keeps them in step.
+> auth-service stores its role as an enum column rather than a `SecurityRole` entity — it has no
+> equivalent of this service's `SecurityRoleController`, so there was nothing to join for.
 
 ## Build and Run
 

@@ -7,9 +7,6 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
 
 @Getter
 @Setter
@@ -34,34 +31,27 @@ public class AppUser extends CoreEntity {
     @Column(name = "is_active")
     private Boolean isActive;
 
-    @Getter(AccessLevel.NONE)
-    @Setter(AccessLevel.NONE)
-    @ElementCollection(fetch = FetchType.EAGER)
-    @Column(name = "authority")
-    @CollectionTable(name = "users_authorities", joinColumns = @JoinColumn(name = "owner_id"))
-    private Set<String> authorities = new LinkedHashSet<>();
+    /**
+     * The user's role — the only authorization state an account carries, and exactly one of them.
+     *
+     * <p>A plain column rather than a collection or a FK to a role table: a user is never both
+     * {@code ADMIN} and {@code CUSTOMER}, and a role has no attributes of its own worth joining for
+     * on every login. Promote it to a {@code @ManyToOne} only if roles ever gain metadata.
+     *
+     * <p>Stored as {@code STRING}, not ordinal — the DB holds {@code ADMIN}, so reordering
+     * {@link RoleType} cannot silently reassign anyone. Being a column on {@code users}, it is
+     * always loaded with the row, so {@code SecurityUserDetails} stays usable in the filter chain
+     * after {@code loadUserByUsername}'s transaction closes.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role", nullable = false, length = 50)
+    private RoleType role;
 
     public void setUserName(String userName) {
         if (this.userName != null) {
             throw new IllegalStateException("Username cannot be changed once set");
         }
         this.userName = userName;
-    }
-
-    public void setAuthorities(List<String> authorities) {
-        this.authorities = new LinkedHashSet<>(authorities);
-    }
-
-    public void addAuthority(String authority) {
-        authorities.add(authority);
-    }
-
-    public void removeAuthority(String authority) {
-        authorities.remove(authority);
-    }
-
-    public Set<String> getAuthorities() {
-        return Set.copyOf(authorities);
     }
 
 }

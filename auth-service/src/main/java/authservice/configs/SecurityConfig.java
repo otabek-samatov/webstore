@@ -124,17 +124,24 @@ public class SecurityConfig {
     }
 
     /**
-     * Copies the authenticated user's authorities into an {@code authorities} claim on the access
-     * token.
+     * Copies the authenticated user's roles into an {@code authorities} claim on the access token,
+     * in Spring Security's own spelling — {@code RoleType.ADMIN} reaches the wire as
+     * {@code ROLE_ADMIN}.
      *
      * <p>Without this a token carries only {@code scope} (e.g. {@code openid}, {@code profile}),
-     * which describes what the <em>client</em> was granted — not what the <em>user</em> may do. A
+     * which describes what the <em>client</em> was granted — not who the <em>user</em> is. A
      * resource server would see {@code SCOPE_openid} and nothing else, so any rule like
-     * {@code hasAuthority("WRITE")} would always 403 even for a user who genuinely holds it.
+     * {@code hasRole("ADMIN")} would always 403 even for a genuine admin.
+     *
+     * <p>The claim keeps the name {@code authorities} even though it now carries only roles: its
+     * values are still literal {@code GrantedAuthority} strings, prefix included, which is exactly
+     * what a resource server's {@code JwtGrantedAuthoritiesConverter} expects to read verbatim.
+     * Renaming it to {@code roles} would invite stripping the prefix too, and a claim of bare
+     * {@code ADMIN} silently fails every {@code hasRole("ADMIN")} check.
      *
      * <p>Only access tokens are customized; the id_token is an identity document and doesn't need
      * them. Under {@code client_credentials} there is no user, so the claim comes out empty — which
-     * is correct: a machine client holds no user authorities.
+     * is correct: a machine client holds no roles, and therefore cannot satisfy any role rule.
      */
     @Bean
     public OAuth2TokenCustomizer<JwtEncodingContext> jwtTokenCustomizer() {
@@ -142,10 +149,10 @@ public class SecurityConfig {
             if (!OAuth2TokenType.ACCESS_TOKEN.equals(context.getTokenType())) {
                 return;
             }
-            Set<String> authorities = context.getPrincipal().getAuthorities().stream()
+            Set<String> roles = context.getPrincipal().getAuthorities().stream()
                     .map(GrantedAuthority::getAuthority)
                     .collect(Collectors.toSet());
-            context.getClaims().claim("authorities", authorities);
+            context.getClaims().claim("authorities", roles);
         };
     }
 

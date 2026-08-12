@@ -1,6 +1,7 @@
 package authservice.security;
 
 import authservice.entities.AppUser;
+import authservice.entities.RoleType;
 import authservice.repositories.AppUserRepository;
 import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -17,6 +18,9 @@ import org.springframework.security.provisioning.UserDetailsManager;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+
+import java.util.Arrays;
+import java.util.Collection;
 
 /**
  * JPA-backed {@link UserDetailsManager} over {@link AppUser}.
@@ -62,7 +66,7 @@ public class SecurityUserDetailsManager implements UserDetailsManager {
         AppUser appUser = new AppUser();
         appUser.setUserName(user.getUsername());
         appUser.setPassword(passwordEncoder.encode(rawPassword));
-        appUser.setAuthorities(user.getAuthorities().stream().map(GrantedAuthority::getAuthority).toList());
+        appUser.setRole(toRole(user.getAuthorities()));
         appUser.setIsActive(user.isEnabled());
 
         try {
@@ -79,9 +83,42 @@ public class SecurityUserDetailsManager implements UserDetailsManager {
         AppUser appUser = appUserRepository.findByUserNameIgnoreCase(user.getUsername())
                 .orElseThrow(() -> new UsernameNotFoundException("Username not found: " + user.getUsername()));
 
-        appUser.setAuthorities(user.getAuthorities().stream().map(GrantedAuthority::getAuthority).toList());
+        appUser.setRole(toRole(user.getAuthorities()));
         appUser.setIsActive(user.isEnabled());
         appUserRepository.save(appUser);
+    }
+
+    /**
+     * Narrows the granted authorities on an incoming {@link UserDetails} to the single
+     * {@link RoleType} an account may hold.
+     *
+     * <p>{@code UserDetails} models authorities as a collection, but this domain does not: a user is
+     * exactly one of {@link RoleType}. Anything other than one recognised role — none, several, or a
+     * name outside the enum — is rejected rather than quietly resolved. A caller still passing
+     * {@code READ} / {@code WRITE}, or two roles, has a stale mental model, and picking one for them
+     * would create an account with privileges nobody asked for and nothing pointing at why.
+     *
+     * <p>Both spellings are accepted, because Spring's own builder produces both:
+     * {@code User.withUsername(…).roles("ADMIN")} yields {@code ROLE_ADMIN} while
+     * {@code .authorities("ADMIN")} yields the bare name.
+     */
+    private static RoleType toRole(Collection<? extends GrantedAuthority> authorities) {
+        if (authorities.size() != 1) {
+            throw new IllegalArgumentException("A user must have exactly one role, but "
+                    + authorities.size() + " were supplied: " + authorities);
+        }
+
+        String name = authorities.iterator().next().getAuthority();
+        if (name.startsWith(SecurityUserDetails.ROLE_PREFIX)) {
+            name = name.substring(SecurityUserDetails.ROLE_PREFIX.length());
+        }
+
+        try {
+            return RoleType.valueOf(name);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("Unknown role: " + name + ". Valid roles are "
+                    + Arrays.toString(RoleType.values()), ex);
+        }
     }
 
     @Override
@@ -132,8 +169,8 @@ public class SecurityUserDetailsManager implements UserDetailsManager {
         AppUser appUser = appUserRepository.findByUserNameIgnoreCase(username)
                 .orElseThrow(() -> new UsernameNotFoundException("Username not found: " + username));
 
-        // AppUser.authorities is an EAGER @ElementCollection, so SecurityUserDetails stays usable in the
-        // filter chain after this transaction closes.
+        // AppUser.role is a plain column, loaded with the row, so SecurityUserDetails stays usable in
+        // the filter chain after this transaction closes.
         return new SecurityUserDetails(appUser);
     }
 }
