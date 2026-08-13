@@ -51,6 +51,7 @@ Entities (JPA/Hibernate) → PostgreSQL
 ```
 userservice/
 ├── UserServiceApplication.java
+├── configs/        SecurityConfig
 ├── controllers/    UserController, UserProfileController, SecurityRoleController,
 │                   RestExceptionHandler
 ├── managers/       UserManager, UserProfileManager, SecurityRoleManager
@@ -96,6 +97,56 @@ try/catch in controllers.
 **Swagger UI:** `http://localhost:8075/swagger-ui.html` · **OpenAPI JSON:** `/v3/api-docs`
 (springdoc is enabled in DEV and UAT, disabled in PROD via the config repo's `application-prod.yml`).
 
+## Security (OAuth2 Resource Server)
+
+**Every endpoint requires `ADMIN` or `SERVICE`.** Unlike product-service — which publishes its
+catalog reads — nothing here is public: accounts, profiles, addresses, and role assignments are
+personal data.
+
+| Path | Access |
+|---|---|
+| `/actuator/health/**`, `/actuator/prometheus` | public |
+| `/swagger-ui/**`, `/v3/api-docs/**` | public (springdoc is disabled entirely in PROD) |
+| everything else — all three controllers | `hasAnyRole("ADMIN", "SERVICE")` |
+
+The two infrastructure carve-outs are not optional: the Compose healthcheck curls
+`/actuator/health` and Prometheus scrapes `/actuator/prometheus` every 15 s.
+
+**No existing traffic breaks.** No webstore service makes REST calls to user-service today — unlike
+inventory-service and payment-service, which order-service calls and can no longer reach. `SERVICE`
+is granted anyway, for symmetry and for the first caller that needs it (an order enriching a
+shipping address, say).
+
+Configured in `configs/SecurityConfig.java` — a **new package**; this service had no `configs/`
+before. The issuer comes from `spring.security.oauth2.resourceserver.jwt.issuer-uri` in the config
+repo's `user-service.yml` (`${AUTH_ISSUER_URI:http://localhost:8076}`). Validation is **local** — the
+JWKS is discovered once, lazily, and cached; auth-service is not in the request path.
+
+### Two consequences of the blanket rule
+
+**A `CUSTOMER` cannot read their own profile.** `GET /v1/users/profile/{id}` needs `ADMIN` or
+`SERVICE`, so there is no self-service path. The fix, when wanted, is an **ownership** rule rather
+than another role — match the caller's identity against the requested id. That is what
+product-service's `authUserId` claim exists for, but mind the mismatch first: the claim carries
+`auth_schema.users.id`, and this service's ids come from `user_schema.users`. Those are different
+numbers for the same person until the stores are reconciled.
+
+**Nobody can self-register.** `POST /v1/users/user` is admin-only. Consistent with the platform
+today — auth-service has no registration endpoint either, and its only account comes from the
+dev-profile seeder — but the two have to be solved together rather than separately. See the
+duplicate-user-store question in `auth-service/CLAUDE.md`.
+
+> ⚠️ **`PUT /v1/users/role/{userID}` does not change what a token says.** Token roles come from
+> `auth_schema.users.role`; `security_role` here is a separate record of the same idea. Until the
+> stores are reconciled, that endpoint edits a local copy — a user promoted to `ADMIN` here still
+> gets `ROLE_CUSTOMER` in their next token, and every `hasRole("ADMIN")` rule across the platform
+> keeps refusing them.
+
+The claim-name + empty-prefix pair is identical to the other resource servers', and carries the
+identical trap: values arrive already prefixed (`ROLE_ADMIN`), so setting the prefix to `ROLE_`
+yields `ROLE_ROLE_ADMIN` and 403s everything. See `auth-service/CLAUDE.md` for the full matched-pair
+explanation.
+
 ## Database
 
 Flyway migrations in `src/main/resources/db/migration/`:
@@ -122,6 +173,8 @@ an applied migration; add a new one with the next version number.
 ## Spring Boot 4 notes
 
 - Uses **`spring-boot-starter-webmvc`** (renamed from `spring-boot-starter-web` in Boot 4).
+- Security comes from **`spring-boot-starter-oauth2-resource-server`** (not `-starter-security` — the
+  resource-server starter pulls in `spring-security-config`/`-web` plus `-oauth2-jose`).
 - Flyway via **`spring-boot-starter-flyway`** + `flyway-database-postgresql` — `flyway-core` alone no
   longer auto-configures migrations.
 - No Kafka and no direct Jackson use, so the Jackson 2 → 3 migration does not affect this service.

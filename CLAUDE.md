@@ -760,13 +760,13 @@ see [Local Infrastructure](#local-infrastructure)):
 
 **Not Yet Implemented:**
 
-- **Platform-wide security.** auth-service issues tokens; **product-service, inventory-service and
-  payment-service validate them.** product-service keeps `GET /v1/books/**` public and gates writes
-  on `ADMIN` / `SERVICE`; inventory-service and payment-service require `ADMIN` / `SERVICE` on
-  **every** endpoint (see their `CLAUDE.md` files). user-service, order-service and the gateway are
-  still entirely unauthenticated. Extending this means adding
-  `spring-boot-starter-oauth2-resource-server` + `issuer-uri` to each remaining service, a
-  `JwtAuthenticationConverter` reading the `authorities` claim, and per-endpoint rules.
+- **Platform-wide security.** auth-service issues tokens; **product-, inventory-, payment- and
+  user-service validate them.** product-service keeps `GET /v1/books/**` public and gates writes on
+  `ADMIN` / `SERVICE`; the other three require `ADMIN` / `SERVICE` on **every** endpoint (see their
+  `CLAUDE.md` files). **order-service and the gateway** are the two that remain unauthenticated.
+  Finishing this means adding `spring-boot-starter-oauth2-resource-server` + `issuer-uri` to
+  order-service, a `JwtAuthenticationConverter` reading the `authorities` claim, and per-endpoint
+  rules — plus deciding whether the gateway validates tokens or merely forwards them.
 
   > ⚠️ **order-service can no longer reach inventory-service or payment-service.** Its `RestClient`
   > sends no `Authorization` header, so all three outbound calls now 401 and **order creation is
