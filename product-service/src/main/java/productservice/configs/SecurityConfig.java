@@ -5,9 +5,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
-import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import productservice.security.WebstoreJwtAuthenticationConverter;
 
 /**
  * Resource-server configuration: the catalog is readable by anyone, but modifying it requires a
@@ -25,7 +24,7 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http,
-                                           JwtAuthenticationConverter jwtAuthenticationConverter) throws Exception {
+                                           WebstoreJwtAuthenticationConverter jwtAuthenticationConverter) throws Exception {
         http
                 // Stateless bearer-token API: nothing is attached automatically by the browser, so
                 // CSRF has no attack surface here. Leaving it enabled would reject every
@@ -49,31 +48,5 @@ public class SecurityConfig {
                         .jwtAuthenticationConverter(jwtAuthenticationConverter)));
 
         return http.build();
-    }
-
-    /**
-     * Maps the {@code authorities} claim that auth-service adds onto the access token.
-     *
-     * <p>The default converter reads {@code scope} and prefixes each value with {@code SCOPE_},
-     * which would yield {@code SCOPE_openid} / {@code SCOPE_profile} and never a role. Here the
-     * claim name is overridden and the prefix cleared, so the values arrive verbatim —
-     * {@code ROLE_ADMIN}, {@code ROLE_CUSTOMER}, {@code ROLE_SERVICE} — already carrying the prefix
-     * auth-service applied, whether the role came from a user row or a client registration.
-     *
-     * <p><b>The empty prefix is load-bearing, and looks wrong at a glance.</b> It is tempting to
-     * "fix" it to {@code ROLE_} since the claim holds only roles — but the claim values are already
-     * prefixed, so that would produce {@code ROLE_ROLE_ADMIN} and 403 every admin write. Either both
-     * sides carry the prefix (as here) or neither does; the two settings are a matched pair with
-     * auth-service's {@code OAuth2TokenCustomizer}.
-     */
-    @Bean
-    public JwtAuthenticationConverter jwtAuthenticationConverter() {
-        JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
-        authoritiesConverter.setAuthoritiesClaimName("authorities");
-        authoritiesConverter.setAuthorityPrefix("");
-
-        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
-        return converter;
     }
 }

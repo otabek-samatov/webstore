@@ -1,6 +1,9 @@
 package authservice.configs;
 
+import authservice.entities.AppUser;
 import authservice.entities.RoleType;
+import authservice.repositories.AppUserRepository;
+import authservice.security.SecurityUserDetails;
 import authservice.security.SecurityUserDetailsManager;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
@@ -14,6 +17,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -36,6 +40,7 @@ import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -48,6 +53,26 @@ public class SecurityConfig {
      * {@code JwtGrantedAuthoritiesConverter} — see the customizer below before renaming it.
      */
     private static final String AUTHORITIES_CLAIM = "authorities";
+
+    /**
+     * Name of the claim carrying the principal's {@code auth_schema.users.id}, read by
+     * product-service's {@code WebstoreJwtAuthenticationConverter} into {@code CustomAuthentication}.
+     *
+     * <p><b>Named after its store, deliberately.</b> user-service owns a second {@code users} table
+     * whose ids are different numbers for the same people, and nothing reconciles the two — see the
+     * open architectural questions in this service's {@code CLAUDE.md}. A claim called
+     * {@code userId} would assert a canonical platform-wide id that does not exist yet; this name
+     * states which store the value came from, so it never has to be un-baked out of tokens already
+     * in circulation. Rename it once that question is settled, not before.
+     *
+     * <p><b>Minted as a string, not a number.</b> A JSON integer arrives as {@code Integer} or
+     * {@code Long} depending on magnitude, and {@code Jwt.getClaim} casts unchecked — so a numeric
+     * claim would work until the sequence crossed {@code Integer.MAX_VALUE} and then throw
+     * {@code ClassCastException}. {@code getClaimAsString} converts rather than casts.
+     *
+     * <p>Set only under user-bearing grants; see the customizer below.
+     */
+    private static final String AUTH_USER_ID_CLAIM = "authUserId";
 
     /**
      * Key under which a machine client's {@link RoleType} is stored in its {@link ClientSettings}.
@@ -166,6 +191,9 @@ public class SecurityConfig {
      * Renaming it to {@code roles} would invite stripping the prefix too, and a claim of bare
      * {@code ADMIN} silently fails every {@code hasRole("ADMIN")} check.
      *
+     * <p>Also adds an {@link #AUTH_USER_ID_CLAIM} carrying {@code users.id} — user-bearing grants
+     * only, since {@code client_credentials} has no user behind it.
+     *
      * <p>Only access tokens are customized; the id_token is an identity document and doesn't need
      * them.
      *
@@ -176,7 +204,7 @@ public class SecurityConfig {
      * service-to-service token would carry no role and 403 on every protected endpoint.
      */
     @Bean
-    public OAuth2TokenCustomizer<JwtEncodingContext> jwtTokenCustomizer() {
+    public OAuth2TokenCustomizer<JwtEncodingContext> jwtTokenCustomizer(AppUserRepository users) {
         return context -> {
             if (!OAuth2TokenType.ACCESS_TOKEN.equals(context.getTokenType())) {
                 return;
@@ -190,10 +218,40 @@ public class SecurityConfig {
                 roles = context.getPrincipal().getAuthorities().stream()
                         .map(GrantedAuthority::getAuthority)
                         .collect(Collectors.toSet());
+                // Inside the user branch on purpose: there is no user under client_credentials, so a
+                // claim added at the outer level would put "authUserId": null on every machine token
+                // and NPE consumers that unbox it — on service-to-service traffic only.
+                authUserId(users, context.getPrincipal())
+                        .ifPresent(id -> context.getClaims().claim(AUTH_USER_ID_CLAIM, id));
             }
 
             context.getClaims().claim(AUTHORITIES_CLAIM, roles);
         };
+    }
+
+    /**
+     * The authenticated user's {@code users.id}, as a string, or empty if the row cannot be found.
+     *
+     * <p><b>Read from the repository rather than off the principal.</b> Casting
+     * {@code context.getPrincipal().getPrincipal()} to {@link SecurityUserDetails} would reach the
+     * same row without a query, and works today only because
+     * {@code InMemoryOAuth2AuthorizationService} holds the principal as a live object. Under the
+     * planned {@code JdbcOAuth2AuthorizationService} the authorization is serialized to JSON, and
+     * {@code SecurityUserDetails} has no Jackson mixin — the cast would stop matching and the claim
+     * would silently vanish from every token. {@code getName()} survives that serialization, so
+     * looking the row up by name does too.
+     *
+     * <p>The query runs once per token issued, not per request, and the lookup is index-backed
+     * (<code>uc_users_user_name_ci</code>).
+     *
+     * <p>Empty is treated as "no claim" rather than an error: the account was deleted between login
+     * and token issue. A token with no id is one a resource server rejects for lack of a user, which
+     * is the right outcome — better than a token asserting an id that no longer resolves.
+     */
+    private static Optional<String> authUserId(AppUserRepository users, Authentication principal) {
+        return users.findByUserNameIgnoreCase(principal.getName())
+                .map(AppUser::getId)
+                .map(String::valueOf);
     }
 
     /**

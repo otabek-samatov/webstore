@@ -303,11 +303,47 @@ are literal `GrantedAuthority` strings (`ROLE_ADMIN`), which is what a resource 
 `JwtGrantedAuthoritiesConverter` reads verbatim. A claim named `roles` would invite dropping the
 prefix to match, and a claim of bare `ADMIN` fails every `hasRole("ADMIN")` check silently.
 
-> ⚠️ **This claim is half of a matched pair.** product-service's `JwtAuthenticationConverter` is
-> configured with `setAuthoritiesClaimName("authorities")` and an **empty** authority prefix — empty
-> because the prefix is already on the value. Change the claim name here, or add a prefix on either
-> side, and every resource server silently stops matching — the symptom is a 403 on a valid token,
-> with nothing pointing at the cause. See `product-service/CLAUDE.md`.
+> ⚠️ **This claim is half of a matched pair.** product-service's
+> `WebstoreJwtAuthenticationConverter` is configured with `setAuthoritiesClaimName("authorities")`
+> and an **empty** authority prefix — empty because the prefix is already on the value. Change the
+> claim name here, or add a prefix on either side, and every resource server silently stops matching
+> — the symptom is a 403 on a valid token, with nothing pointing at the cause. See
+> `product-service/CLAUDE.md`.
+
+### The `authUserId` claim
+
+The same customizer adds `authUserId`, carrying `auth_schema.users.id`:
+
+```json
+{ "sub": "admin", "authUserId": "1", "scope": ["openid","profile"], "authorities": ["ROLE_ADMIN"] }
+```
+
+**Set inside the user branch, not alongside `authorities`.** `client_credentials` has no user behind
+it, so a claim added at the outer level would put `"authUserId": null` on every machine token — and
+NPE consumers that unbox it, on service-to-service traffic only, which is exactly the traffic manual
+testing doesn't cover.
+
+**Named after its store, deliberately.** user-service owns a second `users` table whose ids are
+different numbers for the same people (open question #1 below). A claim called `userId` would assert
+a canonical platform-wide id that doesn't exist yet; this name says which store the value came from,
+so it never has to be un-baked out of tokens already in circulation. Rename it once that question is
+settled — not before.
+
+**A string, not a number.** A JSON integer arrives as `Integer` or `Long` depending on magnitude and
+`Jwt.getClaim` casts unchecked, so a numeric claim would work until the sequence crossed
+`Integer.MAX_VALUE` and then throw `ClassCastException` on the consumer side.
+
+**Read from `AppUserRepository`, not off the principal.** Casting
+`context.getPrincipal().getPrincipal()` to `SecurityUserDetails` reaches the same row without a
+query, and works today only because `InMemoryOAuth2AuthorizationService` holds the principal as a
+live object. Under the planned `JdbcOAuth2AuthorizationService` the authorization is serialized to
+JSON with no Jackson mixin for `SecurityUserDetails` — the cast would stop matching and the claim
+would silently vanish from every token. `getName()` survives that serialization, so a lookup by name
+does too. One index-backed query per token issued, not per request.
+
+A missing row yields **no claim** rather than an error — the account was deleted between login and
+token issue, and a token with no id is one a resource server rejects for lack of a user. Better than
+a token asserting an id that no longer resolves.
 
 ### Secrets
 
@@ -366,8 +402,8 @@ authorities path, including that the EAGER collection survives the closed transa
 `PasswordEncoder`); and the full authorization_code + PKCE flow issues a user token with
 `"sub": "admin"`.
 
-**Written but not yet exercised:** the `authorities` claim on the access token, and
-product-service's `hasRole("ADMIN")` rules that consume it. The verification above predates the
+**Written but not yet exercised:** the `authorities` and `authUserId` claims on the access token, and
+product-service's `hasRole("ADMIN")` rules and `CustomAuthentication` that consume them. The verification above predates the
 roles-only change (`V2`) — the `loadUserByUsername` → bcrypt → `isEnabled()` → roles path needs
 re-running against a migrated database.
 

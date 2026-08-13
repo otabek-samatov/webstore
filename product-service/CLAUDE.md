@@ -115,6 +115,62 @@ configured value at decoder-build time.
 (Boot wraps it in a `SupplierJwtDecoder`, so the app still starts if auth-service is down), and the
 JWKS is cached after that — auth-service is not called per request and is not in the request path.
 
+### The `Authentication` in the security context
+
+`security/WebstoreJwtAuthenticationConverter` turns the validated `Jwt` into a
+`security/CustomAuthentication` — a `JwtAuthenticationToken` subclass carrying the `authUserId`
+claim. Two classes, two jobs:
+
+| Class | Job |
+|---|---|
+| `WebstoreJwtAuthenticationConverter` | `Converter<Jwt, CustomAuthentication>`; owns the claim names and the authorities mapping |
+| `CustomAuthentication` | `extends JwtAuthenticationToken`; adds `getAuthUserId()` |
+
+**It is deliberately not named `JwtAuthenticationConverter`** — that is the Spring class it replaces,
+and two types with one name in the same config is how an import gets silently swapped.
+
+**The authorities mapping is delegated to `JwtGrantedAuthoritiesConverter`, not reimplemented.**
+Reading the claim by hand (`jwt.getClaimAsStringList("authorities")`) costs four lines and loses
+three behaviours: an absent claim becomes an NPE → **500** instead of an empty collection → **403**;
+a claim arriving as a delimited string instead of an array is mishandled; and the claim name, prefix
+and delimiter stop living in one recognisable place. The empty-claim case is one this system
+*deliberately produces* — a machine client with no `settings.client.role` is meant to fail closed —
+so that first row is a live path, not a hypothetical.
+
+**Reading the id.** `getPrincipal()` still returns the `Jwt` — `JwtAuthenticationToken`'s
+constructor passes the token in as token, principal *and* credentials, and subclassing doesn't
+change it. So reaching the typed accessor means casting the `Authentication`:
+
+```java
+@PostMapping
+public ResponseEntity<BookDto> create(@RequestBody BookDto dto, Authentication authentication) {
+    Long authUserId = ((CustomAuthentication) authentication).getAuthUserId();
+}
+```
+
+Three null/type cases, all live:
+
+- **Public reads.** `GET /v1/books/**` is `permitAll`, so an anonymous request carries an
+  `AnonymousAuthenticationToken` whose principal is the string `"anonymousUser"`. The cast above
+  throws `ClassCastException` there — use `instanceof` on read endpoints.
+- **Machine tokens.** `client_credentials` names no user, so `getAuthUserId()` returns `null` by
+  design. This service accepts those on every write, and unboxing to `long` NPEs on exactly that
+  traffic — the traffic manual testing doesn't cover.
+- **Off-request threads.** `SecurityContextHolder` is a `ThreadLocal`; it is empty in `@Scheduled`,
+  `@Async`, and any thread the app spawns.
+
+**The claim is minted and read as a string, then parsed.** A JSON integer deserializes as `Integer`
+or `Long` depending on magnitude and `Jwt.getClaim` casts unchecked — a numeric claim would work
+until ids grew past `Integer.MAX_VALUE`, then throw `ClassCastException`. `getClaimAsString`
+converts rather than casts. A non-numeric value throws instead of degrading to `null`: it would mean
+the issuer changed the format, and that should fail loudly.
+
+> ⚠️ **`authUserId` is auth-service's id, not user-service's.** The two services own separate `users`
+> tables whose ids are different numbers for the same person, and nothing reconciles them. The claim
+> is named after its store precisely so this can't be forgotten — do not use it to look anything up
+> in `user_schema` until that is settled. See the open architectural questions in
+> `auth-service/CLAUDE.md`.
+
 **Rules are default-deny.** Reads are listed explicitly and everything else falls through to
 `hasAnyRole("ADMIN", "SERVICE")`. A controller added later is protected until someone deliberately
 opens it, rather than public by accident. Keep it that way — don't invert to "permit everything,
@@ -127,12 +183,13 @@ automatically by the browser, so CSRF has no attack surface. Leave it enabled an
 POST/PUT/DELETE returns **403 despite a perfectly valid token**, with nothing in the response
 pointing at CSRF.
 
-**The `JwtAuthenticationConverter` is not optional.** The default converter reads the `scope` claim
-and prefixes each value with `SCOPE_`, so a user token yields `SCOPE_openid` / `SCOPE_profile` and
-never a role — every write would 403. The bean overrides the claim name to `authorities` and clears
-the prefix so values arrive verbatim (`ROLE_ADMIN`, `ROLE_CUSTOMER`). It only works because
-auth-service's `OAuth2TokenCustomizer` puts that claim on the token in the first place; the two are
-a matched pair, and changing the claim name on one side breaks the other silently.
+**The converter is not optional.** The default converter reads the `scope` claim and prefixes each
+value with `SCOPE_`, so a user token yields `SCOPE_openid` / `SCOPE_profile` and never a role —
+every write would 403. `WebstoreJwtAuthenticationConverter` overrides the claim name to
+`authorities` and clears the prefix so values arrive verbatim (`ROLE_ADMIN`, `ROLE_CUSTOMER`). It
+only works because auth-service's `OAuth2TokenCustomizer` puts that claim on the token in the first
+place; the two are a matched pair, and changing the claim name on one side breaks the other
+silently.
 
 **The empty authority prefix looks wrong and must stay.** Now that the claim holds only roles it is
 tempting to set the prefix to `ROLE_` — but auth-service already applies it before the value goes on
