@@ -296,7 +296,7 @@ in the listener's single `@Transactional` boundary; the offset is committed afte
 > (`INSERT ... ON CONFLICT DO NOTHING`) would be the robust fix if the keying ever changes.
 
 **Configuration (`inbox.*`):** not set in `webstore-config` today — `InboxProperties` defaults apply.
-Override under `inbox:` in `C:\Projects\webstore-config\config\inventory-service.yml` and commit/push.
+Override under `inbox:` in `C:\Data\Projects\webstore-config\config\inventory-service.yml` and commit/push.
 
 <a id="id-generation"></a>## ID Generation
 

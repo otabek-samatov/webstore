@@ -795,8 +795,15 @@ business services validate them.** The rules differ by service:
 
 All five carve out `/actuator/health/**`, `/actuator/prometheus` and the springdoc paths (the first
 two are load-bearing: the Compose healthcheck and Prometheus scrape them), disable CSRF as stateless
-bearer-token APIs, and share the same `authorities`-claim converter — claim name `authorities`,
+bearer-token APIs, and configure their JWT converter identically — claim name `authorities`,
 **empty** authority prefix, matched with auth-service's `OAuth2TokenCustomizer`.
+
+> **Identical configuration, two different classes.** product-service uses its own
+> `WebstoreJwtAuthenticationConverter`, which lifts the `authUserId` claim into a typed
+> `CustomAuthentication`; the other four wire the plain Spring `JwtAuthenticationConverter`, since
+> nothing in them is user-scoped. There is no shared converter class or common module — the claim
+> name and empty prefix are simply repeated in each `SecurityConfig`, so a change to the claim has to
+> be made in five places plus auth-service.
 
 **Service-to-service calls are authenticated.** order-service is both a resource server and an
 OAuth2 **client**: its single `RestClient` carries a `client_credentials` token from

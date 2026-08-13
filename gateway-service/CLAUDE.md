@@ -51,6 +51,7 @@ fixed port); Docker Compose overrides them with env vars pointing at Compose DNS
 
 | External path   | Target property         | Host default            | Docker (env var value)          |
 |-----------------|-------------------------|-------------------------|---------------------------------|
+| `/auth/**`      | `AUTH_SERVICE_URL`      | `http://localhost:8076` | `http://auth-service:8076`      |
 | `/inventory/**` | `INVENTORY_SERVICE_URL` | `http://localhost:8074` | `http://inventory-service:8074` |
 | `/order/**`     | `ORDER_SERVICE_URL`     | `http://localhost:8077` | `http://order-service:8077`     |
 | `/payment/**`   | `PAYMENT_SERVICE_URL`   | `http://localhost:8078` | `http://payment-service:8078`   |
@@ -61,6 +62,42 @@ To add or change a route, edit `gateway-service.yml` in the config repo and comm
 Server reads from Git). Do not add routes to this service's source `application.yml`. If the new
 target needs a different host per environment, follow the same `${*_SERVICE_URL:...}` placeholder
 pattern and set the env var in `docker-compose.yml`.
+
+## Security
+
+**This service validates nothing.** It has no `spring-boot-starter-oauth2-resource-server`
+dependency and no `SecurityConfig` — every request is forwarded exactly as received, `Authorization`
+header included. auth-service issues tokens and all five business services validate them
+individually, so **the gateway is the last unauthenticated hop in the system.**
+
+Nothing is *exposed* by this: a request that reaches a business service without a valid token is
+rejected there. What it means is that a bad token travels the full extra hop before anyone looks at
+it, and that the gateway itself cannot make routing decisions based on who is calling.
+
+> **Open decision — validate here too, or keep forwarding?** Validating rejects bad tokens one hop
+> earlier and would let routes discriminate by role, at the cost of a second place the issuer has to
+> be kept in step. Forwarding keeps every authorization rule in one layer. Either way, `/auth/**`
+> needs the issuer pinned first — see below. See also the open questions in `auth-service/CLAUDE.md`.
+
+### ⚠️ Prefix stripping breaks `/auth/**`
+
+The `RewritePath` filter that makes every other route work is a genuine problem for this one. An
+authorization server advertises **its own URLs**, and auth-service currently derives its issuer from
+the incoming request rather than from a pinned value. Reached through the gateway it therefore
+publishes URLs that point back at the gateway path it can't serve — in
+`/.well-known/openid-configuration`, in the `iss` claim of every token it mints, and in the
+advertised JWKS URI.
+
+That matters beyond auth-service itself: the business services validate `iss` against their own
+`issuer-uri` (`${AUTH_ISSUER_URI:http://localhost:8076}`), so a token minted through the gateway
+carries an `iss` none of them accept, and every call 401s.
+
+- **Fix:** pin the issuer with an `AuthorizationServerSettings` bean in auth-service, set to the
+  external URL, and align every resource server's `issuer-uri` with it.
+- **Until then:** reach auth-service **directly on `localhost:8076`**, not through `/auth/**`.
+- `client_credentials` is the exception that works either way — a single POST to `/oauth2/token`
+  with no discovery hop and no redirects. Note the token it returns still carries the request-derived
+  `iss`, so it is only useful if that value happens to match what the target expects.
 
 ## Build & Run
 

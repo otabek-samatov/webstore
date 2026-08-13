@@ -72,7 +72,11 @@
       "Bash(cd C:/Data/Projects/webstore-config && cat config/payment-service.yml)",
       "Bash(cat /c/Data/Projects/webstore-config/config/gateway-service.yml 2>/dev/null || echo \"config repo not found at that path\")",
       "Bash(grep -rn \"no longer reach\\\\|broken end to end\\\\|order creation is broken\\\\|sends no.*Authorization\\\\|no \\\\`Authorization\\\\` header\" --include=\"*.md\" . C:/Data/Projects/webstore-config/)",
-      "Bash(grep -rn \"no longer reach\\\\|broken end to end\\\\|order creation is broken\\\\|bare \\\\`RestClient\\\\`\\\\|no \\\\`Authorization\\\\` header\\\\|until it sends a token\\\\|until order-service sends\\\\|will authenticate once\\\\|unfinished half\\\\|is the first resource server\" --include=\"*.md\" . C:/Data/Projects/webstore-config/)"
+      "Bash(grep -rn \"no longer reach\\\\|broken end to end\\\\|order creation is broken\\\\|bare \\\\`RestClient\\\\`\\\\|no \\\\`Authorization\\\\` header\\\\|until it sends a token\\\\|until order-service sends\\\\|will authenticate once\\\\|unfinished half\\\\|is the first resource server\" --include=\"*.md\" . C:/Data/Projects/webstore-config/)",
+      "Bash(echo \"=== WRONG PATH \\(C:\\\\\\\\Projects, missing Data\\) ===\")",
+      "Bash(grep -rn 'C:\\\\\\\\Projects\\\\\\\\webstore-config' --include=CLAUDE.md .)",
+      "Bash(grep -rln 'C:\\\\\\\\Data\\\\\\\\Projects\\\\\\\\webstore-config' --include=CLAUDE.md .)",
+      "Bash(grep -nA6 'refund/payment' payment-service/src/main/java/paymentservice/controllers/PaymentController.java)"
     ]
   }
 }

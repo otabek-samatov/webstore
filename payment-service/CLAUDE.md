@@ -158,7 +158,7 @@ ignores `failed`). The outbox row uses `aggregateType = "Payment"`, `aggregateId
 `eventType = actionType`, `topicName = ${topic.payment.status}`, and the Kafka message key is the `orderId`.
 
 **Outbox `outbox.*` configuration** (defaults from `OutboxProperties`; none currently set in
-`webstore-config` — override under `outbox:` in `C:\Projects\webstore-config\config\payment-service.yml`):
+`webstore-config` — override under `outbox:` in `C:\Data\Projects\webstore-config\config\payment-service.yml`):
 
 | Property                         | Default       | Purpose                                    |
 |----------------------------------|---------------|--------------------------------------------|
@@ -300,7 +300,15 @@ matched-pair explanation.
 
 - `POST /v1/payments/refund` — create/process a refund
 - `GET /v1/payments/refund/{refundID}` — get refund by ID
-- `GET /v1/payments/refund/payment/{paymentID}` — list refunds for a payment (`List<RefundDto>`)
+- `GET /v1/payments/refund/payment/{paymentID}` — refunds for a payment (`List<RefundDto>`)
+
+> ⚠️ **That last one returns a list of at most one.** `Refund` is `@OneToOne` with a unique
+> constraint on `payment_id` (V5), so a payment can never have more than one refund — the
+> `List<RefundDto>` return type and the repository's `findAllByPayment_Id` are left over from when
+> the relation was `@ManyToOne`. Callers must still handle the empty case (no refund yet), but a
+> second element is unreachable. Narrow it to `Optional`/404 if the one-refund rule is permanent;
+> keep the list only if partial refunds are on the roadmap — that would also need the amount and
+> status columns V5 dropped.
 
 ## Entities & Validation
 

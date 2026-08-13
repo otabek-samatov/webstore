@@ -427,7 +427,7 @@ on `OrderServiceApplication`.
 
 None of these properties are currently set in `webstore-config` — defaults from
 `OutboxProperties` are used. To override, add them under `outbox:` in
-`C:\Projects\webstore-config\config\order-service.yml` and commit/push.
+`C:\Data\Projects\webstore-config\config\order-service.yml` and commit/push.
 
 ### Inbox Pattern
 
@@ -536,7 +536,7 @@ Together, the outbox + inbox + `read_committed` consumer give the order ↔ paym
 
 Neither property is currently set in `webstore-config` — defaults from `InboxProperties` are
 used. To override, add them under `inbox:` in
-`C:\Projects\webstore-config\config\order-service.yml` and commit/push.
+`C:\Data\Projects\webstore-config\config\order-service.yml` and commit/push.
 
 <a id="orchestration-saga"></a>### Orchestration Saga
 
@@ -753,14 +753,14 @@ Configuration (`order.payment-failed.*`):
 
 `PaymentFailedReaperProperties` is registered via `@EnableConfigurationProperties` on
 `OrderServiceApplication`. Neither property is set in `webstore-config` today — defaults
-apply; override under `order:` in `C:\Projects\webstore-config\config\order-service.yml`.
+apply; override under `order:` in `C:\Data\Projects\webstore-config\config\order-service.yml`.
 
 ### Configuration Management
 
 The service uses Spring Cloud Config for externalized configuration:
 
 - Config Server URI: `http://localhost:8071`
-- Config source (Git, local clone): **`C:\Projects\webstore-config`**
+- Config source (Git, local clone): **`C:\Data\Projects\webstore-config`**
     - Shared defaults: `config/application.yml`
     - Order-service overrides: `config/order-service.yml`
 - `application.yml` (in this service's source tree) only contains bootstrap config
@@ -783,7 +783,7 @@ The service uses Spring Cloud Config for externalized configuration:
 > Property names in code use the path form (`topic.stock.status`); the topic **value** that actually
 > lands on the wire is `stock-status-event`. The two are easy to confuse when grepping.
 
-To change any of the above, edit the file under `C:\Projects\webstore-config\config\`, commit, and push —
+To change any of the above, edit the file under `C:\Data\Projects\webstore-config\config\`, commit, and push —
 the Config Server reads from Git, not the local working copy, so an un-pushed change won't take effect.
 
 ### Database Schema
