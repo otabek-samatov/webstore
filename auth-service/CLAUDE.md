@@ -427,7 +427,8 @@ re-running against a migrated database.
 | RSA key regenerated per boot | Restarts invalidate all tokens; two instances sign with different keys. DEV-only — needs a keystore |
 | In-memory `RegisteredClientRepository` | Clients vanish on restart. Move to `JdbcRegisteredClientRepository` |
 | CSRF enabled, no API carve-out | Fine today (`formLogin` carries the token); will 403 Postman `POST`s once controllers exist |
-| Only product-service validates tokens | It is the first resource server (writes require the `ADMIN` role); the other five business services plus the gateway are still unauthenticated |
+| The gateway is unauthenticated | All five business services validate tokens now; gateway-service still forwards anything it receives without inspecting it |
+| No ownership checks anywhere | Rules are role-only, so any authenticated user can read or cancel any order, and a `CUSTOMER` cannot read their own profile. Blocked on question 1 below |
 
 ### Open architectural questions
 
@@ -436,10 +437,12 @@ re-running against a migrated database.
    column. Both define a `RoleType` enum with the same two constants and the same one-role-per-user
    cardinality — the models now agree, which makes them easy to merge and equally easy to let drift
    apart. Nothing reconciles them. Settle this before more is built on either side.
-2. **Do the other six services become resource servers?** If yes, each needs
-   `spring-boot-starter-oauth2-resource-server` + `issuer-uri`, the gateway must forward tokens, and
-   every existing endpoint needs an authorization rule — written as `hasRole(...)`, since roles are
-   the only thing a token carries.
+2. **Does the gateway validate tokens, or just forward them?** All five business services are now
+   resource servers (`spring-boot-starter-oauth2-resource-server` + `issuer-uri` + a
+   `JwtAuthenticationConverter` reading the `authorities` claim). gateway-service is the last hop
+   that inspects nothing. Validating there too would reject bad tokens one hop earlier at the cost
+   of a second place to keep the issuer in step; forwarding only keeps the rules in one layer.
+   Either way `/auth/**` needs the issuer pinned first — see the prefix-stripping problem above.
 3. **The vocabulary is coarse.** With permissions gone, any new distinction ("may refund but not
    cancel") has to become a new `RoleType` constant. Watch for role explosion as the remaining
    services are onboarded.
@@ -451,9 +454,12 @@ re-running against a migrated database.
 
 ## Deployment
 
-- **Compose:** service block between user-service and order-service. It is the only business service
-  needing a **third** secret, so it cannot reuse the `*db-secrets` YAML anchor (merge keys cannot
-  extend a sequence) and lists all three explicitly.
+- **Compose:** service block between user-service and order-service. Like order-service, it needs a
+  **third** secret (`auth_client_secret`), so it cannot reuse the `*db-secrets` YAML anchor (merge
+  keys cannot extend a sequence) and lists all three explicitly. The two services share that one
+  secret from opposite ends: auth-service bcrypt-encodes it into the `webstore-service-client`
+  registration; order-service presents it to obtain `client_credentials` tokens. **They must be the
+  same value** — a mismatch is a bare `{"error":"invalid_client"}` with nothing in the logs.
 - **`.env`:** `AUTH_SERVICE_PORT=8076`.
 - **Gateway:** `AUTH_SERVICE_URL` in the `x-service-urls` anchor; `/auth/**` route in
   `gateway-service.yml`. Config-repo changes only take effect once **committed and pushed**.

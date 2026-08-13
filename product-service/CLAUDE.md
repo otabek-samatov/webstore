@@ -66,9 +66,11 @@ Category (hierarchical)
 
 ## Security (OAuth2 Resource Server)
 
-product-service is the **first webstore service to validate tokens**. The catalog is readable by
-anyone; modifying it requires a JWT issued by auth-service whose holder has the `ADMIN` or
-`SERVICE` role.
+product-service was the first webstore service to validate tokens; all five business services do now.
+It is the **only one with a public surface** — the catalog is readable by anyone, while modifying it
+requires a JWT issued by auth-service whose holder has the `ADMIN` or `SERVICE` role. The others
+(inventory, payment, user) require a role on every endpoint; order-service requires only
+`authenticated()`.
 
 | Path | Access |
 |---|---|

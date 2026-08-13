@@ -247,9 +247,22 @@ per-environment layers, switched together by picking a `.env` file:
 > require a matching broker count or `NewTopic` auto-creation fails.
 
 **Secrets:** the `secrets:` section maps file-backed secrets from `./secrets/` (**gitignored** — never
-commit): `secrets/postgres_user.txt` and `secrets/postgres_password.txt`, one value per file. These are
-the single source of truth for the DB credentials; the services and the healthcheck read them at runtime
-(see Configuration Management below for how services resolve them).
+commit), one value per file:
+
+| File | Mounted into | Used for |
+|---|---|---|
+| `secrets/postgres_user.txt` | every business service (as `db_username`) | DB credentials — single source of truth, read by the services and the healthcheck |
+| `secrets/postgres_password.txt` | every business service (as `db_password`) | ditto |
+| `secrets/auth_client_secret.txt` | **auth-service and order-service** (as `auth_client_secret`) | the `webstore-service-client` OAuth2 client secret |
+
+See Configuration Management below for how services resolve them.
+
+> ⚠️ **auth-service and order-service share `auth_client_secret` from opposite ends** — auth-service
+> bcrypt-encodes it into the client registration, order-service presents it to obtain
+> `client_credentials` tokens. They must hold the **same** value; a mismatch surfaces as a bare
+> `{"error":"invalid_client"}` with nothing in the logs. Both need a **third** secret and therefore
+> cannot reuse the `*db-secrets` YAML anchor (merge keys cannot extend a sequence) — each lists all
+> three explicitly.
 
 > Postgres only reads the secrets on **first initialization** of an empty data volume. To change the
 > password later: `ALTER USER` inside the container, update the secret file, recreate the container,
@@ -716,6 +729,17 @@ overrides are still needed only to avoid a local port clash.)
   (`services.inventory.url` / `services.payment.url` in order-service; `*_SERVICE_URL` env vars in
   Docker — a `localhost` default leaking into a container means the env var isn't set)
 - Remember containers use Compose DNS names + fixed ports; host runs use `localhost` + fixed ports
+- **A 401/403 from a downstream service does not look like one by the time it surfaces.**
+  order-service maps 4xx to domain exceptions, so an auth failure calling inventory-service reads as
+  `NotEnoughStockException`, and one calling payment-service becomes `PaymentFailedException` — which
+  the create-order saga treats as a transport error, cancels the order, releases the stock, and
+  returns **402**. Nothing in that chain says "authentication". Check the token first: is
+  `AUTH_CLIENT_SECRET` / the `auth_client_secret` secret set and equal to auth-service's, is
+  auth-service reachable at the client `token-uri`, and does the target's `issuer-uri` match the
+  token's `iss`?
+- **`IllegalStateException: Could not obtain a client_credentials token`** is the *good* failure —
+  order-service's interceptor refusing to send an unauthenticated request. Cause is auth-service
+  down, a wrong secret, or an unknown client id
 
 **4. Database Migration Errors:**
 
