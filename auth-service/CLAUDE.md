@@ -237,7 +237,11 @@ Two chains, and the order matters:
 **All authorization rules in this service live in those two `authorizeHttpRequests` blocks — four
 rules in total.** Everything else in `SecurityConfig` (client registrations, the token customizer,
 `PasswordEncoder`, `JWKSource`) configures *what a token contains* or *how secrets are handled*, not
-who may reach what. The list is short because there are no controllers yet; `anyRequest()
+who may reach what.
+
+> `jwtTokenCustomizer` takes an `AppUserRepository` parameter — a `@Configuration` class reaching a
+> repository looks out of place, but the `authUserId` claim has to come from the row. See
+> [The `authUserId` claim](#the-authuserid-claim) for why it is not read off the principal instead. The list is short because there are no controllers yet; `anyRequest()
 .authenticated()` is currently covering the whole API surface.
 
 | Path | Access |
@@ -403,7 +407,11 @@ authorities path, including that the EAGER collection survives the closed transa
 `"sub": "admin"`.
 
 **Written but not yet exercised:** the `authorities` and `authUserId` claims on the access token, and
-product-service's `hasRole("ADMIN")` rules and `CustomAuthentication` that consume them. The verification above predates the
+product-service's `hasRole("ADMIN")` rules and `CustomAuthentication` that consume them. The check
+that closes this out is a two-token round-trip — an authorization_code token should decode with
+`authUserId` alongside `sub`, a `client_credentials` token should carry `authorities:
+["ROLE_SERVICE"]` and **no** `authUserId` key at all, and an admin `POST /v1/books/book` should
+return 200. The verification above predates the
 roles-only change (`V2`) — the `loadUserByUsername` → bcrypt → `isEnabled()` → roles path needs
 re-running against a migrated database.
 

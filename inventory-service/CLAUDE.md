@@ -110,9 +110,63 @@ Base path: `/v1/inventory/` (`@RequestMapping("/v1/inventory/")` on `InventoryCo
 > There is **no** REST endpoint for `revertStock` — it is reachable only via the Kafka `"revert"`
 > actionType.
 
+## Security (OAuth2 Resource Server)
+
+**Every endpoint requires `ADMIN` or `SERVICE`.** Unlike product-service — which publishes its
+catalog reads — nothing here is public: stock levels, prices, and reservations are commercial data
+with no anonymous use case.
+
+| Path | Access |
+|---|---|
+| `/actuator/health/**`, `/actuator/prometheus` | public |
+| `/swagger-ui/**`, `/v3/api-docs/**` | public (springdoc is disabled entirely in PROD) |
+| everything else — all of `/v1/inventory/**` | `hasAnyRole("ADMIN", "SERVICE")` |
+
+The two infrastructure carve-outs are not optional: the Compose healthcheck curls
+`/actuator/health` and Prometheus scrapes `/actuator/prometheus` every 15 s. Locking those breaks
+container startup and monitoring, not just observability.
+
+**`SERVICE` carries the normal traffic here.** order-service drives `/prices` and `/reserve-stock`
+during order creation under `client_credentials`; `ADMIN` exists for warehouse operations done by
+hand (`/increase-stock`, `/decrease-stock`, `DELETE /{sku}`). Both roles are unrestricted across all
+paths — split them if warehouse adjustments should stop being reachable by any service holding the
+shared `webstore-service-client` secret.
+
+Configured in `configs/SecurityConfig.java`. The issuer comes from
+`spring.security.oauth2.resourceserver.jwt.issuer-uri` in the config repo's `inventory-service.yml`
+(`${AUTH_ISSUER_URI:http://localhost:8076}`). Validation is **local** — the JWKS is discovered once,
+lazily, and cached; auth-service is not in the request path.
+
+> ⚠️ **This breaks order-service until it sends a token.** `PriceItemsStep` and `ReserveStockStep`
+> call this service through a bare `RestClient` with no `Authorization` header, so order creation
+> now fails at the first step with a 401 → `IllegalArgumentException`. order-service needs a
+> `client_credentials` token from auth-service (`webstore-service-client`, which already carries
+> `ROLE_SERVICE`) attached as a bearer token on those calls. The Kafka path is unaffected —
+> `KafkaConsumerService` never crosses the HTTP filter chain.
+
+**Kafka bypasses all of this.** Spring Security's filter chain only guards HTTP. The `commit` /
+`release` / `revert` events order-service publishes reach `InventoryManager` without any
+authentication, so the same stock mutations remain reachable over the broker. That's fine while the
+broker is internal, but it means these rules protect one of two doors — don't read "inventory is
+locked down" as more than it is.
+
+**Uses the plain Spring `JwtAuthenticationConverter`, not product-service's custom one.**
+product-service's `WebstoreJwtAuthenticationConverter` exists to lift `authUserId` into a typed
+`CustomAuthentication`. Nothing here is user-scoped — inventory rows belong to SKUs, and the normal
+caller is a machine token with no user at all — so duplicating those two classes would add a
+consumer-less accessor. Add them if an endpoint ever needs to record *who* adjusted stock;
+`inventory_change` is the natural place for that.
+
+The claim-name + empty-prefix pair is identical to product-service's, and carries the identical
+trap: the values arrive already prefixed (`ROLE_ADMIN`), so setting the prefix to `ROLE_` yields
+`ROLE_ROLE_ADMIN` and 403s everything. See `product-service/CLAUDE.md` and `auth-service/CLAUDE.md`
+for the full matched-pair explanation.
+
 ### Technology Stack
 
 - Java 25 with Spring Boot 4.1.0 (Spring Framework 7)
+- Spring Security via **`spring-boot-starter-oauth2-resource-server`** (not `-starter-security` —
+  the resource-server starter pulls in `spring-security-config`/`-web` plus `-oauth2-jose`)
 - Spring Cloud 2025.1.2 — Config for external configuration
 - Spring Data JPA with PostgreSQL
 - Web via `spring-boot-starter-webmvc` (renamed from `spring-boot-starter-web` in Spring Boot 4)

@@ -760,12 +760,21 @@ see [Local Infrastructure](#local-infrastructure)):
 
 **Not Yet Implemented:**
 
-- **Platform-wide security.** auth-service issues tokens and **product-service is the first (and so
-  far only) consumer** — its `GET /v1/books/**` reads are public while writes require a token whose
-  holder has the `ADMIN` role (see `product-service/CLAUDE.md`). The other five business
-  services and the gateway are still entirely unauthenticated. Extending this means adding
+- **Platform-wide security.** auth-service issues tokens; **product-service, inventory-service and
+  payment-service validate them.** product-service keeps `GET /v1/books/**` public and gates writes
+  on `ADMIN` / `SERVICE`; inventory-service and payment-service require `ADMIN` / `SERVICE` on
+  **every** endpoint (see their `CLAUDE.md` files). user-service, order-service and the gateway are
+  still entirely unauthenticated. Extending this means adding
   `spring-boot-starter-oauth2-resource-server` + `issuer-uri` to each remaining service, a
   `JwtAuthenticationConverter` reading the `authorities` claim, and per-endpoint rules.
+
+  > ⚠️ **order-service can no longer reach inventory-service or payment-service.** Its `RestClient`
+  > sends no `Authorization` header, so all three outbound calls now 401 and **order creation is
+  > broken end to end**. The inventory 401 surfaces as `IllegalArgumentException` → 400; the payment
+  > 401 becomes `PaymentFailedException`, which the saga treats as a transport error → order
+  > `CANCELLED`, stock released, **402** returned — neither symptom mentions authentication.
+  > order-service needs a `client_credentials` token (`webstore-service-client` already carries
+  > `ROLE_SERVICE`) on those calls. Kafka traffic is unaffected — the filter chain only guards HTTP.
 
   **Authorization is roles-only.** A principal holds exactly one `RoleType` and a token carries just
   that; there are no permissions such as `READ` / `WRITE`. Every rule is a `hasRole(...)`. `ADMIN`

@@ -15,6 +15,8 @@ refund operations for customer orders, and notifies order-service of payment out
 - Spring Data JPA (Hibernate)
 - PostgreSQL 18
 - Spring Cloud 2025.1.2 (Config)
+- Spring Security via **`spring-boot-starter-oauth2-resource-server`** (not `-starter-security` — the
+  resource-server starter pulls in `spring-security-config`/`-web` plus `-oauth2-jose`)
 - Spring Kafka 4 — **producer only** (idempotent, non-transactional; see [Kafka & Outbox](#kafka--outbox))
 - Spring `@Scheduled` — drives the outbox poller / recovery / cleanup (`@EnableScheduling` on the app class)
 - MapStruct for DTO mapping
@@ -226,6 +228,61 @@ optimizer (`allocationSize = 50`). `outbox_events` uses `GenerationType.UUID` (n
 
 **Business rules:** only `COMPLETED` payments are refundable; payment becomes `REFUNDED` on success.
 The `@OneToOne` + unique `payment_id` enforces **one refund per payment**.
+
+## Security (OAuth2 Resource Server)
+
+**Every endpoint requires `ADMIN` or `SERVICE`.** Unlike product-service — which publishes its
+catalog reads — nothing here is public: charges, refunds, and payment lookups are financial records
+naming a user, an order, and an amount.
+
+| Path | Access |
+|---|---|
+| `/actuator/health/**`, `/actuator/prometheus` | public |
+| `/swagger-ui/**`, `/v3/api-docs/**` | public (springdoc is disabled entirely in PROD) |
+| everything else — all of `/v1/payments/**` | `hasAnyRole("ADMIN", "SERVICE")` |
+
+The two infrastructure carve-outs are not optional: the Compose healthcheck curls
+`/actuator/health` and Prometheus scrapes `/actuator/prometheus` every 15 s. Locking those breaks
+container startup and monitoring.
+
+**`SERVICE` carries the traffic that matters.** order-service drives `POST /v1/payments` from
+`ProcessPaymentStep` and `retryPayment` under `client_credentials`; `ADMIN` exists for back-office
+work — issuing a refund, inspecting a payment.
+
+> **`POST /refund` deserves a second look.** It is the one operation here that moves money outward,
+> and today any service holding the shared `webstore-service-client` secret can invoke it — while no
+> webstore service actually needs to. If this surface is ever tightened, start there:
+> `hasRole("ADMIN")` alone matches who is meant to use it.
+
+Configured in `configs/SecurityConfig.java`. The issuer comes from
+`spring.security.oauth2.resourceserver.jwt.issuer-uri` in the config repo's `payment-service.yml`
+(`${AUTH_ISSUER_URI:http://localhost:8076}`). Validation is **local** — the JWKS is discovered once,
+lazily, and cached; auth-service is not in the request path.
+
+> ⚠️ **This breaks order creation until order-service sends a token.** `PaymentClient` calls this
+> service through a bare `RestClient` with no `Authorization` header. The 401 hits `PaymentClient`'s
+> 4xx handler and becomes a **`PaymentFailedException`** — which `ProcessPaymentStep` treats as a
+> *transport error*, not a decline. So the create-order saga **fails and compensates**: the order is
+> `CANCELLED`, the reserved stock is released, and the API returns **402 Payment Required**. Nothing
+> in that chain says "authentication"; the symptom reads as a payment-gateway problem. order-service
+> needs a `client_credentials` token (`webstore-service-client` already carries `ROLE_SERVICE`) on
+> those calls.
+
+**No unauthenticated back door.** This service is a Kafka **producer only** — there is no
+`@KafkaListener`, so unlike inventory-service there is no broker path that reaches `PaymentManager`
+around the filter chain. HTTP is the only way in, and it is now gated.
+
+**Uses the plain Spring `JwtAuthenticationConverter`, not product-service's custom one.** Payments do
+carry a `userId`, but it arrives in the request **body** from order-service — the caller is a machine
+token with no user of its own, so a claim-derived id would be absent exactly when it is needed.
+Introduce `CustomAuthentication` only if a human-facing "my payments" endpoint is added, and note
+that `authUserId` is auth-service's id while `payment.user_id` is order-service's notion of the
+customer; those are not the same number today.
+
+The claim-name + empty-prefix pair is identical to product-service's and inventory-service's, and
+carries the identical trap: the values arrive already prefixed (`ROLE_ADMIN`), so setting the prefix
+to `ROLE_` yields `ROLE_ROLE_ADMIN` and 403s everything. See `auth-service/CLAUDE.md` for the full
+matched-pair explanation.
 
 ## API Endpoints
 

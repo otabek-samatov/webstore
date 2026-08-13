@@ -67,7 +67,8 @@ Category (hierarchical)
 ## Security (OAuth2 Resource Server)
 
 product-service is the **first webstore service to validate tokens**. The catalog is readable by
-anyone; modifying it requires a JWT issued by auth-service whose holder has the `ADMIN` role.
+anyone; modifying it requires a JWT issued by auth-service whose holder has the `ADMIN` or
+`SERVICE` role.
 
 | Path | Access |
 |---|---|
@@ -87,14 +88,15 @@ decision, not an oversight: the role is granted by client registration, and ever
 one `webstore-service-client`, so any service holding the secret can write to the catalog. Narrow it
 to specific paths if that becomes too broad.
 
-Configured in `configs/SecurityConfig.java`. The issuer comes from
+Split across two places: `configs/SecurityConfig.java` holds the filter chain and the rules;
+`security/` holds the token→`Authentication` conversion (see below). The issuer comes from
 `spring.security.oauth2.resourceserver.jwt.issuer-uri` in the config repo's `product-service.yml`
 (`${AUTH_ISSUER_URI:http://localhost:8076}`).
 
 **The `JwtDecoder` is auto-configured — that's why `SecurityConfig` never names a key URL.** Setting
 `issuer-uri` makes Spring Boot publish a `JwtDecoder` bean, which `.jwt(...)` picks up from the
-context; the config class only attaches the authorities converter. Calling `jwkSetUri(...)` or
-`decoder(...)` in the DSL would *override* that bean.
+context; the config class only attaches the converter. Calling `jwkSetUri(...)` or `decoder(...)` in
+the DSL would *override* that bean.
 
 **`issuer-uri` is deliberately not `jwk-set-uri`.** Both properties produce a working decoder, and
 the JWKS one looks simpler — it skips a round trip by naming
@@ -137,27 +139,47 @@ and delimiter stop living in one recognisable place. The empty-claim case is one
 *deliberately produces* — a machine client with no `settings.client.role` is meant to fail closed —
 so that first row is a live path, not a hypothetical.
 
-**Reading the id.** `getPrincipal()` still returns the `Jwt` — `JwtAuthenticationToken`'s
-constructor passes the token in as token, principal *and* credentials, and subclassing doesn't
-change it. So reaching the typed accessor means casting the `Authentication`:
+**Reading the id.** `@AuthenticationPrincipal` does **not** give you `CustomAuthentication` — it
+resolves `getPrincipal()`, which on `JwtAuthenticationToken` and therefore on our subclass is the
+`Jwt`. The constructor passes the token in as token, principal *and* credentials, and subclassing
+doesn't change that. Take the `Authentication` instead:
 
 ```java
 @PostMapping
 public ResponseEntity<BookDto> create(@RequestBody BookDto dto, Authentication authentication) {
-    Long authUserId = ((CustomAuthentication) authentication).getAuthUserId();
+    Long authUserId = authentication instanceof CustomAuthentication custom
+            ? custom.getAuthUserId()
+            : null;
 }
 ```
 
-Three null/type cases, all live:
+**Use `instanceof`, not a cast.** It is null-safe (`null instanceof X` is `false`), so one
+expression covers authenticated, anonymous, and null without a separate guard. Declaring the
+parameter as `CustomAuthentication` directly also works — Spring MVC's principal resolver accepts
+any type assignable from the current `Authentication` — and is fine on the write endpoints, where
+`hasAnyRole("ADMIN","SERVICE")` guarantees a JWT.
 
-- **Public reads.** `GET /v1/books/**` is `permitAll`, so an anonymous request carries an
-  `AnonymousAuthenticationToken` whose principal is the string `"anonymousUser"`. The cast above
-  throws `ClassCastException` there — use `instanceof` on read endpoints.
+Three cases, all live, and **the first behaves differently depending on how you reach the
+`Authentication`**:
+
+| | Controller parameter | `SecurityContextHolder` |
+|---|---|---|
+| Anonymous request (`GET /v1/books/**` is `permitAll`) | **`null`** — `SecurityContextHolderAwareRequestWrapper.getUserPrincipal()` returns null for anonymous | the `AnonymousAuthenticationToken`, principal `"anonymousUser"` |
+
+A blind `((CustomAuthentication) authentication)` fails differently in each: on the parameter it
+casts `null` successfully and then NPEs on the method call; via `SecurityContextHolder` it throws
+`ClassCastException`. `instanceof` handles both.
+
 - **Machine tokens.** `client_credentials` names no user, so `getAuthUserId()` returns `null` by
   design. This service accepts those on every write, and unboxing to `long` NPEs on exactly that
   traffic — the traffic manual testing doesn't cover.
 - **Off-request threads.** `SecurityContextHolder` is a `ThreadLocal`; it is empty in `@Scheduled`,
   `@Async`, and any thread the app spawns.
+
+Note that `null` from the snippet above collapses two distinct situations — "nobody authenticated"
+and "a service authenticated, which names no user". Nothing needs to tell them apart today, since
+writes treat `ADMIN` and `SERVICE` identically; split the `instanceof` into an if/else-if if that
+changes.
 
 **The claim is minted and read as a string, then parsed.** A JSON integer deserializes as `Integer`
 or `Long` depending on magnitude and `Jwt.getClaim` casts unchecked — a numeric claim would work
