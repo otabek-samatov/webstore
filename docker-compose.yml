@@ -312,7 +312,20 @@ services:
       <<: *business-env
       # Resolves server.port in the config repo's order-service.yml.
       SERVICE_PORT: ${ORDER_SERVICE_PORT}
-    secrets: *db-secrets
+    # Like auth-service, this service needs a third secret (the OAuth2 client secret it
+    # authenticates with when calling inventory-service / payment-service), so it cannot
+    # reuse the *db-secrets anchor — YAML merge keys cannot extend a sequence — and lists
+    # all three explicitly.
+    secrets:
+      - source: postgres_user
+        target: db_username
+      - source: postgres_password
+        target: db_password
+      # /run/secrets/auth_client_secret -> property auth_client_secret, read by the
+      # spring.security.oauth2.client registration in the config repo's order-service.yml.
+      # Must be the SAME value auth-service bcrypt-encodes for webstore-service-client.
+      - source: auth_client_secret
+        target: auth_client_secret
     ports:
       - "${ORDER_SERVICE_PORT}:${ORDER_SERVICE_PORT}"
     depends_on:

@@ -760,13 +760,35 @@ see [Local Infrastructure](#local-infrastructure)):
 
 **Not Yet Implemented:**
 
-- **Platform-wide security.** auth-service issues tokens; **product-, inventory-, payment- and
-  user-service validate them.** product-service keeps `GET /v1/books/**` public and gates writes on
-  `ADMIN` / `SERVICE`; the other three require `ADMIN` / `SERVICE` on **every** endpoint (see their
-  `CLAUDE.md` files). **order-service and the gateway** are the two that remain unauthenticated.
-  Finishing this means adding `spring-boot-starter-oauth2-resource-server` + `issuer-uri` to
-  order-service, a `JwtAuthenticationConverter` reading the `authorities` claim, and per-endpoint
-  rules — plus deciding whether the gateway validates tokens or merely forwards them.
+- **Platform-wide security.** auth-service issues tokens; **all five business services validate
+  them.** The rules differ by service:
+
+  | Service | Rule |
+  |---|---|
+  | product-service | `GET /v1/books/**` public; everything else `ADMIN` / `SERVICE` |
+  | inventory-service | `ADMIN` / `SERVICE` on every endpoint |
+  | payment-service | `ADMIN` / `SERVICE` on every endpoint |
+  | user-service | `ADMIN` / `SERVICE` on every endpoint |
+  | order-service | `authenticated()` — any role, since ordering is what a `CUSTOMER` does |
+
+  All five carve out `/actuator/health/**`, `/actuator/prometheus` and the springdoc paths, and all
+  five share the same `authorities`-claim converter. **The gateway is the last unauthenticated
+  hop** — decide whether it validates tokens or merely forwards them.
+
+  **Service-to-service calls are authenticated.** order-service is both a resource server and an
+  OAuth2 **client**: its single `RestClient` carries a `client_credentials` token from
+  `webstore-service-client` (which auth-service grants `ROLE_SERVICE`), so its calls to
+  inventory-service and payment-service satisfy those services' rules. The token is cached and
+  refreshed by an `OAuth2AuthorizedClientManager`, not fetched per call. See
+  `order-service/CLAUDE.md`.
+
+  > ⚠️ **The remaining gap: nothing checks *ownership*.** Any authenticated user can read or cancel
+  > any order by id, and a `CUSTOMER` cannot read their own user-service profile. Both need the
+  > caller's identity matched against a stored id, which is blocked on reconciling
+  > `auth_schema.users.id` with `user_schema.users.id`. See `auth-service/CLAUDE.md`.
+  >
+  > Also: every service shares the one `webstore-service-client`, so a downstream service can tell
+  > "some webstore service" but never "order-service specifically".
 
   > ⚠️ **order-service can no longer reach inventory-service or payment-service.** Its `RestClient`
   > sends no `Authorization` header, so all three outbound calls now 401 and **order creation is
