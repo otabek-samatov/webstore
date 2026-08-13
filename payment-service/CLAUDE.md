@@ -259,14 +259,18 @@ Configured in `configs/SecurityConfig.java`. The issuer comes from
 (`${AUTH_ISSUER_URI:http://localhost:8076}`). Validation is **local** — the JWKS is discovered once,
 lazily, and cached; auth-service is not in the request path.
 
-> ⚠️ **This breaks order creation until order-service sends a token.** `PaymentClient` calls this
-> service through a bare `RestClient` with no `Authorization` header. The 401 hits `PaymentClient`'s
-> 4xx handler and becomes a **`PaymentFailedException`** — which `ProcessPaymentStep` treats as a
-> *transport error*, not a decline. So the create-order saga **fails and compensates**: the order is
-> `CANCELLED`, the reserved stock is released, and the API returns **402 Payment Required**. Nothing
-> in that chain says "authentication"; the symptom reads as a payment-gateway problem. order-service
-> needs a `client_credentials` token (`webstore-service-client` already carries `ROLE_SERVICE`) on
-> those calls.
+**order-service authenticates as a machine client.** `PaymentClient` reaches this service through a
+`RestClient` carrying a `client_credentials` token from `webstore-service-client`, which auth-service
+grants `ROLE_SERVICE` — so the charge satisfies the catch-all rule. See the outbound-tokens section
+of `order-service/CLAUDE.md`.
+
+> ⚠️ **If that token ever fails, the symptom looks like a declined card.** A 401 hits
+> `PaymentClient`'s 4xx handler and becomes a **`PaymentFailedException`** — which
+> `ProcessPaymentStep` treats as a *transport error*, not a decline. The create-order saga fails and
+> compensates: order `CANCELLED`, reserved stock released, **402 Payment Required** returned. Nothing
+> in that chain says "authentication". Before debugging the gateway mock, check order-service's
+> token: `AUTH_CLIENT_SECRET` set and matching auth-service's, and this service's `issuer-uri`
+> matching the token's `iss`.
 
 **No unauthenticated back door.** This service is a Kafka **producer only** — there is no
 `@KafkaListener`, so unlike inventory-service there is no broker path that reaches `PaymentManager`

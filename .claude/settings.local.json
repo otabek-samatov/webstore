@@ -69,7 +69,10 @@
       "Bash(git -C /c/Data/Projects/webstore-config log --oneline -1 -- config/gateway-service.yml)",
       "Bash(grep -rn \"security/           SecurityConfig\\\\|security/SecurityConfig\\\\|security\\\\\\\\\\\\\\\\SecurityConfig\" --include=\"*.md\" .)",
       "Bash(grep -rn -A6 \"resourceserver\" C:/Data/Projects/webstore-config/config/ 2>/dev/null)",
-      "Bash(cd C:/Data/Projects/webstore-config && cat config/payment-service.yml)"
+      "Bash(cd C:/Data/Projects/webstore-config && cat config/payment-service.yml)",
+      "Bash(cat /c/Data/Projects/webstore-config/config/gateway-service.yml 2>/dev/null || echo \"config repo not found at that path\")",
+      "Bash(grep -rn \"no longer reach\\\\|broken end to end\\\\|order creation is broken\\\\|sends no.*Authorization\\\\|no \\\\`Authorization\\\\` header\" --include=\"*.md\" . C:/Data/Projects/webstore-config/)",
+      "Bash(grep -rn \"no longer reach\\\\|broken end to end\\\\|order creation is broken\\\\|bare \\\\`RestClient\\\\`\\\\|no \\\\`Authorization\\\\` header\\\\|until it sends a token\\\\|until order-service sends\\\\|will authenticate once\\\\|unfinished half\\\\|is the first resource server\" --include=\"*.md\" . C:/Data/Projects/webstore-config/)"
     ]
   }
 }

@@ -112,10 +112,10 @@ personal data.
 The two infrastructure carve-outs are not optional: the Compose healthcheck curls
 `/actuator/health` and Prometheus scrapes `/actuator/prometheus` every 15 s.
 
-**No existing traffic breaks.** No webstore service makes REST calls to user-service today — unlike
-inventory-service and payment-service, which order-service calls and can no longer reach. `SERVICE`
-is granted anyway, for symmetry and for the first caller that needs it (an order enriching a
-shipping address, say).
+**No webstore service calls this one today**, so these rules break no existing traffic. `SERVICE` is
+granted anyway, for symmetry and for the first caller that needs it (an order enriching a shipping
+address, say) — such a caller would authenticate with a `client_credentials` token the same way
+order-service already does for inventory and payment.
 
 Configured in `configs/SecurityConfig.java` — a **new package**; this service had no `configs/`
 before. The issuer comes from `spring.security.oauth2.resourceserver.jwt.issuer-uri` in the config

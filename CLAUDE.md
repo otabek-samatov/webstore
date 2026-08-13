@@ -782,54 +782,57 @@ see [Local Infrastructure](#local-infrastructure)):
 > For current development activity, consult git history (branches, recent commits, open PRs) rather
 > than a hand-maintained list here — it stays accurate without manual upkeep.
 
+**Implemented — platform security.** auth-service issues OAuth 2.1 / OIDC tokens and **all five
+business services validate them.** The rules differ by service:
+
+| Service | Rule |
+|---|---|
+| product-service | `GET /v1/books/**` public; everything else `ADMIN` / `SERVICE` |
+| inventory-service | `ADMIN` / `SERVICE` on every endpoint |
+| payment-service | `ADMIN` / `SERVICE` on every endpoint |
+| user-service | `ADMIN` / `SERVICE` on every endpoint |
+| order-service | `authenticated()` — any role, since ordering is what a `CUSTOMER` does |
+
+All five carve out `/actuator/health/**`, `/actuator/prometheus` and the springdoc paths (the first
+two are load-bearing: the Compose healthcheck and Prometheus scrape them), disable CSRF as stateless
+bearer-token APIs, and share the same `authorities`-claim converter — claim name `authorities`,
+**empty** authority prefix, matched with auth-service's `OAuth2TokenCustomizer`.
+
+**Service-to-service calls are authenticated.** order-service is both a resource server and an
+OAuth2 **client**: its single `RestClient` carries a `client_credentials` token from
+`webstore-service-client` (which auth-service grants `ROLE_SERVICE`), so its calls to
+inventory-service and payment-service satisfy those services' rules. The token is cached and
+refreshed by an `OAuth2AuthorizedClientManager`, not fetched per call. See `order-service/CLAUDE.md`.
+
+**Authorization is roles-only.** A principal holds exactly one `RoleType` and a token carries just
+that; there are no permissions such as `READ` / `WRITE`. Every rule is a `hasRole(...)` or
+`authenticated()`. `ADMIN` and `CUSTOMER` come from a user row; `SERVICE` is granted by client
+registration and rides on `client_credentials` tokens. See `auth-service/CLAUDE.md`.
+
+> **Kafka is not covered.** Spring Security's filter chain guards HTTP only, so the stock events
+> order-service publishes reach inventory-service's `InventoryManager` with no authentication at
+> all. Fine while the broker is internal — but "inventory is locked down" is true of one of its two
+> doors.
+
 **Not Yet Implemented:**
 
-- **Platform-wide security.** auth-service issues tokens; **all five business services validate
-  them.** The rules differ by service:
-
-  | Service | Rule |
-  |---|---|
-  | product-service | `GET /v1/books/**` public; everything else `ADMIN` / `SERVICE` |
-  | inventory-service | `ADMIN` / `SERVICE` on every endpoint |
-  | payment-service | `ADMIN` / `SERVICE` on every endpoint |
-  | user-service | `ADMIN` / `SERVICE` on every endpoint |
-  | order-service | `authenticated()` — any role, since ordering is what a `CUSTOMER` does |
-
-  All five carve out `/actuator/health/**`, `/actuator/prometheus` and the springdoc paths, and all
-  five share the same `authorities`-claim converter. **The gateway is the last unauthenticated
-  hop** — decide whether it validates tokens or merely forwards them.
-
-  **Service-to-service calls are authenticated.** order-service is both a resource server and an
-  OAuth2 **client**: its single `RestClient` carries a `client_credentials` token from
-  `webstore-service-client` (which auth-service grants `ROLE_SERVICE`), so its calls to
-  inventory-service and payment-service satisfy those services' rules. The token is cached and
-  refreshed by an `OAuth2AuthorizedClientManager`, not fetched per call. See
-  `order-service/CLAUDE.md`.
-
-  > ⚠️ **The remaining gap: nothing checks *ownership*.** Any authenticated user can read or cancel
-  > any order by id, and a `CUSTOMER` cannot read their own user-service profile. Both need the
-  > caller's identity matched against a stored id, which is blocked on reconciling
-  > `auth_schema.users.id` with `user_schema.users.id`. See `auth-service/CLAUDE.md`.
-  >
-  > Also: every service shares the one `webstore-service-client`, so a downstream service can tell
-  > "some webstore service" but never "order-service specifically".
-
-  > ⚠️ **order-service can no longer reach inventory-service or payment-service.** Its `RestClient`
-  > sends no `Authorization` header, so all three outbound calls now 401 and **order creation is
-  > broken end to end**. The inventory 401 surfaces as `IllegalArgumentException` → 400; the payment
-  > 401 becomes `PaymentFailedException`, which the saga treats as a transport error → order
-  > `CANCELLED`, stock released, **402** returned — neither symptom mentions authentication.
-  > order-service needs a `client_credentials` token (`webstore-service-client` already carries
-  > `ROLE_SERVICE`) on those calls. Kafka traffic is unaffected — the filter chain only guards HTTP.
-
-  **Authorization is roles-only.** A principal holds exactly one `RoleType` and a token carries just
-  that; there are no permissions such as `READ` / `WRITE`. Every rule is a `hasRole(...)`. `ADMIN`
-  and `CUSTOMER` come from a user row; `SERVICE` is granted by client registration and rides on
-  `client_credentials` tokens, which is how service-to-service calls will authenticate once the
-  remaining services become resource servers. See `auth-service/CLAUDE.md`.
+- **The gateway is the last unauthenticated hop.** gateway-service forwards whatever it receives
+  without inspecting it. Open decision: validate there too (rejects bad tokens a hop earlier, at the
+  cost of a second place to keep the issuer in step) or keep the rules in one layer. Either way
+  `/auth/**` needs the issuer pinned first — see the prefix-stripping warning above.
+- **Nothing checks ownership.** Rules are role-only, so any authenticated user can read or cancel
+  **any** order by id, and a `CUSTOMER` cannot read their own user-service profile. Both need the
+  caller's identity matched against a stored id, which is blocked on reconciling
+  `auth_schema.users.id` with `user_schema.users.id` — the duplicate-user-store question in
+  `auth-service/CLAUDE.md`.
+- **`SERVICE` is one identity for all machine traffic.** Every service shares the one
+  `webstore-service-client`, so a downstream service can tell "some webstore service" but never
+  "order-service specifically". One registered client per caller would fix it; auth-service's
+  `settings.client.role` lookup already supports that without a code change.
 - **auth-service itself is incomplete** — no controllers (so users can only be created by the
-  dev-profile `DevDataSeeder`, never under `uat`/`prod`), no tests, issuer unpinned, ephemeral
-  signing key, in-memory client registry. See `auth-service/CLAUDE.md`.
+  dev-profile `DevDataSeeder`, never under `uat`/`prod`), no tests, issuer unpinned (so the
+  `localhost:8076` resource-server default only lines up on host runs), ephemeral signing key,
+  in-memory client registry. See `auth-service/CLAUDE.md`.
 - Kubernetes deployment (the full stack — infrastructure + all 8 services — already runs via
   `docker-compose.yml` and the shared root `Dockerfile`; the direct-URL addressing maps 1:1 onto
   K8s Services)

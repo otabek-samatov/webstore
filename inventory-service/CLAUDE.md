@@ -137,12 +137,15 @@ Configured in `configs/SecurityConfig.java`. The issuer comes from
 (`${AUTH_ISSUER_URI:http://localhost:8076}`). Validation is **local** — the JWKS is discovered once,
 lazily, and cached; auth-service is not in the request path.
 
-> ⚠️ **This breaks order-service until it sends a token.** `PriceItemsStep` and `ReserveStockStep`
-> call this service through a bare `RestClient` with no `Authorization` header, so order creation
-> now fails at the first step with a 401 → `IllegalArgumentException`. order-service needs a
-> `client_credentials` token from auth-service (`webstore-service-client`, which already carries
-> `ROLE_SERVICE`) attached as a bearer token on those calls. The Kafka path is unaffected —
-> `KafkaConsumerService` never crosses the HTTP filter chain.
+**order-service authenticates as a machine client.** `PriceItemsStep` and `ReserveStockStep` reach
+this service through a `RestClient` carrying a `client_credentials` token from
+`webstore-service-client`, which auth-service grants `ROLE_SERVICE` — so those calls satisfy the
+catch-all rule. See the outbound-tokens section of `order-service/CLAUDE.md`.
+
+> **If those calls start failing, the symptom will not mention authentication.** A 401 here maps to
+> `IllegalArgumentException` on the order side and surfaces as a 400. Check order-service's token
+> first: is `AUTH_CLIENT_SECRET` (or the `auth_client_secret` Docker secret) set and equal to
+> auth-service's, and does this service's `issuer-uri` match the token's `iss`?
 
 **Kafka bypasses all of this.** Spring Security's filter chain only guards HTTP. The `commit` /
 `release` / `revert` events order-service publishes reach `InventoryManager` without any
