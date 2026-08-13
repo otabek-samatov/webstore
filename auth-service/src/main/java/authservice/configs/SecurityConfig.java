@@ -182,14 +182,16 @@ public class SecurityConfig {
                 return;
             }
 
+            Set<String> roles;
+
             if (AuthorizationGrantType.CLIENT_CREDENTIALS.equals(context.getAuthorizationGrantType())) {
-                context.getClaims().claim(AUTHORITIES_CLAIM, clientAuthorities(context.getRegisteredClient()));
-                return;
+                roles = clientAuthorities(context.getRegisteredClient());
+            } else {
+                roles = context.getPrincipal().getAuthorities().stream()
+                        .map(GrantedAuthority::getAuthority)
+                        .collect(Collectors.toSet());
             }
 
-            Set<String> roles = context.getPrincipal().getAuthorities().stream()
-                    .map(GrantedAuthority::getAuthority)
-                    .collect(Collectors.toSet());
             context.getClaims().claim(AUTHORITIES_CLAIM, roles);
         };
     }

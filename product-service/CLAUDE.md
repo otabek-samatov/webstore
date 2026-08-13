@@ -91,15 +91,36 @@ Configured in `configs/SecurityConfig.java`. The issuer comes from
 `spring.security.oauth2.resourceserver.jwt.issuer-uri` in the config repo's `product-service.yml`
 (`${AUTH_ISSUER_URI:http://localhost:8076}`).
 
-**Validation is local.** The JWKS is fetched from the issuer once and cached — auth-service is not
-called per request and is not in the request path.
+**The `JwtDecoder` is auto-configured — that's why `SecurityConfig` never names a key URL.** Setting
+`issuer-uri` makes Spring Boot publish a `JwtDecoder` bean, which `.jwt(...)` picks up from the
+context; the config class only attaches the authorities converter. Calling `jwkSetUri(...)` or
+`decoder(...)` in the DSL would *override* that bean.
+
+**`issuer-uri` is deliberately not `jwk-set-uri`.** Both properties produce a working decoder, and
+the JWKS one looks simpler — it skips a round trip by naming
+`http://localhost:8076/oauth2/jwks` directly. Take that shortcut and you lose the only thing that
+ties a token to *this* authorization server:
+
+| | `jwk-set-uri` | `issuer-uri` (used here) |
+|---|---|---|
+| How the JWKS is found | hardcoded URL | discovery: `GET {issuer}/.well-known/openid-configuration` → `jwks_uri` |
+| `iss` claim validated | **no** | **yes** — the discovered `issuer` becomes a `JwtIssuerValidator` |
+| `exp` / `nbf` validated | yes | yes |
+
+With `jwk-set-uri`, *any* token signed by a key in that key set is accepted, whoever minted it and
+whatever it claims to be. The discovery hop also cross-checks the document's `issuer` against the
+configured value at decoder-build time.
+
+**Validation is local.** Discovery runs **once, lazily on the first authenticated request**
+(Boot wraps it in a `SupplierJwtDecoder`, so the app still starts if auth-service is down), and the
+JWKS is cached after that — auth-service is not called per request and is not in the request path.
 
 **Rules are default-deny.** Reads are listed explicitly and everything else falls through to
 `hasAnyRole("ADMIN", "SERVICE")`. A controller added later is protected until someone deliberately
 opens it, rather than public by accident. Keep it that way — don't invert to "permit everything,
 protect the writes by name".
 
-### Four things that will bite
+### Five things that will bite
 
 **CSRF must stay disabled.** This is a stateless bearer-token API — nothing is attached
 automatically by the browser, so CSRF has no attack surface. Leave it enabled and every
@@ -122,6 +143,11 @@ prefix (as today) or neither does.
 currently derives its issuer from the request host, so the `localhost:8076` default only lines up
 for host runs. See `auth-service/CLAUDE.md` — the issuer needs pinning before this works in Docker
 or through the gateway.
+
+> **Do not "fix" those 401s by switching to `jwk-set-uri`.** It makes them disappear — because it
+> removes the `iss` check that was failing, not because the mismatch is resolved. The service would
+> then accept tokens minted under any issuer that shares the key set. Pin auth-service's issuer
+> instead; that is the actual fix.
 
 **`client_credentials` tokens can write here.** They carry no user, but auth-service reads the role
 from the client's registration and puts `ROLE_SERVICE` on the token — which the catch-all rule
