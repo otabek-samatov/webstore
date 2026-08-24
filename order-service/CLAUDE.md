@@ -133,12 +133,105 @@ actions — see the [Orchestration Saga](#orchestration-saga) section.
   `OrderManager.createOrder`. See the [Orchestration Saga](#orchestration-saga)
   section for the full design.
 
+### Security (OAuth2 Resource Server)
+
+**Every endpoint requires a valid token — any role.** This is the one webstore service whose rule is
+`authenticated()` rather than `hasAnyRole(...)`: ordering is what a `CUSTOMER` is *for*, where the
+other services are either a public catalog (product) or back-office / machine surfaces (inventory,
+payment, user).
+
+| Path | Access |
+|---|---|
+| `/actuator/health/**`, `/actuator/prometheus` | public |
+| `/swagger-ui/**`, `/v3/api-docs/**` | public (springdoc is disabled entirely in PROD) |
+| everything else — all of `/v1/orders/**` | `authenticated()` |
+
+Configured in `configs/SecurityConfig.java`. The issuer comes from
+`spring.security.oauth2.resourceserver.jwt.issuer-uri` in the config repo's `order-service.yml`
+(`${AUTH_ISSUER_URI:http://localhost:8076}`). Validation is **local** — the JWKS is discovered once,
+lazily, and cached; auth-service is not in the request path.
+
+> ⚠️ **`authenticated()` draws no line between customers.** Nothing checks that the caller owns the
+> order they are asking about, so **any** authenticated user can read, mutate, or cancel **any**
+> order by id — `GET /{orderId}`, `GET /customer/{customerId}` (someone else's entire order
+> history), `PUT /{orderId}/{status}` (cancel someone else's order). This is a known gap, not an
+> oversight in the rule: closing it needs an **ownership** check comparing the caller's identity
+> against `Order.customerId`, and that is blocked on the id-reconciliation question —
+> product-service's `authUserId` claim carries `auth_schema.users.id` while `customerId` is
+> user-service's id. See `auth-service/CLAUDE.md`.
+
+**The `JwtAuthenticationConverter` is wired even though no rule reads a role.** `authenticated()`
+only asks whether a principal exists. Without the bean, the default converter would populate
+authorities from `scope` (`SCOPE_openid`, `SCOPE_profile`), and the first `hasRole(...)` rule anyone
+adds — an admin-only status override, say — would silently 403 a genuine admin. Wiring it now costs
+nothing and removes the trap.
+
+**Kafka is unaffected.** The filter chain guards HTTP only; `KafkaConsumerService` and the outbox
+poller never cross it.
+
+### Outbound tokens (OAuth2 client)
+
+This is the only service that is **both** a resource server and an OAuth2 **client**: inventory-service
+and payment-service require `ADMIN` / `SERVICE` on every endpoint, so the three outbound calls need a
+bearer token. Two starters, two directions — `-oauth2-resource-server` validates what comes in,
+`-oauth2-client` acquires what goes out.
+
+| Piece | Role |
+|---|---|
+| `configs/RestConfig` | builds the single `RestClient` and the `OAuth2AuthorizedClientManager` |
+| `configs/ClientCredentialsTokenInterceptor` | puts `Authorization: Bearer …` on every outbound request |
+| `spring.security.oauth2.client.*` in `order-service.yml` | the `webstore-service-client` registration |
+
+**One interceptor covers all three call sites** — `PriceItemsStep`, `ReserveStockStep`, and
+`PaymentClient` all share the one `RestClient` bean.
+
+**Tokens are cached, not fetched per call.** `OAuth2AuthorizedClientManager.authorize(...)` returns
+the stored token while valid and re-fetches on expiry, so auth-service sees roughly one token request
+per token lifetime.
+
+**`AuthorizedClientServiceOAuth2AuthorizedClientManager`, not the default one.** The default manager
+needs a servlet request and an `Authentication` in the context; some of these calls have neither —
+`ReserveStockStep.compensate` runs in its own transaction, and status changes can originate from
+`PaymentFailedReaper`'s scheduled thread. This variant works off-request and caches the token once
+for the service rather than per end user.
+
+**The service authenticates as itself, not as the caller.** Forwarding the end user's token would
+break on those off-request paths, and would put a `CUSTOMER` token in front of inventory-service,
+which requires `ADMIN` / `SERVICE`. The cost is that downstream services see "some webstore service",
+never "order-service" — every service shares the one `webstore-service-client`. One registration per
+caller would fix that; auth-service's `settings.client.role` lookup already supports it.
+
+**`token-uri`, not the provider's `issuer-uri`.** Two reasons: a token endpoint is a *network
+address* (so `AUTH_SERVICE_URL`, which Compose already sets to the container DNS name) where
+`issuer-uri` is an *identity* the `iss` claim must match; and Spring resolves a client provider's
+`issuer-uri` **eagerly** via OIDC discovery, which would make order-service fail to start whenever
+auth-service is down. Naming the endpoint keeps boot independent — only the first token request needs
+auth-service up.
+
+**Secret plumbing.** `client-secret: ${auth_client_secret}` resolves exactly like the DB credentials:
+`/run/secrets/auth_client_secret` via the configtree import in containers, `AUTH_CLIENT_SECRET` env
+var on host runs. It must be the **same value** auth-service bcrypt-encodes for
+`webstore-service-client`; `docker-compose.yml` now mounts that secret into this service (it cannot
+reuse the `*db-secrets` anchor, same as auth-service — merge keys can't extend a sequence).
+
+Host runs therefore need a third variable:
+
+```bash
+export AUTH_CLIENT_SECRET=$(cat secrets/auth_client_secret.txt)
+```
+
+> **If the token request itself fails** (auth-service down, wrong secret, unknown client), the
+> interceptor throws `IllegalStateException` rather than sending the request unauthenticated. That is
+> deliberate: an unauthenticated call would come back 401 and be mapped to `NotEnoughStockException`
+> or `PaymentFailedException`, reporting an authentication problem as a business failure.
+
 ### Inter-Service Communication
 
 **Synchronous (REST) — outbound to inventory-service and payment-service:**
 
-Uses a plain `RestClient` (from `RestConfig`) with **direct, property-configured base URLs** — there
-is no service discovery. Base URLs come from `services.inventory.url` / `services.payment.url`
+Uses a single `RestClient` (from `RestConfig`) with **direct, property-configured base URLs** — there
+is no service discovery. Every call through it carries a `client_credentials` bearer token; see
+[Outbound tokens](#outbound-tokens-oauth2-client) above. Base URLs come from `services.inventory.url` / `services.payment.url`
 (defaults `http://localhost:8074` / `http://localhost:8078` for host runs; Docker Compose overrides
 them via the `INVENTORY_SERVICE_URL` / `PAYMENT_SERVICE_URL` env vars, which feed the placeholders
 in the config repo's `order-service.yml`). Three integration points exist:
@@ -334,7 +427,7 @@ on `OrderServiceApplication`.
 
 None of these properties are currently set in `webstore-config` — defaults from
 `OutboxProperties` are used. To override, add them under `outbox:` in
-`C:\Projects\webstore-config\config\order-service.yml` and commit/push.
+`C:\Data\Projects\webstore-config\config\order-service.yml` and commit/push.
 
 ### Inbox Pattern
 
@@ -443,7 +536,7 @@ Together, the outbox + inbox + `read_committed` consumer give the order ↔ paym
 
 Neither property is currently set in `webstore-config` — defaults from `InboxProperties` are
 used. To override, add them under `inbox:` in
-`C:\Projects\webstore-config\config\order-service.yml` and commit/push.
+`C:\Data\Projects\webstore-config\config\order-service.yml` and commit/push.
 
 <a id="orchestration-saga"></a>### Orchestration Saga
 
@@ -660,14 +753,14 @@ Configuration (`order.payment-failed.*`):
 
 `PaymentFailedReaperProperties` is registered via `@EnableConfigurationProperties` on
 `OrderServiceApplication`. Neither property is set in `webstore-config` today — defaults
-apply; override under `order:` in `C:\Projects\webstore-config\config\order-service.yml`.
+apply; override under `order:` in `C:\Data\Projects\webstore-config\config\order-service.yml`.
 
 ### Configuration Management
 
 The service uses Spring Cloud Config for externalized configuration:
 
 - Config Server URI: `http://localhost:8071`
-- Config source (Git, local clone): **`C:\Projects\webstore-config`**
+- Config source (Git, local clone): **`C:\Data\Projects\webstore-config`**
     - Shared defaults: `config/application.yml`
     - Order-service overrides: `config/order-service.yml`
 - `application.yml` (in this service's source tree) only contains bootstrap config
@@ -690,7 +783,7 @@ The service uses Spring Cloud Config for externalized configuration:
 > Property names in code use the path form (`topic.stock.status`); the topic **value** that actually
 > lands on the wire is `stock-status-event`. The two are easy to confuse when grepping.
 
-To change any of the above, edit the file under `C:\Projects\webstore-config\config\`, commit, and push —
+To change any of the above, edit the file under `C:\Data\Projects\webstore-config\config\`, commit, and push —
 the Config Server reads from Git, not the local working copy, so an un-pushed change won't take effect.
 
 ### Database Schema
@@ -975,7 +1068,8 @@ triggering Bean Validation before reaching `OrderManager`.
 
 **When integrating with another service over REST:**
 
-1. Use the injected plain `RestClient`
+1. Use the injected `RestClient` — it already attaches a `client_credentials` bearer token, so a new
+   target that requires `SERVICE` works with no extra wiring
 2. Reference the target via a property-configured base URL following the existing pattern: a
    `services.<name>.url` property in the config repo's `order-service.yml` with a
    `${<NAME>_SERVICE_URL:http://localhost:<port>}` placeholder, plus the env var in
@@ -1059,6 +1153,10 @@ Current test coverage is minimal (only context-load test exists). When adding te
 - **MapStruct 1.5.5.Final** — compile-time code generation for mappers
 - **Lombok** — annotation processor required for IDE compilation
 - **Web** via `spring-boot-starter-webmvc` (renamed from `spring-boot-starter-web` in Spring Boot 4)
+- **Spring Security** via `spring-boot-starter-oauth2-resource-server` (not `-starter-security` — the
+  resource-server starter pulls in `spring-security-config`/`-web` plus `-oauth2-jose`) **and**
+  `spring-boot-starter-oauth2-client` — this is the only service that both validates inbound tokens
+  and acquires outbound ones
 - **Flyway** — runs migrations on startup; wired via `spring-boot-starter-flyway` +
   `flyway-database-postgresql` (BOM-managed versions, ~Flyway 11; `flyway-core` alone no longer
   auto-configures migrations under Spring Boot 4)

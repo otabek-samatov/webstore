@@ -1,7 +1,7 @@
 # =============================================================================
 # Webstore full stack
 #   Infrastructure:  PostgreSQL 18, Apache Kafka 4.3.1 (KRaft single node)
-#   Applications:    all 7 Spring Boot services, built from the shared
+#   Applications:    all 8 Spring Boot services, built from the shared
 #                    ./Dockerfile with a per-service SERVICE build arg
 #
 # Usage:
@@ -64,6 +64,7 @@ x-spring-env: &spring-env
 
 x-service-urls: &service-urls
   <<: *spring-env
+  AUTH_SERVICE_URL: http://auth-service:${AUTH_SERVICE_PORT}
   INVENTORY_SERVICE_URL: http://inventory-service:${INVENTORY_SERVICE_PORT}
   ORDER_SERVICE_URL: http://order-service:${ORDER_SERVICE_PORT}
   PAYMENT_SERVICE_URL: http://payment-service:${PAYMENT_SERVICE_PORT}
@@ -264,6 +265,41 @@ services:
       retries: 10
       start_period: 60s
 
+  # auth-service is the one business service that needs a THIRD secret (the
+  # OAuth2 client secret), so it cannot reuse the *db-secrets anchor — YAML
+  # merge keys cannot extend a sequence — and lists all three explicitly.
+  auth-service:
+    build:
+      context: .
+      args:
+        SERVICE: auth-service
+    image: webstore/auth-service
+    container_name: webstore-auth-service
+    <<: *common
+    environment:
+      <<: *business-env
+      # Resolves server.port in the config repo's auth-service.yml.
+      SERVICE_PORT: ${AUTH_SERVICE_PORT}
+    secrets:
+      - source: postgres_user
+        target: db_username
+      - source: postgres_password
+        target: db_password
+      # /run/secrets/auth_client_secret -> property auth_client_secret, read by
+      # SecurityConfig.registeredClientRepository() to encode the client secret.
+      - source: auth_client_secret
+        target: auth_client_secret
+    ports:
+      - "${AUTH_SERVICE_PORT}:${AUTH_SERVICE_PORT}"
+    depends_on:
+      <<: *business-depends
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${AUTH_SERVICE_PORT}/actuator/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
   order-service:
     build:
       context: .
@@ -276,7 +312,20 @@ services:
       <<: *business-env
       # Resolves server.port in the config repo's order-service.yml.
       SERVICE_PORT: ${ORDER_SERVICE_PORT}
-    secrets: *db-secrets
+    # Like auth-service, this service needs a third secret (the OAuth2 client secret it
+    # authenticates with when calling inventory-service / payment-service), so it cannot
+    # reuse the *db-secrets anchor — YAML merge keys cannot extend a sequence — and lists
+    # all three explicitly.
+    secrets:
+      - source: postgres_user
+        target: db_username
+      - source: postgres_password
+        target: db_password
+      # /run/secrets/auth_client_secret -> property auth_client_secret, read by the
+      # spring.security.oauth2.client registration in the config repo's order-service.yml.
+      # Must be the SAME value auth-service bcrypt-encodes for webstore-service-client.
+      - source: auth_client_secret
+        target: auth_client_secret
     ports:
       - "${ORDER_SERVICE_PORT}:${ORDER_SERVICE_PORT}"
     depends_on:
@@ -409,6 +458,8 @@ secrets:
     file: ./secrets/postgres_user.txt
   postgres_password:
     file: ./secrets/postgres_password.txt
+  auth_client_secret:
+    file: ./secrets/auth_client_secret.txt
 
 # -----------------------------------------------------------------------------
 # Named volumes: survive container re-creation.

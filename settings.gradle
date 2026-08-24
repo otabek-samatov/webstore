@@ -7,4 +7,5 @@ include 'inventory-service'
 include 'user-service'
 include 'order-service'
 include 'payment-service'
+include 'auth-service'
 

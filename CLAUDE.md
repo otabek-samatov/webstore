@@ -73,7 +73,7 @@ Gradle 8.14+ on the 8.x line, or Gradle 9.x).
 
 ### Service Inventory
 
-The system consists of 7 microservices defined in `settings.gradle`:
+The system consists of 8 microservices defined in `settings.gradle`:
 
 | Service               | Port | Purpose                                                                              | Database                        |
 |-----------------------|------|--------------------------------------------------------------------------------------|---------------------------------|
@@ -81,9 +81,16 @@ The system consists of 7 microservices defined in `settings.gradle`:
 | **gateway-service**   | 8072 | API Gateway using Spring Cloud Gateway MVC                                           | N/A                             |
 | **product-service**   | 8073 | Book catalog with authors, publishers, categories                                    | PostgreSQL (`product_schema`)   |
 | **inventory-service** | 8074 | Stock level management and reservation tracking                                      | PostgreSQL (`inventory_schema`) |
-| **user-service**      | 8075 | User registration, authentication, profiles, roles                                   | PostgreSQL (`user_schema`)      |
+| **user-service**      | 8075 | User accounts, profiles, addresses, roles                                            | PostgreSQL (`user_schema`)      |
+| **auth-service**      | 8076 | OAuth 2.1 / OIDC authorization server (**incomplete** — see its `CLAUDE.md`)         | PostgreSQL (`auth_schema`)      |
 | **order-service**     | 8077 | Order placement and tracking                                                         | PostgreSQL (`order_schema`)     |
 | **payment-service**   | 8078 | Payment processing and refunds                                                       | PostgreSQL (`payment_schema`)   |
+
+> ⚠️ **user-service and auth-service both store users.** user-service owns `user_schema.users` +
+> `security_role`; auth-service owns `auth_schema.users` with its own credentials and its own `role`
+> column. Two systems of record for the same people — and, since both now define a `RoleType` enum
+> with the same constants, two definitions of the same roles. Nothing reconciles them; which service
+> owns credentials is an **open architectural decision**. See `auth-service/CLAUDE.md`.
 
 > Ports and schema names above are the **defaults** from `webstore-config/config/<service>.yml`. Multi-instance
 > deployments override `server.port` per instance to avoid a local port clash, but there is **no**
@@ -109,7 +116,7 @@ Services must be started in this order for proper operation:
 
 <a id="local-infrastructure"></a>### Local Infrastructure & Containers (Docker Compose)
 
-`docker-compose.yml` in the repo root runs the **entire stack** — infrastructure plus all 7 Spring Boot
+`docker-compose.yml` in the repo root runs the **entire stack** — infrastructure plus all 8 Spring Boot
 services:
 
 ```bash
@@ -157,7 +164,8 @@ variables plus their own `SPRING_PROFILE`, which Compose passes to every contain
 file — see [Port configuration](#port-configuration)):
 
 - **Prometheus:** `http://localhost:${PROMETHEUS_PORT}` (default `9090`) — query UI at `/query`,
-  scrape-target health at `/targets` (all 7 service jobs should show **UP**).
+  scrape-target health at `/targets` (all 8 service jobs should show **UP** — ⚠️ auth-service has
+  no scrape job yet, so it will not appear).
 - **Grafana:** `http://localhost:${GRAFANA_PORT}` (default `3000`) — log in with `admin` / `admin`
   (DEV default), then **Dashboards → Webstore → Webstore Services**; pick the service with the
   `$service` dropdown. The datasource and dashboard are provisioned automatically — no manual
@@ -172,7 +180,7 @@ the UAT/PROD overlays in the config repo include `prometheus` in their trimmed a
 host runs the endpoint is at `http://localhost:<port>/actuator/prometheus` (the Docker Prometheus
 can't scrape host-run services — its targets are container DNS names).
 
-**Service images:** all 7 services build from the **shared root `Dockerfile`** (multi-stage: Gradle
+**Service images:** all 8 services build from the **shared root `Dockerfile`** (multi-stage: Gradle
 wrapper build on `eclipse-temurin:25-jdk`, runtime on `eclipse-temurin:25-jre` + curl for healthchecks),
 selected via the `SERVICE` build arg that compose passes per service. `.dockerignore` excludes
 `secrets/` so credentials can never enter an image layer. Startup ordering is enforced with
@@ -239,9 +247,22 @@ per-environment layers, switched together by picking a `.env` file:
 > require a matching broker count or `NewTopic` auto-creation fails.
 
 **Secrets:** the `secrets:` section maps file-backed secrets from `./secrets/` (**gitignored** — never
-commit): `secrets/postgres_user.txt` and `secrets/postgres_password.txt`, one value per file. These are
-the single source of truth for the DB credentials; the services and the healthcheck read them at runtime
-(see Configuration Management below for how services resolve them).
+commit), one value per file:
+
+| File | Mounted into | Used for |
+|---|---|---|
+| `secrets/postgres_user.txt` | every business service (as `db_username`) | DB credentials — single source of truth, read by the services and the healthcheck |
+| `secrets/postgres_password.txt` | every business service (as `db_password`) | ditto |
+| `secrets/auth_client_secret.txt` | **auth-service and order-service** (as `auth_client_secret`) | the `webstore-service-client` OAuth2 client secret |
+
+See Configuration Management below for how services resolve them.
+
+> ⚠️ **auth-service and order-service share `auth_client_secret` from opposite ends** — auth-service
+> bcrypt-encodes it into the client registration, order-service presents it to obtain
+> `client_credentials` tokens. They must hold the **same** value; a mismatch surfaces as a bare
+> `{"error":"invalid_client"}` with nothing in the logs. Both need a **third** secret and therefore
+> cannot reuse the `*db-secrets` YAML anchor (merge keys cannot extend a sequence) — each lists all
+> three explicitly.
 
 > Postgres only reads the secrets on **first initialization** of an empty data volume. To change the
 > password later: `ALTER USER` inside the container, update the secret file, recreate the container,
@@ -395,6 +416,7 @@ defaults on `localhost`, container values injected by Compose env vars:
 
 | External path   | Target env var          | Docker value                    |
 |-----------------|-------------------------|---------------------------------|
+| `/auth/**`      | `AUTH_SERVICE_URL`      | `http://auth-service:8076`      |
 | `/inventory/**` | `INVENTORY_SERVICE_URL` | `http://inventory-service:8074` |
 | `/order/**`     | `ORDER_SERVICE_URL`     | `http://order-service:8077`     |
 | `/payment/**`   | `PAYMENT_SERVICE_URL`   | `http://payment-service:8078`   |
@@ -402,6 +424,13 @@ defaults on `localhost`, container values injected by Compose env vars:
 | `/user/**`      | `USER_SERVICE_URL`      | `http://user-service:8075`      |
 
 Each route strips its prefix via `RewritePath=/<prefix>/(?<path>.*), /$\{path}` before forwarding.
+
+> ⚠️ **Prefix stripping is a problem for `/auth/**`.** An authorization server advertises its own
+> URLs, and auth-service currently derives its issuer from the incoming request — so through the
+> gateway it publishes unreachable container URLs in `/.well-known/openid-configuration`, the `iss`
+> claim, and the JWKS URI. Fixing it means pinning the issuer to the external URL via an
+> `AuthorizationServerSettings` bean. Until then, reach auth-service directly on `localhost:8076`.
+> `client_credentials` works through the gateway either way (single POST, no discovery or redirects).
 
 **Application Properties Pattern (per service, in source tree):**
 
@@ -546,11 +575,14 @@ PostgreSQL Database
 
 ## API Documentation (Swagger/OpenAPI)
 
-The 5 business services (product, inventory, user, order, payment) generate interactive API docs via
-**springdoc-openapi** (`org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3` — the 3.x line is
-required for Spring Boot 4; 2.x only supports Boot 3). Zero configuration: springdoc introspects the
-Spring MVC controllers at runtime. config-service and gateway-service expose no business API and have
-no springdoc dependency.
+Six services depend on **springdoc-openapi** (`org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3`
+— the 3.x line is required for Spring Boot 4; 2.x only supports Boot 3): the 5 business services
+(product, inventory, user, order, payment) plus **auth-service**. Zero configuration: springdoc
+introspects the Spring MVC controllers at runtime. config-service and gateway-service expose no
+business API and have no springdoc dependency.
+
+> ⚠️ auth-service has the dependency but **no controllers**, so its spec is empty — the docs are
+> live and reachable, and document nothing. See `auth-service/CLAUDE.md`.
 
 Per service (ports from `.env` — see [Port configuration](#port-configuration)):
 
@@ -697,6 +729,17 @@ overrides are still needed only to avoid a local port clash.)
   (`services.inventory.url` / `services.payment.url` in order-service; `*_SERVICE_URL` env vars in
   Docker — a `localhost` default leaking into a container means the env var isn't set)
 - Remember containers use Compose DNS names + fixed ports; host runs use `localhost` + fixed ports
+- **A 401/403 from a downstream service does not look like one by the time it surfaces.**
+  order-service maps 4xx to domain exceptions, so an auth failure calling inventory-service reads as
+  `NotEnoughStockException`, and one calling payment-service becomes `PaymentFailedException` — which
+  the create-order saga treats as a transport error, cancels the order, releases the stock, and
+  returns **402**. Nothing in that chain says "authentication". Check the token first: is
+  `AUTH_CLIENT_SECRET` / the `auth_client_secret` secret set and equal to auth-service's, is
+  auth-service reachable at the client `token-uri`, and does the target's `issuer-uri` match the
+  token's `iss`?
+- **`IllegalStateException: Could not obtain a client_credentials token`** is the *good* failure —
+  order-service's interceptor refusing to send an unauthenticated request. Cause is auth-service
+  down, a wrong secret, or an unknown client id
 
 **4. Database Migration Errors:**
 
@@ -739,10 +782,65 @@ see [Local Infrastructure](#local-infrastructure)):
 > For current development activity, consult git history (branches, recent commits, open PRs) rather
 > than a hand-maintained list here — it stays accurate without manual upkeep.
 
+**Implemented — platform security.** auth-service issues OAuth 2.1 / OIDC tokens and **all five
+business services validate them.** The rules differ by service:
+
+| Service | Rule |
+|---|---|
+| product-service | `GET /v1/books/**` public; everything else `ADMIN` / `SERVICE` |
+| inventory-service | `ADMIN` / `SERVICE` on every endpoint |
+| payment-service | `ADMIN` / `SERVICE` on every endpoint |
+| user-service | `ADMIN` / `SERVICE` on every endpoint |
+| order-service | `authenticated()` — any role, since ordering is what a `CUSTOMER` does |
+
+All five carve out `/actuator/health/**`, `/actuator/prometheus` and the springdoc paths (the first
+two are load-bearing: the Compose healthcheck and Prometheus scrape them), disable CSRF as stateless
+bearer-token APIs, and configure their JWT converter identically — claim name `authorities`,
+**empty** authority prefix, matched with auth-service's `OAuth2TokenCustomizer`.
+
+> **Identical configuration, two different classes.** product-service uses its own
+> `WebstoreJwtAuthenticationConverter`, which lifts the `authUserId` claim into a typed
+> `CustomAuthentication`; the other four wire the plain Spring `JwtAuthenticationConverter`, since
+> nothing in them is user-scoped. There is no shared converter class or common module — the claim
+> name and empty prefix are simply repeated in each `SecurityConfig`, so a change to the claim has to
+> be made in five places plus auth-service.
+
+**Service-to-service calls are authenticated.** order-service is both a resource server and an
+OAuth2 **client**: its single `RestClient` carries a `client_credentials` token from
+`webstore-service-client` (which auth-service grants `ROLE_SERVICE`), so its calls to
+inventory-service and payment-service satisfy those services' rules. The token is cached and
+refreshed by an `OAuth2AuthorizedClientManager`, not fetched per call. See `order-service/CLAUDE.md`.
+
+**Authorization is roles-only.** A principal holds exactly one `RoleType` and a token carries just
+that; there are no permissions such as `READ` / `WRITE`. Every rule is a `hasRole(...)` or
+`authenticated()`. `ADMIN` and `CUSTOMER` come from a user row; `SERVICE` is granted by client
+registration and rides on `client_credentials` tokens. See `auth-service/CLAUDE.md`.
+
+> **Kafka is not covered.** Spring Security's filter chain guards HTTP only, so the stock events
+> order-service publishes reach inventory-service's `InventoryManager` with no authentication at
+> all. Fine while the broker is internal — but "inventory is locked down" is true of one of its two
+> doors.
+
 **Not Yet Implemented:**
 
-- Auth Service (Spring Security with JWT/OAuth2)
-- Kubernetes deployment (the full stack — infrastructure + all 7 services — already runs via
+- **The gateway is the last unauthenticated hop.** gateway-service forwards whatever it receives
+  without inspecting it. Open decision: validate there too (rejects bad tokens a hop earlier, at the
+  cost of a second place to keep the issuer in step) or keep the rules in one layer. Either way
+  `/auth/**` needs the issuer pinned first — see the prefix-stripping warning above.
+- **Nothing checks ownership.** Rules are role-only, so any authenticated user can read or cancel
+  **any** order by id, and a `CUSTOMER` cannot read their own user-service profile. Both need the
+  caller's identity matched against a stored id, which is blocked on reconciling
+  `auth_schema.users.id` with `user_schema.users.id` — the duplicate-user-store question in
+  `auth-service/CLAUDE.md`.
+- **`SERVICE` is one identity for all machine traffic.** Every service shares the one
+  `webstore-service-client`, so a downstream service can tell "some webstore service" but never
+  "order-service specifically". One registered client per caller would fix it; auth-service's
+  `settings.client.role` lookup already supports that without a code change.
+- **auth-service itself is incomplete** — no controllers (so users can only be created by the
+  dev-profile `DevDataSeeder`, never under `uat`/`prod`), no tests, issuer unpinned (so the
+  `localhost:8076` resource-server default only lines up on host runs), ephemeral signing key,
+  in-memory client registry. See `auth-service/CLAUDE.md`.
+- Kubernetes deployment (the full stack — infrastructure + all 8 services — already runs via
   `docker-compose.yml` and the shared root `Dockerfile`; the direct-URL addressing maps 1:1 onto
   K8s Services)
 - Comprehensive integration tests

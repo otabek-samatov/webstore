@@ -50,7 +50,7 @@ spring.cloud.config.server.git:
 
 - **The server reads from the Git remote, not any local clone.** A config change only takes effect
   once it is committed and **pushed** to the `webstore-config` repo (and the client refreshes or
-  restarts). The local working copy at `C:\Projects\webstore-config` is for editing convenience only.
+  restarts). The local working copy at `C:\Data\Projects\webstore-config` is for editing convenience only.
 - `searchPaths: config` is why the YAML files live under `config/` in that repo.
 - `default-label: master` — the served branch. If the repo's default branch is ever renamed, update
   this.
